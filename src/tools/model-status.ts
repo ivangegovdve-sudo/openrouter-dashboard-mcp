@@ -456,7 +456,11 @@ export async function runModelStatus(
       deprecationsCap = deprecationResult.value.cap;
       evidence.push(...deprecationResult.value.evidence);
       warnings.push(...deprecationResult.value.warnings);
-      if (deprecationResult.value.cap.reached && deprecation === null) {
+      if (
+        deprecationResult.value.cap.reached &&
+        deprecationResult.value.cap.nextCursor !== null &&
+        deprecation === null
+      ) {
         warnings.push(
           "The deprecation scan reached its declared bound before the collection ended.",
         );

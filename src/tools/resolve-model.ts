@@ -7,6 +7,7 @@ import {
   publicProvenanceSchema,
 } from "../dashboard/schemas/common.js";
 import {
+  hasConsistentLiveModelFreeness,
   liveModelSchema,
   liveModelsResponseSchema,
   providerIdSchema,
@@ -74,6 +75,7 @@ export const resolveModelInputSchema = z
 
 const exclusionReasonSchema = z.enum([
   "disappeared",
+  "inconsistent_free_metadata",
   "provider_not_allowed",
   "pricing_not_published",
   "pricing_constraint_not_satisfied",
@@ -486,6 +488,9 @@ function exclusionReasons(
 ): ExclusionReason[] {
   const reasons: ExclusionReason[] = [];
   if (model.availability !== "available") pushReason(reasons, "disappeared");
+  if (!hasConsistentLiveModelFreeness(model)) {
+    pushReason(reasons, "inconsistent_free_metadata");
+  }
 
   if (
     constraints.providers !== undefined &&

@@ -652,8 +652,16 @@ export function assertModeResult(
   elapsedMs: number,
   inputArguments: Record<string, unknown> = {},
 ): void {
+  const schema = OUTPUT_SCHEMAS_BY_TOOL.get(name);
+  if (schema === undefined) throw new Error(`no output schema for ${name}`);
+  const parsed = schema.safeParse(structuredContent);
+  if (!parsed.success) {
+    throw new Error(`${name} failed its exported output schema`);
+  }
+  const schemaValidatedContent = parsed.data;
+
   if (mode === "offline") {
-    if (!containsFieldValue(structuredContent, "kind", "unreachable")) {
+    if (!containsFieldValue(schemaValidatedContent, "kind", "unreachable")) {
       throw new Error(`${name} did not return structured unreachable evidence`);
     }
     if (elapsedMs >= OFFLINE_MAX_ELAPSED_MS) {
@@ -662,7 +670,7 @@ export function assertModeResult(
     return;
   }
   if (mode === "html") {
-    if (!containsFieldValue(structuredContent, "kind", "non_json")) {
+    if (!containsFieldValue(schemaValidatedContent, "kind", "non_json")) {
       throw new Error(`${name} did not return structured non_json evidence`);
     }
     const serialized = JSON.stringify(structuredContent);
@@ -676,16 +684,10 @@ export function assertModeResult(
     return;
   }
   if (mode === "fixture") {
-    assertFixtureResult(name, structuredContent);
+    assertFixtureResult(name, schemaValidatedContent);
     return;
   }
 
-  const schema = OUTPUT_SCHEMAS_BY_TOOL.get(name);
-  if (schema === undefined) throw new Error(`no output schema for ${name}`);
-  const parsed = schema.safeParse(structuredContent);
-  if (!parsed.success) {
-    throw new Error(`${name} failed its exported output schema`);
-  }
   const output = asRecord(parsed.data, `${name} structuredContent`);
   if (output.status === "error") {
     throw new Error(`${name} live verification returned a top-level error`);

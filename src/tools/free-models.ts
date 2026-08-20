@@ -7,6 +7,7 @@ import {
   publicProvenanceSchema,
 } from "../dashboard/schemas/common.js";
 import {
+  isConcreteFreeLiveModel,
   liveModelSchema,
   liveModelsResponseSchema,
 } from "../dashboard/schemas/live-models.js";
@@ -404,6 +405,10 @@ async function runFreeModelsUnsafe(
       model.pricing.completionUsdPerToken === null
     ) {
       excludedUnknownPriceCount += 1;
+      continue;
+    }
+    if (!isConcreteFreeLiveModel(model)) {
+      excludedNotFreeCount += 1;
       continue;
     }
     if (!model.outputModalities?.includes(input.outputModality)) {

@@ -4,6 +4,7 @@ import test from "node:test";
 import type { DashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import {
+  MODEL_STATUS_DEPRECATION_ITEM_LIMIT,
   MODEL_STATUS_LIVE_ITEM_LIMIT,
   MODEL_STATUS_LIVE_PAGE_LIMIT,
   runModelStatus,
@@ -16,6 +17,7 @@ import {
   publicCompleteness,
   publicProvenance,
   publicWindow,
+  runId,
 } from "./fixtures.js";
 
 const liveModelsEndpoint = "/api/public/v2/live-models";
@@ -211,6 +213,52 @@ test("returns bounded OpenRouter evidence without the long catalogue description
   assert.equal(
     result.auxiliary.history?.data[0]?.value,
     "90071992547409930001",
+  );
+});
+
+test("model status does not claim a null-cursor deprecation collection continued", async () => {
+  const notices = Array.from(
+    { length: MODEL_STATUS_DEPRECATION_ITEM_LIMIT },
+    (_, index) => ({
+      modelId: `example/other-${index}`,
+      state: "scheduled_deprecation" as const,
+      expirationDate: null,
+      firstObservedAt: "2026-08-19T06:00:00.000Z",
+      lastObservedAt: "2026-08-19T06:00:00.000Z",
+      evidenceRunId: runId,
+    }),
+  );
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === manifestEndpoint) return schema.parse(manifestFixture);
+      if (path === liveModelsEndpoint) {
+        return schema.parse(liveModelsResponse([liveModelFixture], null));
+      }
+      if (path === deprecationsEndpoint) {
+        return schema.parse(deprecationsResponse(notices, null));
+      }
+      throw new DashboardRequestError(
+        "http_error",
+        "The dashboard catalogue returned HTTP 404.",
+        { retryable: false, status: 404 },
+      );
+    },
+  };
+
+  const result = await runModelStatus(
+    { slug: liveModelFixture.id },
+    { client },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.auxiliary.deprecationsCap?.reached, true);
+  assert.equal(result.auxiliary.deprecationsCap?.nextCursor, null);
+  assert.equal(
+    result.warnings.includes(
+      "The deprecation scan reached its declared bound before the collection ended.",
+    ),
+    false,
   );
 });
 

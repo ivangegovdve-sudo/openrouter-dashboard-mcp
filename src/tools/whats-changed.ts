@@ -575,7 +575,7 @@ export async function runWhatsChanged(
       deprecationsCap = scan.cap;
       evidence.push(...scan.evidence);
       warnings.push(...scan.warnings);
-      if (scan.cap.reached) {
+      if (scan.cap.reached && scan.cap.nextCursor !== null) {
         warnings.push(
           "The deprecation scan reached its declared bound before the collection ended.",
         );
@@ -640,7 +640,7 @@ export async function runWhatsChanged(
       liveCap = scan.cap;
       evidence.push(...scan.evidence);
       warnings.push(...scan.warnings);
-      if (scan.cap.reached) {
+      if (scan.cap.reached && scan.cap.nextCursor !== null) {
         warnings.push(
           "The live-model scan reached its declared bound before the collection ended.",
         );

@@ -230,6 +230,38 @@ test("diagnostic call matrix covers all seven deliberate assertions", async () =
   assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 7);
 });
 
+test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+
+  assert.throws(() =>
+    assertModeResult(
+      "offline",
+      "dashboard_source_health",
+      {
+        status: "not-a-registered-output-branch",
+        nested: { kind: "unreachable" },
+      },
+      1,
+    ),
+  );
+});
+
+test("HTML mode rejects a schema-invalid payload with nested non_json evidence", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+
+  assert.throws(() =>
+    assertModeResult(
+      "html",
+      "dashboard_source_health",
+      {
+        status: "not-a-registered-output-branch",
+        nested: { kind: "non_json" },
+      },
+      1,
+    ),
+  );
+});
+
 test("live capability declines require the exact route and PR 24 message", async () => {
   const { assertModeResult } = await loadStdioHarness();
   const capabilityMessage =

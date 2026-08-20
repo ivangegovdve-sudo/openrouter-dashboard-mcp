@@ -17,8 +17,11 @@ export interface DashboardClient {
 export type DashboardClientOptions = {
   baseUrl?: string;
   timeoutMs?: number;
+  maxResponseBytes?: number;
   fetchImpl?: typeof fetch;
 };
+
+export const DASHBOARD_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 function isJsonContentType(contentType: string | null): boolean {
   if (contentType === null) return false;
@@ -44,6 +47,98 @@ function timeoutError(): DashboardRequestError {
   );
 }
 
+function responseByteLimit(override?: number): number {
+  const limit = override ?? DASHBOARD_MAX_RESPONSE_BYTES;
+  if (!Number.isSafeInteger(limit) || limit <= 0) {
+    throw new DashboardRequestError(
+      "configuration_error",
+      "The dashboard response byte limit must be a positive safe integer.",
+      { retryable: false },
+    );
+  }
+  return limit;
+}
+
+function oversizedPayloadError(): DashboardRequestError {
+  return new DashboardRequestError(
+    "invalid_payload",
+    "The dashboard catalogue returned an oversized payload.",
+    { retryable: false },
+  );
+}
+
+function contentLengthBytes(response: Response): bigint | null {
+  const value = response.headers.get("content-length")?.trim();
+  if (value === undefined || !/^(0|[1-9]\d*)$/.test(value)) return null;
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+}
+
+function initiateCancellation(
+  stream: ReadableStream<Uint8Array> | null,
+): void {
+  if (stream === null || stream.locked) return;
+  try {
+    void stream.cancel().catch(() => {
+      // Cancellation is best-effort and must never delay the caller.
+    });
+  } catch {
+    // Hostile or already-disposed streams cannot affect the safe result.
+  }
+}
+
+async function boundedResponseText(
+  response: Response,
+  maxResponseBytes: number,
+): Promise<string> {
+  const declaredBytes = contentLengthBytes(response);
+  if (
+    declaredBytes !== null &&
+    declaredBytes > BigInt(maxResponseBytes)
+  ) {
+    throw oversizedPayloadError();
+  }
+
+  if (response.body === null) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let decoded = "";
+  let bytesRead = 0;
+  let completed = false;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        completed = true;
+        break;
+      }
+      bytesRead += next.value.byteLength;
+      if (bytesRead > maxResponseBytes) throw oversizedPayloadError();
+      decoded += decoder.decode(next.value, { stream: true });
+    }
+    decoded += decoder.decode();
+    return decoded;
+  } finally {
+    if (!completed) {
+      try {
+        void reader.cancel().catch(() => {
+          // Cancellation is best-effort and must never delay the caller.
+        });
+      } catch {
+        // Hostile or already-disposed readers cannot affect the safe result.
+      }
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      // A reader with in-flight cleanup remains owned by the aborted request.
+    }
+  }
+}
+
 export function createDashboardClient(
   options: DashboardClientOptions = {},
 ): DashboardClient {
@@ -57,14 +152,17 @@ export function createDashboardClient(
     ): Promise<T> {
       const url = requestUrl(path, query, options.baseUrl);
       const timeoutMs = dashboardRequestTimeoutMs(options.timeoutMs);
+      const maxResponseBytes = responseByteLimit(options.maxResponseBytes);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       timer.unref?.();
+      let response: Response | undefined;
 
       try {
-        const response = await fetchImpl(url, {
+        response = await fetchImpl(url, {
           method: "GET",
           headers: { Accept: "application/json" },
+          redirect: "manual",
           signal: controller.signal,
         });
 
@@ -87,7 +185,7 @@ export function createDashboardClient(
           );
         }
 
-        const body = await response.text();
+        const body = await boundedResponseText(response, maxResponseBytes);
         let decoded: unknown;
         try {
           decoded = JSON.parse(body) as unknown;
@@ -118,6 +216,8 @@ export function createDashboardClient(
         );
       } finally {
         clearTimeout(timer);
+        initiateCancellation(response?.body ?? null);
+        controller.abort();
       }
     },
   };

@@ -52,6 +52,69 @@ function liveModel(overrides: Partial<LiveModel> = {}): LiveModel {
   });
 }
 
+test("live-model schema rejects favourable freeness markers with contradictory metadata", () => {
+  const consistentFree = {
+    ...liveModelFixture,
+    pricing: {
+      promptUsdPerToken: "0.0000",
+      completionUsdPerToken: "0",
+    },
+    isFree: true,
+    freeKind: "concrete_free",
+  } as const;
+  assert.equal(liveModelSchema.safeParse(consistentFree).success, true);
+
+  for (const contradictory of [
+    { ...consistentFree, freeKind: "paid_or_unknown" as const },
+    {
+      ...consistentFree,
+      pricing: {
+        promptUsdPerToken: "0.000001",
+        completionUsdPerToken: "0",
+      },
+    },
+    { ...consistentFree, isFree: null },
+    {
+      ...consistentFree,
+      isFree: false,
+      freeKind: "paid_or_unknown" as const,
+      pricing: {
+        promptUsdPerToken: null,
+        completionUsdPerToken: "0",
+      },
+    },
+    {
+      ...consistentFree,
+      isFree: null,
+      freeKind: "paid_or_unknown" as const,
+    },
+  ]) {
+    assert.equal(liveModelSchema.safeParse(contradictory).success, false);
+  }
+
+  assert.equal(
+    liveModelSchema.safeParse({
+      ...consistentFree,
+      isFree: false,
+      freeKind: "paid_or_unknown",
+    }).success,
+    true,
+    "zero token prices can remain paid when another modality carries the charge",
+  );
+  assert.equal(
+    liveModelSchema.safeParse({
+      ...consistentFree,
+      isFree: null,
+      freeKind: "free_router",
+      pricing: {
+        promptUsdPerToken: null,
+        completionUsdPerToken: "0",
+      },
+    }).success,
+    true,
+  );
+});
+
 function liveModelsResponse(
   data: readonly LiveModel[],
   cursor: string | null = null,
@@ -189,6 +252,48 @@ test("returns only ids eligible after every requested filter", async () => {
   assert.equal(ranked.query.get("outputModality"), "text");
   assert.equal(ranked.query.get("reasoning"), "true");
   assert.equal(ranked.query.get("provider"), "groq");
+});
+
+test("resolver excludes contradictory favourable freeness metadata even without a free constraint", async () => {
+  const consistent = liveModel({ id: "groq/consistent" });
+  const contradictory = {
+    ...consistent,
+    id: "groq/contradictory",
+    pricing: {
+      promptUsdPerToken: "0.000001",
+      completionUsdPerToken: "0",
+    },
+    isFree: true,
+    freeKind: "paid_or_unknown" as const,
+  } as unknown as LiveModel;
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === manifestEndpoint) return schema.parse(manifestFixture);
+      if (path === liveModelsEndpoint) {
+        return liveModelsResponse([contradictory, consistent]) as never;
+      }
+      throw new Error(`Unexpected test path: ${path}`);
+    },
+  };
+
+  const result = await runResolveModel(
+    { intent: "any_available", fallbackDepth: 3 },
+    { client },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.deepEqual(
+    result.resolved.map((row) => row.id),
+    ["groq/consistent"],
+  );
+  assert.ok(
+    result.excluded.some(
+      (row) =>
+        row.id === "groq/contradictory" &&
+        row.reason === "inconsistent_free_metadata",
+    ),
+  );
 });
 
 test("does not silently add or drop constraints", async () => {

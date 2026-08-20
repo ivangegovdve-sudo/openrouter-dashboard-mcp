@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { z } from "zod";
+
 import { createDashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import { manifestSchema } from "../src/dashboard/schemas/openrouter.js";
@@ -23,7 +25,7 @@ const htmlFetch: typeof fetch = async () =>
     headers: { "content-type": "text/html; charset=utf-8" },
   });
 
-test("times out a hung fetch and classifies it as unreachable", async () => {
+test("times out a hung fetch and classifies it as timeout", async () => {
   const client = createDashboardClient({
     baseUrl: "https://catalogue.test",
     timeoutMs: 20,
@@ -40,6 +42,256 @@ test("times out a hung fetch and classifies it as unreachable", async () => {
     (error: unknown) =>
       error instanceof DashboardRequestError && error.kind === "timeout",
   );
+});
+
+test("rejects an oversized declared JSON body before reading and cancels it", async () => {
+  let pulled = false;
+  let cancelled = false;
+  const client = createDashboardClient({
+    baseUrl: "https://catalogue.test",
+    maxResponseBytes: 16,
+    timeoutMs: 200,
+    fetchImpl: async (_input, init) => {
+      const body = new ReadableStream<Uint8Array>(
+        {
+          start(controller) {
+            init?.signal?.addEventListener(
+              "abort",
+              () => controller.error(new DOMException("aborted", "AbortError")),
+              { once: true },
+            );
+          },
+          pull() {
+            pulled = true;
+            return new Promise<void>(() => {});
+          },
+          cancel() {
+            cancelled = true;
+            return new Promise<void>(() => {});
+          },
+        },
+        { highWaterMark: 0 },
+      );
+      return new Response(body, {
+        headers: {
+          "content-type": "application/json",
+          "content-length": "17",
+        },
+      });
+    },
+  });
+  const startedAt = performance.now();
+
+  await assert.rejects(
+    client.get(
+      "/api/public/v2/manifest",
+      new URLSearchParams(),
+      manifestSchema,
+    ),
+    (error: unknown) =>
+      error instanceof DashboardRequestError &&
+      error.kind === "invalid_payload" &&
+      !error.message.includes("17"),
+  );
+
+  assert.ok(performance.now() - startedAt < 100);
+  assert.equal(pulled, false);
+  assert.equal(cancelled, true);
+});
+
+test("rejects an oversized chunked JSON body while streaming and cancels it", async () => {
+  let cancelled = false;
+  let sent = false;
+  const client = createDashboardClient({
+    baseUrl: "https://catalogue.test",
+    maxResponseBytes: 8,
+    timeoutMs: 500,
+    fetchImpl: async (_input, init) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          init?.signal?.addEventListener(
+            "abort",
+            () => controller.error(new DOMException("aborted", "AbortError")),
+            { once: true },
+          );
+        },
+        pull(controller) {
+          if (!sent) {
+            sent = true;
+            controller.enqueue(
+              new TextEncoder().encode('{"private":"oversized"}'),
+            );
+          }
+          return new Promise<void>(() => {});
+        },
+        cancel() {
+          cancelled = true;
+          return new Promise<void>(() => {});
+        },
+      });
+      return new Response(body, {
+        headers: {
+          "content-type": "application/json",
+          "content-length": "not-a-decimal-length",
+        },
+      });
+    },
+  });
+
+  await assert.rejects(
+    client.get(
+      "/api/public/v2/manifest",
+      new URLSearchParams(),
+      manifestSchema,
+    ),
+    (error: unknown) =>
+      error instanceof DashboardRequestError &&
+      error.kind === "invalid_payload" &&
+      !error.message.includes("private"),
+  );
+
+  assert.equal(cancelled, true);
+});
+
+test("accepts exact-cap JSON using UTF-8 byte length rather than string length", async () => {
+  const body = JSON.stringify({ value: "é" });
+  const byteLength = Buffer.byteLength(body, "utf8");
+  assert.ok(byteLength > body.length);
+  const client = createDashboardClient({
+    baseUrl: "https://catalogue.test",
+    maxResponseBytes: byteLength,
+    fetchImpl: async () =>
+      new Response(body, {
+        headers: {
+          "content-type": "application/json",
+          "content-length": String(byteLength),
+        },
+      }),
+  });
+
+  const result = await client.get(
+    "/utf8",
+    new URLSearchParams(),
+    z.object({ value: z.literal("é") }).strict(),
+  );
+
+  assert.deepEqual(result, { value: "é" });
+});
+
+test("rejects an invalid injected response cap before fetching", async () => {
+  let fetchCalls = 0;
+  const client = createDashboardClient({
+    baseUrl: "https://catalogue.test",
+    maxResponseBytes: 0,
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      return new Response();
+    },
+  });
+
+  await assert.rejects(
+    client.get(
+      "/api/public/v2/manifest",
+      new URLSearchParams(),
+      manifestSchema,
+    ),
+    (error: unknown) =>
+      error instanceof DashboardRequestError &&
+      error.kind === "configuration_error",
+  );
+  assert.equal(fetchCalls, 0);
+});
+
+for (const responseCase of [
+  { name: "HTTP 503", status: 503, contentType: "application/json" },
+  { name: "HTML", status: 200, contentType: "text/html" },
+] as const) {
+  test(`cancels an endless ${responseCase.name} body without awaiting cancellation`, async () => {
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        cancelled = true;
+        return new Promise<void>(() => {});
+      },
+    });
+    const client = createDashboardClient({
+      baseUrl: "https://catalogue.test",
+      timeoutMs: 500,
+      fetchImpl: async () =>
+        new Response(body, {
+          status: responseCase.status,
+          headers: { "content-type": responseCase.contentType },
+        }),
+    });
+    const startedAt = performance.now();
+
+    await assert.rejects(
+      client.get(
+        "/api/public/v2/manifest",
+        new URLSearchParams(),
+        manifestSchema,
+      ),
+      (error: unknown) =>
+        error instanceof DashboardRequestError &&
+        error.kind ===
+          (responseCase.status === 503 ? "http_error" : "non_json"),
+    );
+
+    assert.ok(performance.now() - startedAt < 100);
+    assert.equal(cancelled, true);
+  });
+}
+
+test("uses manual redirect handling and rejects redirects without reading metadata", async () => {
+  let redirectPolicy: RequestRedirect | undefined;
+  let pulled = false;
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>(
+    {
+      pull() {
+        pulled = true;
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        cancelled = true;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const client = createDashboardClient({
+    baseUrl: "https://catalogue.test",
+    fetchImpl: async (_input, init) => {
+      redirectPolicy = init?.redirect;
+      return new Response(body, {
+        status: 302,
+        headers: {
+          location: "https://private-redirect.test/path?secret=private",
+          "content-type": "text/plain",
+        },
+      });
+    },
+  });
+
+  await assert.rejects(
+    client.get(
+      "/api/public/v2/manifest",
+      new URLSearchParams(),
+      manifestSchema,
+    ),
+    (error: unknown) =>
+      error instanceof DashboardRequestError &&
+      error.kind === "http_error" &&
+      error.status === 302 &&
+      !error.message.includes("private-redirect") &&
+      !error.message.includes("secret"),
+  );
+
+  assert.equal(redirectPolicy, "manual");
+  assert.equal(pulled, false);
+  assert.equal(cancelled, true);
 });
 
 test("keeps the timeout active while reading a stalled response body", async () => {
@@ -217,9 +469,11 @@ test("does not retain upstream parsing details as an error cause", async () => {
 test("encodes query values, sends only JSON acceptance, and returns the validated envelope", async () => {
   let requestedUrl = "";
   let requestedHeaders = new Headers();
+  let requestedSignal: AbortSignal | null | undefined;
   const fetchImpl: typeof fetch = async (input, init) => {
     requestedUrl = input.toString();
     requestedHeaders = new Headers(init?.headers);
+    requestedSignal = init?.signal;
     return new Response(JSON.stringify(manifestFixture), {
       headers: { "content-type": "application/json; charset=utf-8" },
     });
@@ -245,6 +499,7 @@ test("encodes query values, sends only JSON acceptance, and returns the validate
   assert.equal(parsedUrl.searchParams.get("model"), "provider/model name+variant");
   assert.equal(requestedHeaders.get("accept"), "application/json");
   assert.equal(requestedHeaders.has("authorization"), false);
+  assert.equal(requestedSignal?.aborted, true);
   assert.deepEqual(result, manifestFixture);
 });
 

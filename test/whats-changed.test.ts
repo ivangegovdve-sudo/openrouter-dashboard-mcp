@@ -336,6 +336,52 @@ test("paginates deprecations only to the declared bound and preserves cursors", 
   });
 });
 
+test("does not claim the collection continued when an exact item cap ends with a null cursor", async () => {
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [] },
+    { date: "2026-08-19", complete: true, rows: [] },
+  ]);
+  const notices = Array.from({ length: DEPRECATION_ITEM_LIMIT }, (_, index) => ({
+    modelId: `example/model-${index}`,
+    state: "scheduled_deprecation" as const,
+    expirationDate: null,
+    firstObservedAt: "2026-08-19T06:00:00.000Z",
+    lastObservedAt: "2026-08-19T06:00:00.000Z",
+    evidenceRunId: runId,
+  }));
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [manifestEndpoint, historyEndpoint, deprecationsEndpoint],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      if (path === deprecationsEndpoint) {
+        return schema.parse(collectionResponse(notices, null));
+      }
+      throw new Error(`Unexpected test path: ${path}`);
+    },
+  };
+
+  const result = await runWhatsChanged(
+    { since: "2026-08-18", limit: 5 },
+    { client },
+  );
+
+  assert.notEqual(result.status, "error");
+  if (result.status === "error") return;
+  assert.equal(result.caps.deprecations?.reached, true);
+  assert.equal(result.caps.deprecations?.nextCursor, null);
+  assert.equal(
+    result.warnings.includes(
+      "The deprecation scan reached its declared bound before the collection ended.",
+    ),
+    false,
+  );
+});
+
 test("uses explicit since for independent sections when history request fails", async () => {
   const notice = {
     modelId: "example/deprecated",

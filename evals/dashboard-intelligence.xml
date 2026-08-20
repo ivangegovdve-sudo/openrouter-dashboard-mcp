@@ -70,9 +70,9 @@
     <criteria>
       <assert path="$.tool" operator="equals" value="dashboard_usage_leaders" />
       <assert path="$.result.query.windowDays" operator="equals" value="7" />
-      <assert path="$.result.models.leaders" operator="max-items-when-present" value="3" />
-      <assert path="$.result.apps.leaders" operator="max-items-when-present" value="3" />
-      <assert path="$.result.apps.leaders[*].rolling30DayEcosystemTokenVolume" operator="all-match-when-present" value="^[0-9]+$" />
+      <assert path="$.result.modelRequestedWindow.leaders" operator="max-items-when-present" value="3" />
+      <assert path="$.result.appsRolling30Day.leaders" operator="max-items-when-present" value="3" />
+      <assert path="$.result.appsRolling30Day.leaders[*].rolling30DayEcosystemTokenVolume" operator="all-match-when-present" value="^[0-9]+$" />
     </criteria>
   </case>
 
@@ -84,8 +84,8 @@
       <assert path="$.tool" operator="equals" value="dashboard_usage_leaders" />
       <assert path="$.result.query.windowDays" operator="equals" value="30" />
       <assert path="$.result.status" operator="one-of" value="ok,partial" />
-      <assert path="$.result.models.status" operator="one-of" value="available,unavailable" />
-      <assert path="$.result.models.leaders" operator="max-items-when-present" value="5" />
+      <assert path="$.result.modelRequestedWindow.status" operator="one-of" value="available,partial,unavailable" />
+      <assert path="$.result.modelRequestedWindow.leaders" operator="max-items-when-present" value="5" />
     </criteria>
   </case>
 

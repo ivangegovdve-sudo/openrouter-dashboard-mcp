@@ -291,7 +291,7 @@ test("keeps only upstream-free candidates with published prices and the requeste
     async get(path, query, schema) {
       if (path === manifestEndpoint) return schema.parse(manifestFixture);
       if (path === liveModelsEndpoint) {
-        return schema.parse(collection(liveRows));
+        return collection(liveRows) as never;
       }
       if (path === freeModelsEndpoint) {
         return schema.parse(freeModelsResponse());
@@ -331,6 +331,56 @@ test("keeps only upstream-free candidates with published prices and the requeste
     excludedUnknownPriceCount: 1,
     excludedModalityCount: 1,
   });
+});
+
+test("free-model tool excludes contradictory live freeness while preserving the catalogue free router", async () => {
+  const contradictory = {
+    ...freeLiveModel,
+    id: "openrouter/contradictory-free",
+    pricing: {
+      promptUsdPerToken: "0.000001",
+      completionUsdPerToken: "0",
+    },
+    isFree: true,
+    freeKind: "paid_or_unknown" as const,
+  };
+  const freeRouter = {
+    ...freeCatalogueModel,
+    id: "openrouter/free",
+    canonicalSlug: "openrouter/free",
+    name: "Free Router",
+    freeKind: "free_router" as const,
+  };
+  const client: DashboardClient = {
+    async get(path, query, schema) {
+      if (path === manifestEndpoint) return schema.parse(manifestFixture);
+      if (path === liveModelsEndpoint) {
+        return collection([contradictory, freeLiveModel]) as never;
+      }
+      if (path === freeModelsEndpoint) {
+        return schema.parse({ ...freeModelsResponse(), router: freeRouter });
+      }
+      if (query.get("x") === "benchmarkQuality") {
+        return schema.parse(
+          frontierResponse("benchmarkQuality", "medianThroughput"),
+        );
+      }
+      return schema.parse(
+        frontierResponse("contextLength", "weeklyPopularityRank"),
+      );
+    },
+  };
+
+  const output = await runFreeModels({}, { client });
+
+  assert.equal(output.status, "ok");
+  if (output.status !== "ok") return;
+  assert.deepEqual(
+    output.liveCandidates.data.map((row) => row.id),
+    ["openrouter/free-text"],
+  );
+  assert.equal(output.liveCandidates.cap.excludedNotFreeCount, 1);
+  assert.equal(output.openRouterCatalogue.router?.freeKind, "free_router");
 });
 
 test("preserves endpoint staleness, opaque cursors, caps, and warnings", async () => {
