@@ -33,7 +33,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers source health without fetching during construction or tools/list", async () => {
+test("registers source health and Task 3 tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -44,15 +44,23 @@ test("registers source health without fetching during construction or tools/list
   try {
     const listed = await client.listTools();
     assert.equal(fetchImpl.calls, 0);
-    assert.equal(listed.tools.length, 1);
-    assert.equal(listed.tools[0]?.name, "dashboard_source_health");
-    assert.deepEqual(listed.tools[0]?.annotations, {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: true,
-    });
-    assert.ok(listed.tools[0]?.inputSchema);
-    assert.ok(listed.tools[0]?.outputSchema);
+    assert.deepEqual(
+      listed.tools.map((tool) => tool.name).sort(),
+      [
+        "dashboard_model_status",
+        "dashboard_source_health",
+        "dashboard_whats_changed",
+      ],
+    );
+    for (const tool of listed.tools) {
+      assert.deepEqual(tool.annotations, {
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: true,
+      });
+      assert.ok(tool.inputSchema);
+      assert.ok(tool.outputSchema);
+    }
   } finally {
     await client.close();
   }

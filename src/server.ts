@@ -7,7 +7,9 @@ import {
   createDashboardClient,
   type DashboardClientOptions,
 } from "./dashboard/client.js";
+import { registerModelStatus } from "./tools/model-status.js";
 import { registerSourceHealth } from "./tools/source-health.js";
+import { registerWhatsChanged } from "./tools/whats-changed.js";
 
 export type CreateServerOptions = DashboardClientOptions;
 
@@ -22,5 +24,7 @@ export function createServer(
   });
   const client = createDashboardClient(options);
   registerSourceHealth(server, { client });
+  registerModelStatus(server, { client });
+  registerWhatsChanged(server, { client });
   return server;
 }
