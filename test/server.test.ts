@@ -5,6 +5,8 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type { McpServer } from "@modelcontextprotocol/server";
 
 import { createServer } from "../src/server.js";
+import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
 import {
   manifestFixture,
   publicCompleteness,
@@ -34,7 +36,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers source health through Task 5 tools without fetching during construction or tools/list", async () => {
+test("registers exactly the seven Task 6 tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -49,9 +51,11 @@ test("registers source health through Task 5 tools without fetching during const
       listed.tools.map((tool) => tool.name).sort(),
       [
         "dashboard_free_models",
+        "dashboard_github_movers",
         "dashboard_model_status",
         "dashboard_resolve_model",
         "dashboard_source_health",
+        "dashboard_usage_leaders",
         "dashboard_whats_changed",
       ],
     );
@@ -64,6 +68,54 @@ test("registers source health through Task 5 tools without fetching during const
       assert.ok(tool.inputSchema);
       assert.ok(tool.outputSchema);
     }
+  } finally {
+    await client.close();
+  }
+});
+
+test("serializes and validates both new Task 6 handlers while keeping the connection alive", async () => {
+  const fetchImpl: typeof fetch = async () => {
+    throw new Error("private offline registration diagnostic");
+  };
+  const server = createServer({
+    baseUrl: "https://catalogue.test/",
+    fetchImpl,
+  });
+  const client = await connectTestClient(server);
+
+  try {
+    const calls = [
+      {
+        name: "dashboard_usage_leaders",
+        arguments: { windowDays: 1, limit: 1 },
+        schema: usageLeadersOutputSchema,
+      },
+      {
+        name: "dashboard_github_movers",
+        arguments: { category: "mcp", windowDays: 7, limit: 1 },
+        schema: githubMoversOutputSchema,
+      },
+    ] as const;
+
+    for (const call of calls) {
+      const result = await client.callTool({
+        name: call.name,
+        arguments: call.arguments,
+      });
+      assert.equal(result.isError, undefined);
+      assert.ok(result.structuredContent);
+      call.schema.parse(result.structuredContent);
+      const text = result.content.find((item) => item.type === "text");
+      assert.ok(text && text.type === "text");
+      assert.deepEqual(JSON.parse(text.text), result.structuredContent);
+      assert.doesNotMatch(
+        JSON.stringify(result),
+        /private offline registration diagnostic/,
+      );
+    }
+
+    const listed = await client.listTools();
+    assert.equal(listed.tools.length, 7);
   } finally {
     await client.close();
   }
