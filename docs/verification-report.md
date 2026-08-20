@@ -10,12 +10,12 @@ The live and alien-cwd runs used the public default `https://openrouter-github-d
 
 | Mode | Result | Total elapsed | Reviewed stderr |
 |---|---|---:|---:|
-| live | 7 tools listed twice; 7 calls validated | 3291.32 ms | 0 bytes |
-| fixture | complete diagnostic matrix validated | 992.56 ms | 0 bytes |
+| live | 7 tools listed twice; 7 calls validated | 3353.92 ms | 0 bytes |
+| fixture | complete diagnostic matrix validated | 1014.00 ms | 0 bytes |
 | offline | all 7 calls contained structured `unreachable`; connection survived | 891.97 ms | 0 bytes |
 | html | all 7 calls contained structured `non_json`; no body/stack leaked | 1059.22 ms | 0 bytes |
 | stdout purity | 10/10 strict response-only NDJSON frames; ids 1–10 exactly | 498.32 ms | 0 bytes |
-| alien-cwd | live matrix from `C:\\`; live status/top-level shapes matched | 2219.09 ms | 0 bytes |
+| alien-cwd | live matrix from `C:\\`; live status/top-level shapes matched | 2173.58 ms | 0 bytes |
 
 Evidence artifacts are ignored and stored at `verification/raw/{live,fixture,offline,html,stdout,alien-cwd}.json`, with reviewed stderr in the corresponding `*.stderr.txt` files. Before writing, the harness validates forbidden diagnostic and credential-bearing fields and fails closed; it does not rewrite definitions, arguments, timings, URLs, or `structuredContent`. Only separately captured stderr receives URL sanitization.
 
@@ -23,15 +23,15 @@ Evidence artifacts are ignored and stored at `verification/raw/{live,fixture,off
 
 | Tool | Elapsed | Status | Deployment observation |
 |---|---:|---|---|
-| `dashboard_resolve_model` | 690.49 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_model_status` | 49.36 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_whats_changed` | 317.82 ms | partial | real history/deprecation evidence; price history remains unsupported |
-| `dashboard_free_models` | 83.71 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_usage_leaders` | 221.34 ms | partial | real public model/app data; endpoint-specific partial sections preserved |
-| `dashboard_source_health` | 67.68 ms | ok | six sources; stale benchmark source and failed latest attempt retained |
-| `dashboard_github_movers` | 1511.29 ms | partial | real category-scoped momentum; endpoint-specific auxiliary failures retained |
+| `dashboard_resolve_model` | 715.36 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_model_status` | 58.94 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_whats_changed` | 307.15 ms | partial | real history/deprecation evidence; price history remains unsupported |
+| `dashboard_free_models` | 73.34 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_usage_leaders` | 281.77 ms | partial | real public model/app data; endpoint-specific partial sections preserved |
+| `dashboard_source_health` | 66.82 ms | ok | six sources; stale benchmark source and failed latest attempt retained |
+| `dashboard_github_movers` | 1479.09 ms | partial | real category-scoped momentum; endpoint-specific auxiliary failures retained |
 
-Live connect/list/final-list/close timings were 267.63/14.24/11.25/21.46 ms. The public manifest still lacked `/api/public/v2/live-models`; this is current deployment state, not a forced fixture. All seven results passed their exported output schemas; the three unavailable live-model-dependent paths used the exact capability contract, while their normal branches were exercised against the local fixture with request-specific invariants.
+Live connect/list/final-list/close timings were 278.36/19.21/11.32/20.61 ms. The public manifest still lacked `/api/public/v2/live-models`; this is current deployment state, not a forced fixture. All seven results passed their exported output schemas; the three unavailable live-model-dependent paths used the exact capability contract, while their normal branches were exercised against the local fixture with request-specific invariants. The standard resolver probe now requests `verbose: true`, allowing returned details to prove requested modality, reasoning, and provider-active constraints without inventing fields; this adds payload only after the live-models route is deployed. Normal resolver validation also requires exactly `min(eligibleCount, fallbackDepth)` rows, and live free-model candidates require semantic zero prompt/completion prices plus the authoritative `concrete_free` classification.
 
 ## Actual live `structuredContent`
 
@@ -3975,9 +3975,9 @@ An Electron host should spawn the compiled absolute `build/index.js` path with t
 
 Fresh final verification:
 
-- `npm test`: exit 0; 98 tests passed, 0 failed.
+- `npm test`: exit 0; 101 tests passed, 0 failed.
 - `npm run build`: exit 0; production TypeScript build plus no-emit harness typecheck passed; executable remained `build/index.js`.
-- `git diff --check`: exit 0 with no output after normalizing the edited `package.json` line endings.
+- `git diff --check`: exit 0 with no output.
 - XML parse/coverage check: 10 cases, 10 independent, archived date `2026-08-19`, 7 unique tool names.
 - Live-report equality check: all seven JSON blocks deep-strict-equal their corresponding `verification/raw/live.json` `structuredContent` values.
 

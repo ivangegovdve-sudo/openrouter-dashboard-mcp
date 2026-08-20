@@ -161,7 +161,7 @@ test("standard call matrix covers the exact seven tools and arguments", async ()
         intent: "any_available",
         constraints: { outputModality: "text" },
         fallbackDepth: 3,
-        verbose: false,
+        verbose: true,
       },
     },
     {
@@ -268,7 +268,7 @@ test("live normal-branch validation enforces schemas and tool invariants", async
       intent: "cheapest_capable" as const,
       constraints: { free: true, outputModality: "text" },
       fallbackDepth: 3,
-      verbose: false,
+      verbose: true,
     };
     const statusArguments = { slug: "fixture/free-text" };
     const freeArguments = { outputModality: "text", limit: 5 };
@@ -399,6 +399,271 @@ test("live normal-branch validation enforces schemas and tool invariants", async
         "live",
         "dashboard_free_models",
         overLimitFree,
+        1,
+        freeArguments,
+      ),
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("resolver live invariants require exactly the bounded eligible result count", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    const resolverArguments = {
+      intent: "any_available" as const,
+      constraints: { free: true, outputModality: "text" },
+      fallbackDepth: 3,
+      verbose: true,
+    };
+    const resolver = await runResolveModel(resolverArguments, { client });
+    if (resolver.status !== "ok" || resolver.resolved.length !== 1) {
+      assert.fail("fixture resolver must return one normal resolved row");
+    }
+
+    const empty = structuredClone(resolver);
+    empty.resolved = [];
+    empty.cap.eligibleCount = 1;
+    empty.cap.resolvedCount = 0;
+    empty.cap.fallbackTruncated = true;
+    empty.unsatisfiable = true;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        empty,
+        1,
+        resolverArguments,
+      ),
+    );
+
+    const undersized = structuredClone(resolver);
+    undersized.cap.eligibleCount = 2;
+    undersized.cap.fallbackTruncated = true;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        undersized,
+        1,
+        resolverArguments,
+      ),
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("resolver live invariants prove every observable requested capability", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    const baseArguments = {
+      intent: "any_available" as const,
+      constraints: { free: true, outputModality: "text" },
+      fallbackDepth: 3,
+      verbose: true,
+    };
+    const resolver = await runResolveModel(baseArguments, { client });
+    if (
+      resolver.status !== "ok" ||
+      resolver.resolved[0]?.details === undefined
+    ) {
+      assert.fail("verbose fixture resolver must expose candidate details");
+    }
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        resolver,
+        1,
+        baseArguments,
+      ),
+    );
+
+    const missingDetails = structuredClone(resolver);
+    delete missingDetails.resolved[0]!.details;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        missingDetails,
+        1,
+        baseArguments,
+      ),
+    );
+
+    const wrongDetailsIdentity = structuredClone(resolver);
+    wrongDetailsIdentity.resolved[0]!.details!.id = "fixture/other-model";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        wrongDetailsIdentity,
+        1,
+        baseArguments,
+      ),
+    );
+
+    const wrongModality = structuredClone(resolver);
+    wrongModality.resolved[0]!.details!.outputModalities = ["audio"];
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        wrongModality,
+        1,
+        baseArguments,
+      ),
+    );
+
+    const reasoningArguments = {
+      ...baseArguments,
+      constraints: { ...baseArguments.constraints, reasoning: true },
+    };
+    const reasoning = structuredClone(resolver);
+    reasoning.constraints = { ...reasoning.constraints, reasoning: true };
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        reasoning,
+        1,
+        reasoningArguments,
+      ),
+    );
+    const unknownReasoning = structuredClone(reasoning);
+    unknownReasoning.resolved[0]!.details!.reasoningEfforts = null;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        unknownReasoning,
+        1,
+        reasoningArguments,
+      ),
+    );
+
+    const nonReasoningArguments = {
+      ...baseArguments,
+      constraints: { ...baseArguments.constraints, reasoning: false },
+    };
+    const nonReasoning = structuredClone(resolver);
+    nonReasoning.constraints = {
+      ...nonReasoning.constraints,
+      reasoning: false,
+    };
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        nonReasoning,
+        1,
+        nonReasoningArguments,
+      ),
+    );
+
+    const activeProviderArguments = {
+      ...baseArguments,
+      constraints: {
+        ...baseArguments.constraints,
+        requireProviderActive: true as const,
+      },
+    };
+    const activeProvider = structuredClone(resolver);
+    activeProvider.constraints = {
+      ...activeProvider.constraints,
+      requireProviderActive: true,
+    };
+    activeProvider.resolved[0]!.details!.providerActive = true;
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        activeProvider,
+        1,
+        activeProviderArguments,
+      ),
+    );
+    const inactiveProvider = structuredClone(activeProvider);
+    inactiveProvider.resolved[0]!.details!.providerActive = false;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        inactiveProvider,
+        1,
+        activeProviderArguments,
+      ),
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("free-model live invariants require zero concrete-free pricing", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    const freeArguments = { outputModality: "text", limit: 5 };
+    const free = await runFreeModels(freeArguments, { client });
+    if (
+      (free.status !== "ok" && free.status !== "partial") ||
+      free.liveCandidates.data[0] === undefined
+    ) {
+      assert.fail("fixture free-model output must expose a live candidate");
+    }
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        free,
+        1,
+        freeArguments,
+      ),
+    );
+
+    const nonzeroPrompt = structuredClone(free);
+    nonzeroPrompt.liveCandidates.data[0]!.pricing.promptUsdPerToken =
+      "0.000001";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        nonzeroPrompt,
+        1,
+        freeArguments,
+      ),
+    );
+
+    const nonzeroCompletion = structuredClone(free);
+    nonzeroCompletion.liveCandidates.data[0]!.pricing.completionUsdPerToken =
+      "0.000001";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        nonzeroCompletion,
+        1,
+        freeArguments,
+      ),
+    );
+
+    const wrongFreeKind = structuredClone(free);
+    wrongFreeKind.liveCandidates.data[0]!.freeKind = "paid_or_unknown";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        wrongFreeKind,
         1,
         freeArguments,
       ),

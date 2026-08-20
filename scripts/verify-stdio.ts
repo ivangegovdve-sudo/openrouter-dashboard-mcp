@@ -82,7 +82,7 @@ export const STANDARD_CALLS = [
       intent: "any_available",
       constraints: { outputModality: "text" },
       fallbackDepth: 3,
-      verbose: false,
+      verbose: true,
     },
   },
   {
@@ -488,7 +488,8 @@ function assertResolveModelLiveInvariants(
     throw new Error("resolver output does not match the requested intent/constraints");
   }
   if (
-    output.resolved.length > input.fallbackDepth ||
+    output.resolved.length !==
+      Math.min(output.cap.eligibleCount, input.fallbackDepth) ||
     output.cap.resolvedLimit !== input.fallbackDepth ||
     output.cap.resolvedCount !== output.resolved.length ||
     output.cap.excludedCount !== output.excluded.length ||
@@ -530,6 +531,39 @@ function assertResolveModelLiveInvariants(
     ) {
       throw new Error("resolver output selected an unrequested provider");
     }
+    const needsConstraintDetails =
+      input.constraints.outputModality !== undefined ||
+      input.constraints.reasoning !== undefined ||
+      input.constraints.requireProviderActive !== undefined;
+    if (needsConstraintDetails) {
+      const details = model.details;
+      if (
+        details === undefined ||
+        details.id !== model.id ||
+        details.provider !== model.provider
+      ) {
+        throw new Error("resolver output cannot prove requested candidate constraints");
+      }
+      if (
+        input.constraints.outputModality !== undefined &&
+        !details.outputModalities?.includes(input.constraints.outputModality)
+      ) {
+        throw new Error("resolver output selected the wrong output modality");
+      }
+      if (
+        input.constraints.reasoning !== undefined &&
+        (input.constraints.reasoning === false ||
+          details.reasoningEfforts === null)
+      ) {
+        throw new Error("resolver output selected a reasoning mismatch");
+      }
+      if (
+        input.constraints.requireProviderActive !== undefined &&
+        details.providerActive !== true
+      ) {
+        throw new Error("resolver output selected an inactive or unknown provider");
+      }
+    }
   }
   for (const model of output.excluded) {
     if (resolvedKeys.has(`${model.provider}\u0000${model.id}`)) {
@@ -552,6 +586,10 @@ function assertModelStatusLiveInvariants(
   ) {
     throw new Error("model status suggested the exact supposedly missing model");
   }
+}
+
+function isZeroExactDecimal(value: string | null): boolean {
+  return value !== null && /^0(?:\.0+)?$/.test(value);
 }
 
 function assertFreeModelsLiveInvariants(
@@ -586,11 +624,12 @@ function assertFreeModelsLiveInvariants(
     if (
       model.availability !== "available" ||
       model.isFree !== true ||
-      model.pricing.promptUsdPerToken === null ||
-      model.pricing.completionUsdPerToken === null ||
+      model.freeKind !== "concrete_free" ||
+      !isZeroExactDecimal(model.pricing.promptUsdPerToken) ||
+      !isZeroExactDecimal(model.pricing.completionUsdPerToken) ||
       !model.outputModalities?.includes(input.outputModality)
     ) {
-      throw new Error("free-model output contains an unavailable or unknown row");
+      throw new Error("free-model output contains an unavailable or non-free row");
     }
   }
 
