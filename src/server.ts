@@ -7,6 +7,7 @@ import {
   createDashboardClient,
   type DashboardClientOptions,
 } from "./dashboard/client.js";
+import { registerFreeModels } from "./tools/free-models.js";
 import { registerModelStatus } from "./tools/model-status.js";
 import { registerResolveModel } from "./tools/resolve-model.js";
 import { registerSourceHealth } from "./tools/source-health.js";
@@ -25,6 +26,7 @@ export function createServer(
   });
   const client = createDashboardClient(options);
   registerSourceHealth(server, { client });
+  registerFreeModels(server, { client });
   registerResolveModel(server, { client });
   registerModelStatus(server, { client });
   registerWhatsChanged(server, { client });

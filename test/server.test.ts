@@ -34,7 +34,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers source health through Task 4 tools without fetching during construction or tools/list", async () => {
+test("registers source health through Task 5 tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -48,6 +48,7 @@ test("registers source health through Task 4 tools without fetching during const
     assert.deepEqual(
       listed.tools.map((tool) => tool.name).sort(),
       [
+        "dashboard_free_models",
         "dashboard_model_status",
         "dashboard_resolve_model",
         "dashboard_source_health",
