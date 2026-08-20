@@ -4,7 +4,6 @@ import test from "node:test";
 import type { DashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import {
-  MODEL_STATUS_CAPABILITY_MESSAGE,
   MODEL_STATUS_LIVE_ITEM_LIMIT,
   MODEL_STATUS_LIVE_PAGE_LIMIT,
   runModelStatus,
@@ -22,6 +21,8 @@ import {
 const liveModelsEndpoint = "/api/public/v2/live-models";
 const manifestEndpoint = "/api/public/v2/manifest";
 const deprecationsEndpoint = "/api/public/v2/deprecations";
+const expectedCapabilityMessage =
+  "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
 
 function liveModelsResponse(
   data: readonly unknown[],
@@ -77,8 +78,8 @@ test("declines with the exact actionable message when live-models is absent", as
 
   assert.equal(result.status, "unavailable");
   if (result.status !== "unavailable") return;
-  assert.equal(result.summary, MODEL_STATUS_CAPABILITY_MESSAGE);
-  assert.equal(result.message, MODEL_STATUS_CAPABILITY_MESSAGE);
+  assert.equal(result.summary, expectedCapabilityMessage);
+  assert.equal(result.message, expectedCapabilityMessage);
   assert.deepEqual(requests, [manifestEndpoint]);
   assert.equal(result.evidence[0]?.endpoint, manifestEndpoint);
 });

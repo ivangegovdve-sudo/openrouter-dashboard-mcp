@@ -80,6 +80,15 @@ const availableModelChangesSchema = z
   })
   .strict();
 
+const partialModelChangesSchema = z
+  .object({
+    status: z.literal("partial"),
+    items: z.array(liveModelSchema),
+    omitted: z.null(),
+    reason: z.string(),
+  })
+  .strict();
+
 const unavailableSectionSchema = z
   .object({
     status: z.literal("unavailable"),
@@ -89,6 +98,7 @@ const unavailableSectionSchema = z
 
 const modelChangesSchema = z.discriminatedUnion("status", [
   availableModelChangesSchema,
+  partialModelChangesSchema,
   unavailableSectionSchema,
 ]);
 
@@ -127,8 +137,18 @@ const availableDeprecationsSchema = z
   })
   .strict();
 
+const partialDeprecationsSchema = z
+  .object({
+    status: z.literal("partial"),
+    items: z.array(publicDeprecationSchema),
+    omitted: z.null(),
+    reason: z.string(),
+  })
+  .strict();
+
 const newDeprecationsSchema = z.discriminatedUnion("status", [
   availableDeprecationsSchema,
+  partialDeprecationsSchema,
   unavailableSectionSchema,
 ]);
 
@@ -209,6 +229,7 @@ export type WhatsChangedDependencies = {
 type Evidence = z.infer<typeof sourceEvidenceSchema>;
 type HistoryBucket = z.infer<typeof publicOverviewHistoryBucketSchema>;
 type LiveModel = z.infer<typeof liveModelSchema>;
+type OverviewHistory = z.infer<typeof overviewHistoryResponseSchema>;
 
 type DeprecationScan = {
   rows: Array<z.infer<typeof publicDeprecationSchema>>;
@@ -238,8 +259,15 @@ function unavailable(reason: string): z.infer<typeof unavailableSectionSchema> {
   return { status: "unavailable", reason };
 }
 
-function timestampOnOrAfter(timestamp: string, since: string): boolean {
-  return Date.parse(timestamp) >= Date.parse(`${since}T00:00:00Z`);
+function timestampInComparisonWindow(
+  timestamp: string,
+  since: string,
+  through: string,
+): boolean {
+  const observedAt = Date.parse(timestamp);
+  const afterBaselineDay = Date.parse(`${since}T00:00:00Z`) + 86_400_000;
+  const afterThroughDay = Date.parse(`${through}T00:00:00Z`) + 86_400_000;
+  return observedAt >= afterBaselineDay && observedAt < afterThroughDay;
 }
 
 async function scanDeprecations(
@@ -342,11 +370,7 @@ function baselineBucketFor(
   buckets: HistoryBucket[],
   since: string,
 ): HistoryBucket | null {
-  return (
-    buckets
-      .filter((bucket) => bucket.date <= since)
-      .at(-1) ?? null
-  );
+  return buckets.find((bucket) => bucket.date === since) ?? null;
 }
 
 function rankMovementItems(
@@ -395,7 +419,9 @@ function availableItemCount(
     | z.infer<typeof newDeprecationsSchema>
     | z.infer<typeof rankMovementsSchema>,
 ): number {
-  return section.status === "available" ? section.items.length : 0;
+  return section.status === "available" || section.status === "partial"
+    ? section.items.length
+    : 0;
 }
 
 export async function runWhatsChanged(
@@ -404,7 +430,7 @@ export async function runWhatsChanged(
 ): Promise<WhatsChangedOutput> {
   try {
     const input = whatsChangedInputSchema.parse(rawInput);
-    const [manifest, history] = await Promise.all([
+    const [manifestResult, historyResult] = await Promise.allSettled([
       client.get(MANIFEST_ENDPOINT, new URLSearchParams(), manifestSchema),
       client.get(
         HISTORY_ENDPOINT,
@@ -416,25 +442,43 @@ export async function runWhatsChanged(
       ),
     ]);
 
+    if (manifestResult.status === "rejected") throw manifestResult.reason;
+    const manifest = manifestResult.value;
+
     const evidence: Evidence[] = [sourceEvidence(MANIFEST_ENDPOINT, manifest)];
     const warnings: string[] = [];
-    if (history.status === "available") {
+    let history: OverviewHistory | null = null;
+    let historyUnavailableReason: string | null = null;
+    if (historyResult.status === "rejected") {
+      const error = safeDashboardError(historyResult.reason);
+      historyUnavailableReason = `Overview history is unavailable: ${error.message}`;
+      warnings.push(historyUnavailableReason);
+    } else {
+      history = historyResult.value;
+    }
+    if (history?.status === "available") {
       evidence.push(sourceEvidence(HISTORY_ENDPOINT, history));
       warnings.push(...staleWarning(HISTORY_ENDPOINT, history.stale));
+    } else if (history?.status === "unavailable") {
+      historyUnavailableReason =
+        "Overview history is unavailable because there is insufficient history.";
     }
 
     const buckets =
-      history.status === "available"
+      history?.status === "available"
         ? completeBuckets(history.data.modelUsage)
         : [];
     const currentBucket = buckets.at(-1) ?? null;
     const defaultBaseline = buckets.length >= 2 ? buckets.at(-2) ?? null : null;
     const effectiveSince = input.since ?? defaultBaseline?.date ?? null;
+    const through =
+      currentBucket?.date ??
+      (input.since === undefined ? null : manifest.window.end);
 
-    if (effectiveSince === null || currentBucket === null) {
+    if (effectiveSince === null || through === null) {
       const reason =
-        history.status === "unavailable"
-          ? "Overview history is unavailable, so the prior complete ingestion bucket cannot be determined."
+        historyUnavailableReason !== null
+          ? `${historyUnavailableReason} The prior complete ingestion bucket cannot be determined.`
           : "Fewer than two complete model-usage buckets are available, so the prior complete ingestion bucket cannot be determined.";
       const section = unavailable(reason);
       return {
@@ -464,7 +508,9 @@ export async function runWhatsChanged(
         : baselineBucketFor(buckets, effectiveSince);
 
     let rankMovements: z.infer<typeof rankMovementsSchema>;
-    if (baseline === null) {
+    if (historyUnavailableReason !== null) {
+      rankMovements = unavailable(historyUnavailableReason);
+    } else if (baseline === null || currentBucket === null) {
       rankMovements = unavailable(
         `No complete model-usage bucket exists on or before ${effectiveSince}.`,
       );
@@ -505,13 +551,27 @@ export async function runWhatsChanged(
     } else {
       const scan = deprecationResult.value;
       const allNew = scan.rows.filter((notice) =>
-        timestampOnOrAfter(notice.firstObservedAt, effectiveSince),
+        timestampInComparisonWindow(
+          notice.firstObservedAt,
+          effectiveSince,
+          through,
+        ),
       );
-      newDeprecations = {
-        status: "available",
-        items: allNew.slice(0, input.limit),
-        omitted: Math.max(0, allNew.length - input.limit),
-      };
+      const items = allNew.slice(0, input.limit);
+      newDeprecations =
+        scan.cap.nextCursor === null
+          ? {
+              status: "available",
+              items,
+              omitted: Math.max(0, allNew.length - input.limit),
+            }
+          : {
+              status: "partial",
+              items,
+              omitted: null,
+              reason:
+                "The deprecation scan reached its declared bound with more evidence unscanned.",
+            };
       deprecationsCap = scan.cap;
       evidence.push(...scan.evidence);
       warnings.push(...scan.warnings);
@@ -537,23 +597,46 @@ export async function runWhatsChanged(
     } else {
       const scan = liveResult.value;
       const appearances = scan.rows.filter((model) =>
-        timestampOnOrAfter(model.firstSeenAt, effectiveSince),
+        timestampInComparisonWindow(model.firstSeenAt, effectiveSince, through),
       );
       const disappearances = scan.rows.filter(
         (model) =>
           model.disappearedAt !== null &&
-          timestampOnOrAfter(model.disappearedAt, effectiveSince),
+          timestampInComparisonWindow(
+            model.disappearedAt,
+            effectiveSince,
+            through,
+          ),
       );
-      modelAppearances = {
-        status: "available",
-        items: appearances.slice(0, input.limit),
-        omitted: Math.max(0, appearances.length - input.limit),
-      };
-      modelDisappearances = {
-        status: "available",
-        items: disappearances.slice(0, input.limit),
-        omitted: Math.max(0, disappearances.length - input.limit),
-      };
+      const appearanceItems = appearances.slice(0, input.limit);
+      const disappearanceItems = disappearances.slice(0, input.limit);
+      if (scan.cap.nextCursor === null) {
+        modelAppearances = {
+          status: "available",
+          items: appearanceItems,
+          omitted: Math.max(0, appearances.length - input.limit),
+        };
+        modelDisappearances = {
+          status: "available",
+          items: disappearanceItems,
+          omitted: Math.max(0, disappearances.length - input.limit),
+        };
+      } else {
+        const reason =
+          "The live-model scan reached its declared bound with more evidence unscanned.";
+        modelAppearances = {
+          status: "partial",
+          items: appearanceItems,
+          omitted: null,
+          reason,
+        };
+        modelDisappearances = {
+          status: "partial",
+          items: disappearanceItems,
+          omitted: null,
+          reason,
+        };
+      }
       liveCap = scan.cap;
       evidence.push(...scan.evidence);
       warnings.push(...scan.warnings);
@@ -577,16 +660,26 @@ export async function runWhatsChanged(
     const unavailableCount = sections.filter(
       (section) => section.status === "unavailable",
     ).length;
-    const summary =
-      changeCount === 0
-        ? `Nothing changed in the available comparisons since ${effectiveSince}.`
-        : `${changeCount} change${changeCount === 1 ? "" : "s"} found since ${effectiveSince}.`;
+    const incompleteCount = sections.filter(
+      (section) => section.status === "partial",
+    ).length;
+    let summary: string;
+    if (incompleteCount > 0 && changeCount === 0) {
+      summary = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
+    } else if (incompleteCount > 0) {
+      summary = `${changeCount} change${changeCount === 1 ? "" : "s"} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
+    } else if (changeCount === 0) {
+      summary = `Nothing changed in the available comparisons since ${effectiveSince}.`;
+    } else {
+      summary = `${changeCount} change${changeCount === 1 ? "" : "s"} found since ${effectiveSince}.`;
+    }
 
     return {
-      status: unavailableCount === 0 ? "ok" : "partial",
+      status:
+        unavailableCount === 0 && incompleteCount === 0 ? "ok" : "partial",
       summary,
       since: effectiveSince,
-      through: currentBucket.date,
+      through,
       sinceSource,
       modelAppearances,
       modelDisappearances,
