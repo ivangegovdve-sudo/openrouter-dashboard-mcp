@@ -18,7 +18,7 @@ import {
   assertMatchingTextContent,
   assertToolDefinitions,
   DIAGNOSTIC_CALLS,
-  sanitizeEvidenceValue,
+  validateEvidenceValue,
 } from "./verify-stdio.js";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -74,15 +74,17 @@ export function parsePurityFrames(
     } catch {
       throw new Error(`stdout line ${index + 1} is not a JSON-RPC frame`);
     }
-    frames.push(frame);
     const record = frame as FrameRecord;
-    if (!("id" in record)) continue;
-    if (
-      "method" in record ||
-      (!("result" in record) && !("error" in record))
-    ) {
+    if (!("id" in record)) {
       throw new Error(
-        `stdout line ${index + 1} is an id-bearing request, not a response`,
+        `stdout line ${index + 1} is not a response frame`,
+      );
+    }
+    const hasResult = "result" in record;
+    const hasError = "error" in record;
+    if ("method" in record || hasResult === hasError) {
+      throw new Error(
+        `stdout line ${index + 1} is not exactly one result or error response`,
       );
     }
     const id = record.id;
@@ -94,6 +96,7 @@ export function parsePurityFrames(
     }
     if (responseIds.has(id)) throw new Error(`stdout repeats response id ${id}`);
     responseIds.add(id);
+    frames.push(frame);
   }
   for (const id of expectedResponseIds) {
     if (!responseIds.has(id)) throw new Error(`stdout is missing response id ${id}`);
@@ -180,8 +183,8 @@ function sanitizeReviewedStderr(bytes: Buffer): string {
 }
 
 async function writeEvidence(evidence: unknown, stderr: string): Promise<string> {
-  const safeEvidence = sanitizeEvidenceValue(evidence);
-  const serialized = `${JSON.stringify(safeEvidence, null, 2)}\n`;
+  const validatedEvidence = validateEvidenceValue(evidence);
+  const serialized = `${JSON.stringify(validatedEvidence, null, 2)}\n`;
   if (Buffer.byteLength(serialized) > EVIDENCE_MAX_BYTES) {
     throw new Error("stdout verification evidence exceeds its cap");
   }

@@ -10,28 +10,28 @@ The live and alien-cwd runs used the public default `https://openrouter-github-d
 
 | Mode | Result | Total elapsed | Reviewed stderr |
 |---|---|---:|---:|
-| live | 7 tools listed twice; 7 calls validated | 3021.81 ms | 0 bytes |
-| fixture | complete diagnostic matrix validated | 969.78 ms | 0 bytes |
-| offline | all 7 calls contained structured `unreachable`; connection survived | 968.23 ms | 0 bytes |
-| html | all 7 calls contained structured `non_json`; no body/stack leaked | 988.51 ms | 0 bytes |
-| stdout purity | 10/10 strict NDJSON response frames; ids 1–10 exactly | 466.33 ms | 0 bytes |
-| alien-cwd | live matrix from `C:\\`; live status/top-level shapes matched | 2232.85 ms | 0 bytes |
+| live | 7 tools listed twice; 7 calls validated | 3291.32 ms | 0 bytes |
+| fixture | complete diagnostic matrix validated | 992.56 ms | 0 bytes |
+| offline | all 7 calls contained structured `unreachable`; connection survived | 891.97 ms | 0 bytes |
+| html | all 7 calls contained structured `non_json`; no body/stack leaked | 1059.22 ms | 0 bytes |
+| stdout purity | 10/10 strict response-only NDJSON frames; ids 1–10 exactly | 498.32 ms | 0 bytes |
+| alien-cwd | live matrix from `C:\\`; live status/top-level shapes matched | 2219.09 ms | 0 bytes |
 
-Evidence artifacts are ignored and stored at `verification/raw/{live,fixture,offline,html,stdout,alien-cwd}.json`, with reviewed stderr in the corresponding `*.stderr.txt` files.
+Evidence artifacts are ignored and stored at `verification/raw/{live,fixture,offline,html,stdout,alien-cwd}.json`, with reviewed stderr in the corresponding `*.stderr.txt` files. Before writing, the harness validates forbidden diagnostic and credential-bearing fields and fails closed; it does not rewrite definitions, arguments, timings, URLs, or `structuredContent`. Only separately captured stderr receives URL sanitization.
 
 ## Live tool-call timings and deployment state
 
 | Tool | Elapsed | Status | Deployment observation |
 |---|---:|---|---|
-| `dashboard_resolve_model` | 662.68 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_model_status` | 62.11 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_whats_changed` | 294.33 ms | partial | real history/deprecation evidence; price history remains unsupported |
-| `dashboard_free_models` | 102.08 ms | unavailable | exact PR #24 `/live-models` capability decline |
-| `dashboard_usage_leaders` | 323.60 ms | partial | real public model/app data; endpoint-specific partial sections preserved |
-| `dashboard_source_health` | 64.96 ms | ok | six sources; stale benchmark source and failed latest attempt retained |
-| `dashboard_github_movers` | 1182.86 ms | partial | real category-scoped momentum; endpoint-specific auxiliary failures retained |
+| `dashboard_resolve_model` | 690.49 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_model_status` | 49.36 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_whats_changed` | 317.82 ms | partial | real history/deprecation evidence; price history remains unsupported |
+| `dashboard_free_models` | 83.71 ms | unavailable | exact PR #24 `/live-models` capability decline |
+| `dashboard_usage_leaders` | 221.34 ms | partial | real public model/app data; endpoint-specific partial sections preserved |
+| `dashboard_source_health` | 67.68 ms | ok | six sources; stale benchmark source and failed latest attempt retained |
+| `dashboard_github_movers` | 1511.29 ms | partial | real category-scoped momentum; endpoint-specific auxiliary failures retained |
 
-Live connect/list/final-list/close timings were 269.22/14.52/11.25/20.30 ms. The public manifest still lacked `/api/public/v2/live-models`; this is current deployment state, not a forced fixture.
+Live connect/list/final-list/close timings were 267.63/14.24/11.25/21.46 ms. The public manifest still lacked `/api/public/v2/live-models`; this is current deployment state, not a forced fixture. All seven results passed their exported output schemas; the three unavailable live-model-dependent paths used the exact capability contract, while their normal branches were exercised against the local fixture with request-specific invariants.
 
 ## Actual live `structuredContent`
 
@@ -420,7 +420,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-13T06:04:08.262Z",
           "sourceAsOf": "2026-08-13T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -429,7 +429,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-14T06:40:08.308Z",
           "sourceAsOf": "2026-08-14T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -438,7 +438,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-19T06:41:59.342Z",
           "sourceAsOf": "2026-08-19T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -447,7 +447,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-16T06:40:08.400Z",
           "sourceAsOf": "2026-08-16T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -456,7 +456,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-17T06:40:08.369Z",
           "sourceAsOf": "2026-08-17T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -465,7 +465,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-12T07:50:02.130Z",
           "sourceAsOf": "2026-08-12T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -474,7 +474,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-15T06:40:08.368Z",
           "sourceAsOf": "2026-08-15T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "models_ranked_history",
@@ -950,7 +950,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-13T06:04:08.262Z",
           "sourceAsOf": "2026-08-13T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -959,7 +959,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-14T06:40:08.308Z",
           "sourceAsOf": "2026-08-14T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -968,7 +968,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-19T06:41:59.342Z",
           "sourceAsOf": "2026-08-19T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -977,7 +977,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-16T06:40:08.400Z",
           "sourceAsOf": "2026-08-16T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -986,7 +986,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-17T06:40:08.369Z",
           "sourceAsOf": "2026-08-17T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -995,7 +995,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-12T07:50:02.130Z",
           "sourceAsOf": "2026-08-12T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "github.rankings.adoption",
@@ -1004,7 +1004,7 @@ The following seven payloads are the actual bounded machine-readable values capt
           "fetchedAt": "2026-08-15T06:40:08.368Z",
           "sourceAsOf": "2026-08-15T00:00:00.000Z",
           "transformVersion": "github-adoption-v1",
-          "citation": "https://docs.github.com/en/rest/repos/repos"
+          "citation": "https://docs.github.com/en/rest/repos/repos#get-a-repository"
         },
         {
           "sourceId": "models_ranked_history",
@@ -1745,13 +1745,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:147",
-            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-12T07:46:06.066Z",
             "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:148",
-            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-12T07:46:08.999Z",
             "payloadSha256": "3621d7c9a41aecd250bfac85c8e04f614bb031549589e3704d4bb4daa29de75e"
           },
@@ -1763,13 +1763,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:165",
-            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-12T07:46:13.821Z",
             "payloadSha256": "5b7e2a0482416704cdcf4a2fecbecb99e07d79b1c961a9697b87f756117f1859"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:166",
-            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-12T07:46:16.849Z",
             "payloadSha256": "930a5dc7f243fd33f9d1f5c34408f103253aec9b2967ead96695cacfcf5c4317"
           },
@@ -1781,13 +1781,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:185",
-            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-12T07:44:24.427Z",
             "payloadSha256": "99a0af5f0284fadd296d4891aefe09b1bf319c57985aa5f576dfc48ed955f131"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:186",
-            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-12T07:44:27.330Z",
             "payloadSha256": "78c6a64e3165b6e7be03f966435066ead780a5dfb290cad343146dae0e515f26"
           },
@@ -1799,13 +1799,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:232",
-            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-12T07:46:54.285Z",
             "payloadSha256": "60707061dd2462c8c2ce954015457ccae5987d24ea80d42d84ea47c0e1a6034e"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:233",
-            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-12T07:46:56.991Z",
             "payloadSha256": "b0cb7b81416109202ab325653e3d8cd183fe9c2b591f01aa8be5f5dd2733b9ba"
           },
@@ -1817,19 +1817,19 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:329",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-12T07:44:49.301Z",
             "payloadSha256": "8cc3fe01c18a6cd2dec484400cec032cb1a6c4ee584cf1abc3dc17f89f2e3275"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:330",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-12T07:44:52.009Z",
             "payloadSha256": "f93e1edab24fdd7499f48b46ebb823c830c4b4ebe8c508212c42713643df4a52"
           },
           {
             "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:331",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
             "fetchedAt": "2026-08-12T07:44:54.435Z",
             "payloadSha256": "92ebdea80aa39d5c0a089718dfc42777f0270e6c2aac348d0f107c3cea15488c"
           },
@@ -1841,13 +1841,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:148",
-            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-19T06:43:03.678Z",
             "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:149",
-            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+            "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-19T06:43:04.221Z",
             "payloadSha256": "73553391b15709b1236027a70ec5b4956f37b07a5adf1b5bbfc27df7db73d6bb"
           },
@@ -1859,13 +1859,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:166",
-            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-19T06:43:04.231Z",
             "payloadSha256": "e637d0ca4ac8714165510a2d6b8c369a5db7ca5176ef87a53449cfa5aaf6a0dd"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:167",
-            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+            "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-19T06:43:04.951Z",
             "payloadSha256": "4649facfcefcfc12b95e74cebfceb6f6c75a32cbea564c1630bf09e608e17bf6"
           },
@@ -1877,13 +1877,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:186",
-            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-19T06:42:43.918Z",
             "payloadSha256": "707073a5e2d9942a614ca49362f0a47dc907bcd4d12809676e4858e18354052f"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:187",
-            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+            "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-19T06:42:44.416Z",
             "payloadSha256": "da450d6dde8c4b691331f78285173e932d956e34aa379a951ade6cd6558d7323"
           },
@@ -1895,13 +1895,13 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:233",
-            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-19T06:43:11.811Z",
             "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:234",
-            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+            "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-19T06:43:12.209Z",
             "payloadSha256": "34782b59ffb29a938496de93b08156d932860a0fdcb47b34002a2427b19f6ee9"
           },
@@ -1913,19 +1913,19 @@ The following seven payloads are the actual bounded machine-readable values capt
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:330",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
             "fetchedAt": "2026-08-19T06:42:48.161Z",
             "payloadSha256": "7a8824200557850484eac89664626934dad4b48845d112f9f6a199bcc59f474c"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:331",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
             "fetchedAt": "2026-08-19T06:42:48.571Z",
             "payloadSha256": "5230bbb231161437ee5bd779bfad877177872d29f8bc7e1998ff9dacdba4fea6"
           },
           {
             "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:332",
-            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+            "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
             "fetchedAt": "2026-08-19T06:42:48.842Z",
             "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
           }
@@ -2034,13 +2034,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:04.231Z",
                     "payloadSha256": "e637d0ca4ac8714165510a2d6b8c369a5db7ca5176ef87a53449cfa5aaf6a0dd"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:04.951Z",
                     "payloadSha256": "4649facfcefcfc12b95e74cebfceb6f6c75a32cbea564c1630bf09e608e17bf6"
                   }
@@ -2170,13 +2170,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-16T06:41:15.937Z",
                     "payloadSha256": "2b97a2c2eb22b51157776c1004e2a8f61eef01af90231cd10ce1321f6ff1ea01"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-16T06:41:16.652Z",
                     "payloadSha256": "f426621f1c5b527b4d2cd0fac1aa421f2a98d773b0d5149e61e691c5ce47d795"
                   },
@@ -2188,13 +2188,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-13T06:05:24.040Z",
                     "payloadSha256": "8a93e2e9e40fcaa4d2658ec0118c16082bffbeebd558566d9bd1e29c23d8755e"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-13T06:05:24.787Z",
                     "payloadSha256": "b859856d1f7a0c5edab72b4d75f0e3865260213b350a68be488afd993b87dda6"
                   },
@@ -2206,13 +2206,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-14T06:41:19.096Z",
                     "payloadSha256": "8a93e2e9e40fcaa4d2658ec0118c16082bffbeebd558566d9bd1e29c23d8755e"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-14T06:41:19.708Z",
                     "payloadSha256": "3defe81521bd04e8b4017b9e18c36f4908233a444244cd98a7f5e1e296b10e94"
                   },
@@ -2224,13 +2224,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:165",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-12T07:46:13.821Z",
                     "payloadSha256": "5b7e2a0482416704cdcf4a2fecbecb99e07d79b1c961a9697b87f756117f1859"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-12T07:46:16.849Z",
                     "payloadSha256": "930a5dc7f243fd33f9d1f5c34408f103253aec9b2967ead96695cacfcf5c4317"
                   },
@@ -2242,13 +2242,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-17T06:41:17.303Z",
                     "payloadSha256": "2b97a2c2eb22b51157776c1004e2a8f61eef01af90231cd10ce1321f6ff1ea01"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-17T06:41:18.038Z",
                     "payloadSha256": "9297c9e34feeb68973c16f8f24474cd4112d1dab87463424022ddcf900c12b88"
                   },
@@ -2260,13 +2260,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-15T06:41:16.908Z",
                     "payloadSha256": "2b97a2c2eb22b51157776c1004e2a8f61eef01af90231cd10ce1321f6ff1ea01"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-15T06:41:17.859Z",
                     "payloadSha256": "876648e5a4d4111685b0f9560b1152a2f41ba922667a4da65ad3eb092e152c87"
                   },
@@ -2278,13 +2278,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:166",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:04.231Z",
                     "payloadSha256": "e637d0ca4ac8714165510a2d6b8c369a5db7ca5176ef87a53449cfa5aaf6a0dd"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:167",
-                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases",
+                    "sourceUrl": "https://api.github.com/repos/github/github-mcp-server/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:04.951Z",
                     "payloadSha256": "4649facfcefcfc12b95e74cebfceb6f6c75a32cbea564c1630bf09e608e17bf6"
                   }
@@ -2410,19 +2410,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:42:48.161Z",
                     "payloadSha256": "7a8824200557850484eac89664626934dad4b48845d112f9f6a199bcc59f474c"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:42:48.571Z",
                     "payloadSha256": "5230bbb231161437ee5bd779bfad877177872d29f8bc7e1998ff9dacdba4fea6"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-19T06:42:48.842Z",
                     "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
                   }
@@ -2552,19 +2552,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-16T06:40:59.226Z",
                     "payloadSha256": "9ea655e182a08a2e9bcfe66165c7de450802a44e2a389082264b93d5325e1ea4"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-16T06:40:59.776Z",
                     "payloadSha256": "5dd962d191ac3442881372403c857e46aa2c93c07313656394366cf5574e664f"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-16T06:41:00.078Z",
                     "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
                   },
@@ -2576,19 +2576,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-13T06:05:07.355Z",
                     "payloadSha256": "8cc3fe01c18a6cd2dec484400cec032cb1a6c4ee584cf1abc3dc17f89f2e3275"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-13T06:05:07.863Z",
                     "payloadSha256": "bbc63e2a47937bc9b976cbadb105dfeb167f820889e7b1d3cec4643ab9a58d92"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-13T06:05:08.176Z",
                     "payloadSha256": "92ebdea80aa39d5c0a089718dfc42777f0270e6c2aac348d0f107c3cea15488c"
                   },
@@ -2600,19 +2600,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-14T06:41:02.169Z",
                     "payloadSha256": "e563719280084e9dc7df504000942729ed9c29cfefb2051ee443a514f0953f37"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-14T06:41:02.649Z",
                     "payloadSha256": "07fdc71d49414c00b77fda7c574b927e733262b61c5d5b011a25ab42fd7ace83"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-14T06:41:03.012Z",
                     "payloadSha256": "92ebdea80aa39d5c0a089718dfc42777f0270e6c2aac348d0f107c3cea15488c"
                   },
@@ -2624,19 +2624,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:329",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-12T07:44:49.301Z",
                     "payloadSha256": "8cc3fe01c18a6cd2dec484400cec032cb1a6c4ee584cf1abc3dc17f89f2e3275"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-12T07:44:52.009Z",
                     "payloadSha256": "f93e1edab24fdd7499f48b46ebb823c830c4b4ebe8c508212c42713643df4a52"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-12T07:44:54.435Z",
                     "payloadSha256": "92ebdea80aa39d5c0a089718dfc42777f0270e6c2aac348d0f107c3cea15488c"
                   },
@@ -2648,19 +2648,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-17T06:41:01.160Z",
                     "payloadSha256": "9ea655e182a08a2e9bcfe66165c7de450802a44e2a389082264b93d5325e1ea4"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-17T06:41:01.581Z",
                     "payloadSha256": "fb9ff6a0facb4451b8b8c275381d121682490c5dd96cdc78d5c0318318658b64"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-17T06:41:01.877Z",
                     "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
                   },
@@ -2672,19 +2672,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-15T06:41:00.665Z",
                     "payloadSha256": "9ea655e182a08a2e9bcfe66165c7de450802a44e2a389082264b93d5325e1ea4"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-15T06:41:01.080Z",
                     "payloadSha256": "5dd962d191ac3442881372403c857e46aa2c93c07313656394366cf5574e664f"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-15T06:41:01.475Z",
                     "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
                   },
@@ -2696,19 +2696,19 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:330",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:42:48.161Z",
                     "payloadSha256": "7a8824200557850484eac89664626934dad4b48845d112f9f6a199bcc59f474c"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:331",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:42:48.571Z",
                     "payloadSha256": "5230bbb231161437ee5bd779bfad877177872d29f8bc7e1998ff9dacdba4fea6"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:332",
-                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases",
+                    "sourceUrl": "https://api.github.com/repos/PrefectHQ/fastmcp/releases?per_page=100&page=2",
                     "fetchedAt": "2026-08-19T06:42:48.842Z",
                     "payloadSha256": "cbfda7b4b9c8734f5aab9b96ae996e51141f637ee8334abd50f621b076033967"
                   }
@@ -2834,13 +2834,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:42:43.918Z",
                     "payloadSha256": "707073a5e2d9942a614ca49362f0a47dc907bcd4d12809676e4858e18354052f"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:42:44.416Z",
                     "payloadSha256": "da450d6dde8c4b691331f78285173e932d956e34aa379a951ade6cd6558d7323"
                   }
@@ -2970,13 +2970,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-16T06:40:54.972Z",
                     "payloadSha256": "54241c7facd12254bf464ed4fa00f249b4b312a563c8b2451a3111c5f5dce0af"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-16T06:40:55.409Z",
                     "payloadSha256": "94293a5f9c305c5d18716ae496540f3b27cac5d685a84fad6451e1cc14afbd3f"
                   },
@@ -2988,13 +2988,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-13T06:05:02.015Z",
                     "payloadSha256": "deeaa012de46047b2b6a590c0454474deaf8c98ed968ab2b5fc7e8bb50ae7004"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-13T06:05:02.618Z",
                     "payloadSha256": "74795edeafffec4b563c610c22e8b90010c4b4907e3dcaf6f234cee7e4a595e5"
                   },
@@ -3006,13 +3006,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-14T06:40:57.666Z",
                     "payloadSha256": "9f022fba5d070204989dfb7198e0688fbbbe4839b9a1dc566885f67be3413a48"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-14T06:40:58.171Z",
                     "payloadSha256": "d8bd925ba37ef88ef099db181c2c6e2612525c1c11322d7b7466813c0c2b3d15"
                   },
@@ -3024,13 +3024,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:185",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-12T07:44:24.427Z",
                     "payloadSha256": "99a0af5f0284fadd296d4891aefe09b1bf319c57985aa5f576dfc48ed955f131"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-12T07:44:27.330Z",
                     "payloadSha256": "78c6a64e3165b6e7be03f966435066ead780a5dfb290cad343146dae0e515f26"
                   },
@@ -3042,13 +3042,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-17T06:40:56.541Z",
                     "payloadSha256": "54241c7facd12254bf464ed4fa00f249b4b312a563c8b2451a3111c5f5dce0af"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-17T06:40:57.082Z",
                     "payloadSha256": "89bfa750dfed940143a7a8fc5da76aa634d6f2c817177c94dd8e69345f6cef9d"
                   },
@@ -3060,13 +3060,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-15T06:40:56.317Z",
                     "payloadSha256": "54241c7facd12254bf464ed4fa00f249b4b312a563c8b2451a3111c5f5dce0af"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-15T06:40:56.761Z",
                     "payloadSha256": "94293a5f9c305c5d18716ae496540f3b27cac5d685a84fad6451e1cc14afbd3f"
                   },
@@ -3078,13 +3078,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:186",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:42:43.918Z",
                     "payloadSha256": "707073a5e2d9942a614ca49362f0a47dc907bcd4d12809676e4858e18354052f"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:187",
-                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases",
+                    "sourceUrl": "https://api.github.com/repos/IBM/mcp-context-forge/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:42:44.416Z",
                     "payloadSha256": "da450d6dde8c4b691331f78285173e932d956e34aa379a951ade6cd6558d7323"
                   }
@@ -3210,13 +3210,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:11.811Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:12.209Z",
                     "payloadSha256": "34782b59ffb29a938496de93b08156d932860a0fdcb47b34002a2427b19f6ee9"
                   }
@@ -3346,13 +3346,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-16T06:41:23.802Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-16T06:41:24.252Z",
                     "payloadSha256": "2768b084752a538426c48f629a16bef9590814e7dfb8aa63079206c3c103510f"
                   },
@@ -3364,13 +3364,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-13T06:05:32.879Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-13T06:05:33.326Z",
                     "payloadSha256": "eb6fb111e3e89665f4036fb4df8010e8cb289ff4d356b0a1eed471401ac9a2ae"
                   },
@@ -3382,13 +3382,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-14T06:41:27.227Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-14T06:41:27.663Z",
                     "payloadSha256": "2768b084752a538426c48f629a16bef9590814e7dfb8aa63079206c3c103510f"
                   },
@@ -3400,13 +3400,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:232",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-12T07:46:54.285Z",
                     "payloadSha256": "60707061dd2462c8c2ce954015457ccae5987d24ea80d42d84ea47c0e1a6034e"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-12T07:46:56.991Z",
                     "payloadSha256": "b0cb7b81416109202ab325653e3d8cd183fe9c2b591f01aa8be5f5dd2733b9ba"
                   },
@@ -3418,13 +3418,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-17T06:41:25.587Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-17T06:41:26.096Z",
                     "payloadSha256": "2768b084752a538426c48f629a16bef9590814e7dfb8aa63079206c3c103510f"
                   },
@@ -3436,13 +3436,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-15T06:41:24.697Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-15T06:41:25.066Z",
                     "payloadSha256": "2768b084752a538426c48f629a16bef9590814e7dfb8aa63079206c3c103510f"
                   },
@@ -3454,13 +3454,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:233",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:11.811Z",
                     "payloadSha256": "94fe053df429786616f8c007dd8242832512eb6d09d852629384aef88de12e4c"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:234",
-                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases",
+                    "sourceUrl": "https://api.github.com/repos/mark3labs/mcp-go/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:12.209Z",
                     "payloadSha256": "34782b59ffb29a938496de93b08156d932860a0fdcb47b34002a2427b19f6ee9"
                   }
@@ -3586,13 +3586,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:03.678Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:04.221Z",
                     "payloadSha256": "73553391b15709b1236027a70ec5b4956f37b07a5adf1b5bbfc27df7db73d6bb"
                   }
@@ -3722,13 +3722,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-16T06:41:14.832Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "03b5bad3-85db-4a21-8a67-f2c1a38be196:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-16T06:41:15.423Z",
                     "payloadSha256": "618b049f56cd99126e2cfc0f1758d0eeb25da1b487dc0119d8ef52a828ac52a8"
                   },
@@ -3740,13 +3740,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-13T06:05:23.139Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "1ac50f67-5640-4637-bbec-cbead11f32fb:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-13T06:05:23.799Z",
                     "payloadSha256": "916e17bc97c592bd444d0c687d0765ab964604525b2f7b990c9997b602b3ccb3"
                   },
@@ -3758,13 +3758,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-14T06:41:18.430Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "1df5c3c3-967f-4dc5-9c29-c1cf66917b2b:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-14T06:41:19.134Z",
                     "payloadSha256": "9910678581e77628772d277bbc238138a57e313d90fad2f190449bd8df8507f4"
                   },
@@ -3776,13 +3776,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:147",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-12T07:46:06.066Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "7490969d-ee3d-47db-b3cf-e29eadd12d36:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-12T07:46:08.999Z",
                     "payloadSha256": "3621d7c9a41aecd250bfac85c8e04f614bb031549589e3704d4bb4daa29de75e"
                   },
@@ -3794,13 +3794,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-17T06:41:16.771Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "992fba70-3cef-4512-ab1f-e45b383378c5:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-17T06:41:17.360Z",
                     "payloadSha256": "17c43da8454d003726d5e336105313393c56d7ddccec6cf39007c022df0e9959"
                   },
@@ -3812,13 +3812,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-15T06:41:16.275Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "a5bffd37-8865-4fa3-b969-5878be65904f:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-15T06:41:16.882Z",
                     "payloadSha256": "5c22c4466cd5d7ae99aa16b91ff010f3196d5a19d5d282641ca1d52367fadfea"
                   },
@@ -3830,13 +3830,13 @@ The following seven payloads are the actual bounded machine-readable values capt
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:148",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/commits?sha=main&per_page=1",
                     "fetchedAt": "2026-08-19T06:43:03.678Z",
                     "payloadSha256": "90d8513904588f4a86bd3179c9324bc479294562fa735c94252dc6aa6426bb87"
                   },
                   {
                     "id": "e9c34e4e-cacf-4961-9792-d03ddf6afe48:149",
-                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases",
+                    "sourceUrl": "https://api.github.com/repos/docker/mcp-gateway/releases?per_page=100&page=1",
                     "fetchedAt": "2026-08-19T06:43:04.221Z",
                     "payloadSha256": "73553391b15709b1236027a70ec5b4956f37b07a5adf1b5bbfc27df7db73d6bb"
                   }
@@ -3911,8 +3911,8 @@ The fixture session used the complete seven-call diagnostic matrix and strict ro
 - Free models: only the available, known-free, zero-price text row survived; unknown and disappeared rows were excluded.
 - Usage and GitHub: both successful deterministic paths exercised all documented auxiliary requests.
 - Source health: the stale `benchmarks_current` source and failed latest attempt remained visible.
-- Per-call timings, in matrix order: 474.91, 15.86, 29.80, 41.33, 34.27, 5.90, and 28.68 ms.
-- Initial/final list timings were 14.47/11.42 ms; the connection remained usable.
+- Per-call timings, in matrix order: 464.65, 15.21, 28.96, 41.21, 35.06, 5.90, and 28.39 ms.
+- Initial/final list timings were 20.80/11.32 ms; the connection remained usable.
 
 ## Dead-port offline evidence
 
@@ -3920,19 +3920,19 @@ Offline mode allocated an ephemeral `127.0.0.1` port, closed it, proved a connec
 
 | Tool | Elapsed | Top-level status | Required kind present |
 |---|---:|---|---|
-| resolver | 504.34 ms | error | `unreachable` |
-| model status | 13.35 ms | error | `unreachable` |
-| changes | 18.27 ms | error | `unreachable` |
-| free models | 33.32 ms | error | `unreachable` |
-| usage leaders | 22.55 ms | partial | `unreachable` |
-| source health | 5.98 ms | error | `unreachable` |
-| GitHub movers | 18.96 ms | partial | `unreachable` |
+| resolver | 449.06 ms | error | `unreachable` |
+| model status | 11.94 ms | error | `unreachable` |
+| changes | 16.32 ms | error | `unreachable` |
+| free models | 31.21 ms | error | `unreachable` |
+| usage leaders | 20.36 ms | partial | `unreachable` |
+| source health | 5.49 ms | error | `unreachable` |
+| GitHub movers | 17.48 ms | partial | `unreachable` |
 
 Every call was below the 11,500 ms offline ceiling. A second `tools/list` returned all seven tools after the calls.
 
 ## HTML evidence
 
-A loopback server returned status 200 and `text/html; charset=utf-8` for every route. All seven calls contained structured `non_json` evidence. Per-call timings were 511.26, 13.34, 19.35, 33.25, 21.03, 5.51, and 22.09 ms. No HTML body, parse stack, raw cause, headers, or environment appeared in evidence, and the final list succeeded.
+A loopback server returned status 200 and `text/html; charset=utf-8` for every route. All seven calls contained structured `non_json` evidence. Per-call timings were 528.70, 13.16, 23.74, 31.76, 20.82, 5.48, and 17.88 ms. No HTML body, parse stack, raw cause, headers, or environment appeared in evidence, and the final list succeeded.
 
 ## Raw stdout purity
 
@@ -3942,12 +3942,12 @@ It sent legacy initialize, initialized notification, an initial list, seven diag
 
 - was non-empty and ended in LF;
 - decoded once as fatal UTF-8 after child exit;
-- contained exactly 10 non-blank NDJSON frames;
-- contained exactly response ids 1 through 10, with no duplicates, unknown ids, or id-bearing server requests accepted as responses;
+- contained exactly 10 non-blank response-only NDJSON frames;
+- contained exactly response ids 1 through 10, with no duplicates, unknown ids, notifications, requests, or ambiguous result/error frames accepted as responses;
 - contained no malformed or unterminated frame;
 - had empty separately captured stderr.
 
-The harness unit suite also proved rejection of malformed JSON-RPC, invalid UTF-8, blank/interstitial lines, missing final LF, unknown ids, and missing ids.
+The harness unit suite also proved rejection of malformed JSON-RPC, invalid UTF-8, blank/interstitial lines, missing final LF, unknown ids, missing ids, unsolicited notifications, id-bearing requests, and frames containing both result and error.
 
 ## Alien-cwd evidence
 
@@ -3975,7 +3975,7 @@ An Electron host should spawn the compiled absolute `build/index.js` path with t
 
 Fresh final verification:
 
-- `npm test`: exit 0; 94 tests passed, 0 failed.
+- `npm test`: exit 0; 98 tests passed, 0 failed.
 - `npm run build`: exit 0; production TypeScript build plus no-emit harness typecheck passed; executable remained `build/index.js`.
 - `git diff --check`: exit 0 with no output after normalizing the edited `package.json` line endings.
 - XML parse/coverage check: 10 cases, 10 independent, archived date `2026-08-19`, 7 unique tool names.

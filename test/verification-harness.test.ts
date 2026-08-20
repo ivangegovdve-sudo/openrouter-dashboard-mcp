@@ -6,6 +6,9 @@ import { z } from "zod";
 
 import { createDashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
+import { runFreeModels } from "../src/tools/free-models.js";
+import { runModelStatus } from "../src/tools/model-status.js";
+import { runResolveModel } from "../src/tools/resolve-model.js";
 
 async function loadFixtureHarness(): Promise<
   typeof import("../scripts/fixture-dashboard.js")
@@ -236,6 +239,9 @@ test("live capability declines require the exact route and PR 24 message", async
     summary: capabilityMessage,
     message: capabilityMessage,
     missingCapability: "/api/public/v2/live-models",
+    evidence: [],
+    provenance: [],
+    warnings: [],
   };
 
   assert.doesNotThrow(() =>
@@ -252,28 +258,185 @@ test("live capability declines require the exact route and PR 24 message", async
   }
 });
 
-test("evidence sanitization removes forbidden diagnostics and strips URL secrets", async () => {
-  const { sanitizeEvidenceValue } = await loadStdioHarness();
-  const result = sanitizeEvidenceValue({
-    mode: "fixture",
-    responseBody: "fixture-html-body",
-    stack: "private stack",
-    cause: "private cause",
-    headers: { accept: "application/json" },
-    environment: { region: "test" },
-    sourceUrl: "https://user@example.test/path?private=yes#fragment",
-    structuredContent: { status: "ok", totalTokens: "10" },
-  });
-  const serialized = JSON.stringify(result);
+test("live normal-branch validation enforces schemas and tool invariants", async () => {
+  const { assertModeResult } = await loadStdioHarness();
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    const resolverArguments = {
+      intent: "cheapest_capable" as const,
+      constraints: { free: true, outputModality: "text" },
+      fallbackDepth: 3,
+      verbose: false,
+    };
+    const statusArguments = { slug: "fixture/free-text" };
+    const freeArguments = { outputModality: "text", limit: 5 };
+    const [resolver, status, free] = await Promise.all([
+      runResolveModel(resolverArguments, { client }),
+      runModelStatus(statusArguments, { client }),
+      runFreeModels(freeArguments, { client }),
+    ]);
 
-  assert.deepEqual(result, {
+    if (resolver.status !== "ok" || resolver.resolved[0] === undefined) {
+      assert.fail("fixture resolver must return a normal resolved row");
+    }
+    if (status.status !== "ok") {
+      assert.fail("fixture model status must return the exact requested model");
+    }
+    if (
+      (free.status !== "ok" && free.status !== "partial") ||
+      free.liveCandidates.data[0] === undefined
+    ) {
+      assert.fail("fixture free-model output must return a normal candidate row");
+    }
+    assert.ok(resolver.excluded.some((entry) => entry.reason === "disappeared"));
+    assert.ok(
+      resolver.excluded.some(
+        (entry) => entry.reason === "pricing_not_published",
+      ),
+    );
+
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        resolver,
+        1,
+        resolverArguments,
+      ),
+    );
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_model_status",
+        status,
+        1,
+        statusArguments,
+      ),
+    );
+    assert.doesNotThrow(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        free,
+        1,
+        freeArguments,
+      ),
+    );
+
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        { ...resolver, schemaVersion: "1.0" },
+        1,
+        resolverArguments,
+      ),
+    );
+
+    const resolverUnknown = structuredClone(resolver);
+    resolverUnknown.resolved[0]!.isFree = null;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        resolverUnknown,
+        1,
+        resolverArguments,
+      ),
+    );
+
+    const resolverOverlap = structuredClone(resolver);
+    resolverOverlap.excluded.push({
+      provider: resolverOverlap.resolved[0]!.provider,
+      id: resolverOverlap.resolved[0]!.id,
+      reason: "disappeared",
+    });
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_resolve_model",
+        resolverOverlap,
+        1,
+        resolverArguments,
+      ),
+    );
+
+    const wrongModel = structuredClone(status);
+    wrongModel.model.id = "fixture/different-model";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_model_status",
+        wrongModel,
+        1,
+        statusArguments,
+      ),
+    );
+
+    const unavailableFree = structuredClone(free);
+    unavailableFree.liveCandidates.data[0]!.availability = "disappeared";
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        unavailableFree,
+        1,
+        freeArguments,
+      ),
+    );
+
+    const overLimitFree = structuredClone(free);
+    overLimitFree.liveCandidates.data = Array.from(
+      { length: freeArguments.limit + 1 },
+      () => structuredClone(free.liveCandidates.data[0]!),
+    );
+    overLimitFree.liveCandidates.cap.returnedCount =
+      overLimitFree.liveCandidates.data.length;
+    assert.throws(() =>
+      assertModeResult(
+        "live",
+        "dashboard_free_models",
+        overLimitFree,
+        1,
+        freeArguments,
+      ),
+    );
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("evidence validation preserves safe payloads and fails closed on forbidden fields", async () => {
+  const { validateEvidenceValue } = await loadStdioHarness();
+  const evidence = {
     mode: "fixture",
-    sourceUrl: "https://example.test/path",
-    structuredContent: { status: "ok", totalTokens: "10" },
-  });
-  assert.doesNotMatch(
-    serialized,
-    /fixture-html-body|private stack|private cause|private=yes|fragment/,
+    elapsedMs: 12.5,
+    toolDefinitions: [{ name: "dashboard_source_health" }],
+    calls: [
+      {
+        name: "dashboard_source_health",
+        arguments: {},
+        elapsedMs: 1.25,
+        structuredContent: {
+          status: "ok",
+          sourceUrl: "https://example.test/path?view=public#section",
+          totalTokens: "10",
+        },
+      },
+    ],
+  };
+
+  assert.equal(
+    JSON.stringify(validateEvidenceValue(evidence)),
+    JSON.stringify(evidence),
+  );
+  assert.throws(() =>
+    validateEvidenceValue({
+      ...evidence,
+      calls: [{ ...evidence.calls[0], responseBody: "must-not-be-recorded" }],
+    }),
   );
 });
 
@@ -296,28 +459,54 @@ test("credential guard rejects normalized credential fields and values", async (
       ecosystemTokenVolume: "20",
       promptUsdPerToken: "0.000001",
       completionUsdPerToken: "0.000002",
+      ecosystemTokenVolumeMovement: "up",
+      previousEcosystemTokenVolume: "19",
+      rolling30DayEcosystemTokenVolume: "200",
+      categoryTokenShare: "0.25",
     }),
   );
 });
 
-test("purity parser accepts only complete correlated JSON-RPC NDJSON", async () => {
+test("credential guard rejects credential-bearing field-name variants", async () => {
+  const { assertEvidenceCredentialSafe } = await loadStdioHarness();
+
+  for (const value of [
+    { authToken: "opaque" },
+    { authorizationHeader: "opaque" },
+    { apiKeyValue: "opaque" },
+  ]) {
+    assert.throws(() => assertEvidenceCredentialSafe(value));
+  }
+});
+
+test("purity parser accepts complete correlated response-only JSON-RPC NDJSON", async () => {
   const { parsePurityFrames } = await loadStdoutHarness();
   const bytes = Buffer.from(
     '{"jsonrpc":"2.0","id":1,"result":{}}\n' +
-      '{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}\n' +
       '{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}\n',
     "utf8",
   );
 
   const frames = parsePurityFrames(bytes, new Set([1, 2]));
 
-  assert.equal(frames.length, 3);
+  assert.equal(frames.length, 2);
   assert.deepEqual(
     frames
       .filter((frame) => "id" in frame)
       .map((frame) => (frame as { id: unknown }).id),
     [1, 2],
   );
+});
+
+test("purity parser rejects an unsolicited notification stdout frame", async () => {
+  const { parsePurityFrames } = await loadStdoutHarness();
+  const bytes = Buffer.from(
+    '{"jsonrpc":"2.0","id":1,"result":{}}\n' +
+      '{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}\n',
+    "utf8",
+  );
+
+  assert.throws(() => parsePurityFrames(bytes, new Set([1])));
 });
 
 test("purity parser rejects an id-bearing server request as a response", async () => {
@@ -369,6 +558,14 @@ for (const purityCase of [
       "utf8",
     ),
     expectedIds: new Set([1, 2]),
+  },
+  {
+    name: "response containing both result and error",
+    bytes: Buffer.from(
+      '{"jsonrpc":"2.0","id":1,"result":{},"error":{"code":-32603,"message":"ambiguous"}}\n',
+      "utf8",
+    ),
+    expectedIds: new Set([1]),
   },
 ] as const) {
   test(`purity parser rejects ${purityCase.name}`, async () => {

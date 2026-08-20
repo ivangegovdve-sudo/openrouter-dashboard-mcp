@@ -5,6 +5,27 @@ import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import type { ZodType } from "zod";
+
+import {
+  freeModelsInputSchema,
+  freeModelsOutputSchema,
+  type FreeModelsOutput,
+} from "../src/tools/free-models.js";
+import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import {
+  modelStatusInputSchema,
+  modelStatusOutputSchema,
+  type ModelStatusOutput,
+} from "../src/tools/model-status.js";
+import {
+  resolveModelInputSchema,
+  resolveModelOutputSchema,
+  type ResolveModelOutput,
+} from "../src/tools/resolve-model.js";
+import { sourceHealthOutputSchema } from "../src/tools/source-health.js";
+import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
+import { whatsChangedOutputSchema } from "../src/tools/whats-changed.js";
 
 import {
   allocateDeadDashboardUrl,
@@ -147,21 +168,29 @@ const MAX_STDERR_BYTES = 64 * 1024;
 const CAPABILITY_MESSAGE =
   "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
 
-const CREDENTIAL_FIELD_NAMES = new Set([
-  "authorization",
-  "proxyauthorization",
-  "apikey",
-  "accesstoken",
-  "refreshtoken",
-  "idtoken",
-  "clientsecret",
-  "secret",
-  "password",
-  "passwd",
-  "cookie",
-  "setcookie",
-  "token",
+const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
+  ["dashboard_resolve_model", resolveModelOutputSchema],
+  ["dashboard_model_status", modelStatusOutputSchema],
+  ["dashboard_whats_changed", whatsChangedOutputSchema],
+  ["dashboard_free_models", freeModelsOutputSchema],
+  ["dashboard_usage_leaders", usageLeadersOutputSchema],
+  ["dashboard_source_health", sourceHealthOutputSchema],
+  ["dashboard_github_movers", githubMoversOutputSchema],
 ]);
+
+const CREDENTIAL_FIELD_ALLOWLIST = new Set([
+  "categorytokenshare",
+  "completionusdpertoken",
+  "ecosystemtokenvolume",
+  "ecosystemtokenvolumemovement",
+  "previousecosystemtokenvolume",
+  "promptusdpertoken",
+  "rolling30dayecosystemtokenvolume",
+  "totaltokens",
+]);
+
+const CREDENTIAL_FIELD_NAME_PATTERN =
+  /authorization|authentication|auth(?:token|header|key|secret|credential)|apikey|credential|password|passwd|secret|cookie|token|(?:access|private|client|signing|encryption)key|session(?:id|key|token|secret)/;
 
 const FORBIDDEN_EVIDENCE_FIELDS = new Set([
   "body",
@@ -210,7 +239,10 @@ export function assertEvidenceCredentialSafe(value: unknown): void {
     }
     for (const [key, entry] of Object.entries(current)) {
       const normalized = normalizedFieldName(key);
-      if (CREDENTIAL_FIELD_NAMES.has(normalized)) {
+      if (
+        !CREDENTIAL_FIELD_ALLOWLIST.has(normalized) &&
+        CREDENTIAL_FIELD_NAME_PATTERN.test(normalized)
+      ) {
         throw new Error(`credential-bearing evidence field at ${[...pathParts, key].join(".")}`);
       }
       visit(entry, [...pathParts, key]);
@@ -233,21 +265,27 @@ function sanitizedUrl(value: string): string {
   }
 }
 
-export function sanitizeEvidenceValue(value: unknown): unknown {
-  const sanitize = (current: unknown): unknown => {
-    if (typeof current === "string") return sanitizedUrl(current);
-    if (current === null || typeof current !== "object") return current;
-    if (Array.isArray(current)) return current.map((entry) => sanitize(entry));
-    const output: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(current)) {
-      if (FORBIDDEN_EVIDENCE_FIELDS.has(normalizedFieldName(key))) continue;
-      output[key] = sanitize(entry);
+export function validateEvidenceValue(value: unknown): unknown {
+  const validate = (current: unknown, pathParts: string[]): void => {
+    if (current === null || typeof current !== "object") return;
+    if (Array.isArray(current)) {
+      current.forEach((entry, index) =>
+        validate(entry, [...pathParts, String(index)]),
+      );
+      return;
     }
-    return output;
+    for (const [key, entry] of Object.entries(current)) {
+      if (FORBIDDEN_EVIDENCE_FIELDS.has(normalizedFieldName(key))) {
+        throw new Error(
+          `forbidden evidence field at ${[...pathParts, key].join(".")}`,
+        );
+      }
+      validate(entry, [...pathParts, key]);
+    }
   };
-  const sanitized = sanitize(value);
-  assertEvidenceCredentialSafe(sanitized);
-  return sanitized;
+  validate(value, ["evidence"]);
+  assertEvidenceCredentialSafe(value);
+  return value;
 }
 
 function elapsedSince(started: number): number {
@@ -377,7 +415,13 @@ export function assertMatchingTextContent(
 }
 
 export function assertFixtureResult(name: string, structuredContent: unknown): void {
-  const output = asRecord(structuredContent, `${name} structuredContent`);
+  const schema = OUTPUT_SCHEMAS_BY_TOOL.get(name);
+  if (schema === undefined) throw new Error(`no output schema for ${name}`);
+  const parsed = schema.safeParse(structuredContent);
+  if (!parsed.success) {
+    throw new Error(`${name} failed its exported output schema`);
+  }
+  const output = asRecord(parsed.data, `${name} structuredContent`);
   if (output.status === "error") throw new Error(`${name} fixture returned error`);
 
   if (name === "dashboard_resolve_model") {
@@ -426,11 +470,148 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
   }
 }
 
+function assertResolveModelLiveInvariants(
+  output: ResolveModelOutput,
+  inputArguments: Record<string, unknown>,
+): void {
+  if (output.status !== "ok") return;
+  const input = resolveModelInputSchema.parse(inputArguments);
+  const { minContext, ...otherConstraints } = input.constraints;
+  const expectedConstraints = {
+    ...otherConstraints,
+    ...(minContext === undefined ? {} : { minContext: String(minContext) }),
+  };
+  if (
+    output.intent !== input.intent ||
+    !isDeepStrictEqual(output.constraints, expectedConstraints)
+  ) {
+    throw new Error("resolver output does not match the requested intent/constraints");
+  }
+  if (
+    output.resolved.length > input.fallbackDepth ||
+    output.cap.resolvedLimit !== input.fallbackDepth ||
+    output.cap.resolvedCount !== output.resolved.length ||
+    output.cap.excludedCount !== output.excluded.length ||
+    output.cap.eligibleCount < output.resolved.length ||
+    output.cap.fallbackTruncated !==
+      (output.cap.eligibleCount > output.resolved.length) ||
+    output.unsatisfiable !== (output.resolved.length === 0)
+  ) {
+    throw new Error("resolver output violates requested bounds or count invariants");
+  }
+
+  const resolvedKeys = new Set<string>();
+  for (const [index, model] of output.resolved.entries()) {
+    const key = `${model.provider}\u0000${model.id}`;
+    if (resolvedKeys.has(key) || model.rank !== index + 1) {
+      throw new Error("resolver output repeats or misranks a resolved model");
+    }
+    resolvedKeys.add(key);
+    if (model.availability !== "available") {
+      throw new Error("resolver output contains a non-available resolved model");
+    }
+    if (
+      input.constraints.free !== undefined &&
+      model.isFree !== input.constraints.free
+    ) {
+      throw new Error("resolver output selected unknown or mismatched pricing");
+    }
+    if (minContext !== undefined) {
+      if (
+        model.contextLength === null ||
+        BigInt(model.contextLength) < BigInt(String(minContext))
+      ) {
+        throw new Error("resolver output selected unknown or insufficient context");
+      }
+    }
+    if (
+      input.constraints.providers !== undefined &&
+      !input.constraints.providers.includes(model.provider)
+    ) {
+      throw new Error("resolver output selected an unrequested provider");
+    }
+  }
+  for (const model of output.excluded) {
+    if (resolvedKeys.has(`${model.provider}\u0000${model.id}`)) {
+      throw new Error("resolver output selected an excluded model");
+    }
+  }
+}
+
+function assertModelStatusLiveInvariants(
+  output: ModelStatusOutput,
+  inputArguments: Record<string, unknown>,
+): void {
+  const input = modelStatusInputSchema.parse(inputArguments);
+  if (output.status === "ok" && output.model.id !== input.slug) {
+    throw new Error("model status returned a different model than requested");
+  }
+  if (
+    output.status === "not_found" &&
+    output.suggestions.includes(input.slug)
+  ) {
+    throw new Error("model status suggested the exact supposedly missing model");
+  }
+}
+
+function assertFreeModelsLiveInvariants(
+  output: FreeModelsOutput,
+  inputArguments: Record<string, unknown>,
+): void {
+  if (output.status !== "ok" && output.status !== "partial") return;
+  const input = freeModelsInputSchema.parse(inputArguments);
+  if (
+    output.query.outputModality !== input.outputModality ||
+    output.query.limit !== input.limit ||
+    output.query.outputModalityDefaulted !==
+      (inputArguments.outputModality === undefined)
+  ) {
+    throw new Error("free-model output does not match the requested query");
+  }
+  const live = output.liveCandidates;
+  const excludedCount =
+    live.cap.excludedUnavailableCount +
+    live.cap.excludedNotFreeCount +
+    live.cap.excludedUnknownPriceCount +
+    live.cap.excludedModalityCount;
+  if (
+    live.data.length > input.limit ||
+    live.cap.requestedLimit !== input.limit ||
+    live.cap.returnedCount !== live.data.length ||
+    live.cap.examinedCount !== live.data.length + excludedCount
+  ) {
+    throw new Error("free-model live candidates violate requested bounds or counts");
+  }
+  for (const model of live.data) {
+    if (
+      model.availability !== "available" ||
+      model.isFree !== true ||
+      model.pricing.promptUsdPerToken === null ||
+      model.pricing.completionUsdPerToken === null ||
+      !model.outputModalities?.includes(input.outputModality)
+    ) {
+      throw new Error("free-model output contains an unavailable or unknown row");
+    }
+  }
+
+  const catalogue = output.openRouterCatalogue;
+  if (
+    catalogue.data.length > input.limit ||
+    catalogue.cap.requestedLimit !== input.limit ||
+    catalogue.cap.returnedCount !== catalogue.data.length ||
+    catalogue.data.some((model) => model.freeKind !== "concrete_free") ||
+    (catalogue.router !== null && catalogue.router.freeKind !== "free_router")
+  ) {
+    throw new Error("free-model catalogue violates requested bounds or free classes");
+  }
+}
+
 export function assertModeResult(
   mode: VerificationMode,
   name: string,
   structuredContent: unknown,
   elapsedMs: number,
+  inputArguments: Record<string, unknown> = {},
 ): void {
   if (mode === "offline") {
     if (!containsFieldValue(structuredContent, "kind", "unreachable")) {
@@ -460,7 +641,13 @@ export function assertModeResult(
     return;
   }
 
-  const output = asRecord(structuredContent, `${name} structuredContent`);
+  const schema = OUTPUT_SCHEMAS_BY_TOOL.get(name);
+  if (schema === undefined) throw new Error(`no output schema for ${name}`);
+  const parsed = schema.safeParse(structuredContent);
+  if (!parsed.success) {
+    throw new Error(`${name} failed its exported output schema`);
+  }
+  const output = asRecord(parsed.data, `${name} structuredContent`);
   if (output.status === "error") {
     throw new Error(`${name} live verification returned a top-level error`);
   }
@@ -476,6 +663,22 @@ export function assertModeResult(
       output.message !== CAPABILITY_MESSAGE)
   ) {
     throw new Error(`${name} returned the wrong PR #24 capability decline`);
+  }
+  if (name === "dashboard_resolve_model") {
+    assertResolveModelLiveInvariants(
+      parsed.data as ResolveModelOutput,
+      inputArguments,
+    );
+  } else if (name === "dashboard_model_status") {
+    assertModelStatusLiveInvariants(
+      parsed.data as ModelStatusOutput,
+      inputArguments,
+    );
+  } else if (name === "dashboard_free_models") {
+    assertFreeModelsLiveInvariants(
+      parsed.data as FreeModelsOutput,
+      inputArguments,
+    );
   }
 }
 
@@ -544,8 +747,8 @@ async function writeEvidence(
   evidence: VerificationEvidence,
   reviewedStderr: string,
 ): Promise<string> {
-  const safeEvidence = sanitizeEvidenceValue(evidence);
-  const serialized = `${JSON.stringify(safeEvidence, null, 2)}\n`;
+  const validatedEvidence = validateEvidenceValue(evidence);
+  const serialized = `${JSON.stringify(validatedEvidence, null, 2)}\n`;
   if (Buffer.byteLength(serialized) > MAX_EVIDENCE_BYTES) {
     throw new Error("verification evidence exceeds its total cap");
   }
@@ -698,6 +901,7 @@ export async function runVerification(mode: VerificationMode): Promise<string> {
         call.name,
         resultRecord.structuredContent,
         result.elapsedMs,
+        call.arguments,
       );
       calls.push({
         name: call.name,
