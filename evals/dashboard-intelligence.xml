@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation-set id="dashboard-intelligence" version="1.0" archived-date="2026-08-19">
+  <case id="resolve-impossible-free-context" independent="true">
+    <question>Against the catalogue evidence archived on 2026-08-19, can any free text model satisfy a minimum context of 90071992547409930002? Explain exclusions without selecting unknown or disappeared rows.</question>
+    <expected-tool>dashboard_resolve_model</expected-tool>
+    <arguments><![CDATA[{"intent":"cheapest_capable","constraints":{"free":true,"minContext":"90071992547409930002","outputModality":"text"},"fallbackDepth":3,"verbose":false}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_resolve_model" />
+      <assert path="$.arguments.fallbackDepth" operator="equals" value="3" />
+      <assert path="$.result.status" operator="one-of" value="ok,unavailable" />
+      <assert path="$.result.resolved" operator="empty-when" value="$.result.unsatisfiable=true" />
+      <assert path="$.result.excluded[*].reason" operator="contains-when" value="disappeared|$.result.status=ok" />
+    </criteria>
+  </case>
+
+  <case id="resolve-bounded-text-fallbacks" independent="true">
+    <question>Using the evidence publication reviewed on 2026-08-19, return at most three currently available text-output fallbacks without inventing measurements.</question>
+    <expected-tool>dashboard_resolve_model</expected-tool>
+    <arguments><![CDATA[{"intent":"any_available","constraints":{"outputModality":"text"},"fallbackDepth":3,"verbose":false}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_resolve_model" />
+      <assert path="$.result.resolved" operator="max-items-when-present" value="3" />
+      <assert path="$.result.resolved[*].availability" operator="all-equal-when-present" value="available" />
+      <assert path="$.result.resolved[*].measurement" operator="all-one-of-when-present" value="measured,unmeasured,not_applicable" />
+    </criteria>
+  </case>
+
+  <case id="model-status-exact-id" independent="true">
+    <question>As of the 2026-08-19 archive review, check the exact catalogue status of groq/llama-3.3-70b-versatile and do not substitute a fuzzy match.</question>
+    <expected-tool>dashboard_model_status</expected-tool>
+    <arguments><![CDATA[{"slug":"groq/llama-3.3-70b-versatile"}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_model_status" />
+      <assert path="$.arguments.slug" operator="equals" value="groq/llama-3.3-70b-versatile" />
+      <assert path="$.result.status" operator="one-of" value="ok,not_found,unavailable" />
+      <assert path="$.result.summary" operator="equals-when" value="This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.|$.result.missingCapability=/api/public/v2/live-models" />
+    </criteria>
+  </case>
+
+  <case id="changes-since-archive-date" independent="true">
+    <question>Summarize bounded catalogue changes since 2026-08-18 using evidence available through the 2026-08-19 archive, including what cannot be determined.</question>
+    <expected-tool>dashboard_whats_changed</expected-tool>
+    <arguments><![CDATA[{"since":"2026-08-18","limit":5}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_whats_changed" />
+      <assert path="$.result.priceChanges.status" operator="equals" value="unsupported_by_public_api" />
+      <assert path="$.result.modelAppearances.items" operator="max-items-when-present" value="5" />
+      <assert path="$.result.modelDisappearances.items" operator="max-items-when-present" value="5" />
+      <assert path="$.result.newDeprecations.items" operator="max-items-when-present" value="5" />
+    </criteria>
+  </case>
+
+  <case id="free-text-models" independent="true">
+    <question>From the 2026-08-19 archive evidence, list no more than five usable free text-output models; exclude unknown price, non-free, unavailable, and wrong-modality rows.</question>
+    <expected-tool>dashboard_free_models</expected-tool>
+    <arguments><![CDATA[{"outputModality":"text","limit":5}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_free_models" />
+      <assert path="$.result.liveCandidates.data" operator="max-items-when-present" value="5" />
+      <assert path="$.result.liveCandidates.data[*].availability" operator="all-equal-when-present" value="available" />
+      <assert path="$.result.liveCandidates.data[*].isFree" operator="all-equal-when-present" value="true" />
+      <assert path="$.result.liveCandidates.data[*].outputModalities" operator="all-contain-when-present" value="text" />
+    </criteria>
+  </case>
+
+  <case id="usage-seven-day" independent="true">
+    <question>For the archived review ending 2026-08-19, report up to three public ecosystem usage leaders over a seven-day comparison while preserving exact integer strings.</question>
+    <expected-tool>dashboard_usage_leaders</expected-tool>
+    <arguments><![CDATA[{"windowDays":7,"limit":3}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_usage_leaders" />
+      <assert path="$.result.query.windowDays" operator="equals" value="7" />
+      <assert path="$.result.models.leaders" operator="max-items-when-present" value="3" />
+      <assert path="$.result.apps.leaders" operator="max-items-when-present" value="3" />
+      <assert path="$.result.apps.leaders[*].rolling30DayEcosystemTokenVolume" operator="all-match-when-present" value="^[0-9]+$" />
+    </criteria>
+  </case>
+
+  <case id="usage-thirty-day" independent="true">
+    <question>Using the same 2026-08-19 archive boundary, produce a bounded 30-day model-usage comparison and keep incomplete history explicitly unavailable or partial.</question>
+    <expected-tool>dashboard_usage_leaders</expected-tool>
+    <arguments><![CDATA[{"windowDays":30,"limit":5}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_usage_leaders" />
+      <assert path="$.result.query.windowDays" operator="equals" value="30" />
+      <assert path="$.result.status" operator="one-of" value="ok,partial" />
+      <assert path="$.result.models.status" operator="one-of" value="available,unavailable" />
+      <assert path="$.result.models.leaders" operator="max-items-when-present" value="5" />
+    </criteria>
+  </case>
+
+  <case id="source-health" independent="true">
+    <question>At the 2026-08-19 archive checkpoint, report public source freshness and latest-attempt failures without making any production write.</question>
+    <expected-tool>dashboard_source_health</expected-tool>
+    <arguments><![CDATA[{}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_source_health" />
+      <assert path="$.arguments" operator="equals-json" value="{}" />
+      <assert path="$.result.status" operator="one-of" value="ok,error" />
+      <assert path="$.result.sources[*].sourceId" operator="all-nonempty-when-present" value="true" />
+      <assert path="$.result.sources[*].stale" operator="all-type-when-present" value="boolean" />
+    </criteria>
+  </case>
+
+  <case id="github-mcp-seven-day" independent="true">
+    <question>For the publication archived on 2026-08-19, show at most three MCP project-family momentum movers over seven days and keep missing baseline ranks unknown.</question>
+    <expected-tool>dashboard_github_movers</expected-tool>
+    <arguments><![CDATA[{"category":"mcp","windowDays":7,"limit":3}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_github_movers" />
+      <assert path="$.result.query.entityLevel" operator="equals" value="project-family" />
+      <assert path="$.result.categories" operator="items" value="1" />
+      <assert path="$.result.categories[0].category" operator="equals" value="mcp" />
+      <assert path="$.result.categories[0].leaders" operator="max-items-when-present" value="3" />
+    </criteria>
+  </case>
+
+  <case id="github-connectors-thirty-day" independent="true">
+    <question>Against the 2026-08-19 archive boundary, request a separate bounded connectors project-family momentum section for the supported 30-day window.</question>
+    <expected-tool>dashboard_github_movers</expected-tool>
+    <arguments><![CDATA[{"category":"connectors","windowDays":30,"limit":5}]]></arguments>
+    <criteria>
+      <assert path="$.tool" operator="equals" value="dashboard_github_movers" />
+      <assert path="$.result.query.category" operator="equals" value="connectors" />
+      <assert path="$.result.query.windowDays" operator="equals" value="30" />
+      <assert path="$.result.categories[0].leaders" operator="max-items-when-present" value="5" />
+      <assert path="$.result.categories[0].rankingEvidence.ranking.metric" operator="equals-when-present" value="momentum" />
+    </criteria>
+  </case>
+</evaluation-set>

@@ -7,10 +7,12 @@
     "openrouter-dashboard-mcp": "./build/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run typecheck:harness",
     "test": "tsx --test",
     "test:watch": "tsx --test --watch",
-    "verify:stdio": "tsx scripts/verify-stdio.ts"
+    "typecheck:harness": "tsc -p tsconfig.harness.json",
+    "verify:stdio": "tsx scripts/verify-stdio.ts",
+    "verify:stdout": "tsx scripts/verify-stdout.ts"
   },
   "engines": {
     "node": ">=20"
