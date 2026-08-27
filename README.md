@@ -186,7 +186,9 @@ So the section reports only what the payload supports:
 
 Measured against production, 2026-08-27.
 
-To be exact about what that costs: **`ok` is unreachable in this version.** A readable price section can never establish coverage, and an unreadable one is degraded — either way the report is partial. Do not write a branch waiting for `ok`. Making it reachable would need the producer to publish dates for the runs it compares *and* this client to read them; neither exists today, and this README will not guess at the shape of either.
+To be exact about what that costs: **`ok` is unreachable in this version.** A readable price section can never establish coverage, and an unreadable one is degraded — either way a *successful* report is `partial`. Do not write a branch waiting for `ok`. Making it reachable would need the producer to publish dates for the runs it compares *and* this client to read them; neither exists today, and this README will not guess at the shape of either.
+
+This is about successful reports only. A read that fails outright — bad input, or a manifest that cannot be fetched — still returns `status: "error"` with the safe error attached. Handle three: `partial`, `error`, and `ok` for completeness even though nothing produces it.
 
 **An inverted window is an outcome, not a warning.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section would then report nothing — which is exactly what a satisfied query looks like. A warning beside a normal summary does not fix that, because the summary is the line a caller relays and it would read *Nothing changed since 2027-01-01*. So an inverted range returns `status: "partial"` with the window-scoped sections `unavailable` and a summary that names the inversion. Price movement is independent of your window, so it still reports.
 

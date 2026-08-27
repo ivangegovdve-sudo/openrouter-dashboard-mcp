@@ -243,7 +243,9 @@ const whatsChangedSuccessSchema = z
   .object({
     /**
      * `ok` is currently unreachable, and a consumer should not write a branch
-     * that waits for it.
+     * that waits for it. This says nothing about `error`, which is a separate
+     * outcome from a failed read and must still be handled -- see
+     * whatsChangedErrorSchema.
      *
      * A readable price section can never establish that it covered the
      * requested window -- the producer publishes no date for the base run of
@@ -1086,7 +1088,7 @@ export async function runWhatsChanged(
  * caller away from the answer this server exists to give.
  */
 export const whatsChangedToolDescription =
-  "Report what changed for a set of models: which stopped being free and now bill against the same id, other price movement, appearances, disappearances, deprecations, and public ecosystem token-usage rank changes. Free-to-paid transitions are reported in their own bucket. The upstream route compares its own two most recent archived runs and publishes no date for the base run, so how much of the requested window it covered cannot be established: the report says so, its status is always partial rather than ok, and an empty result is never an all-clear on models that started charging. Model, deprecation and rank sections are bounded and scoped to the requested window.";
+  "Report what changed for a set of models: which stopped being free and now bill against the same id, other price movement, appearances, disappearances, deprecations, and public ecosystem token-usage rank changes. Free-to-paid transitions are reported in their own bucket. The upstream route compares its own two most recent archived runs and publishes no date for the base run, so how much of the requested window it covered cannot be established: the report says so, a successful report is always partial rather than ok, and an empty result is never an all-clear on models that started charging. A read that fails outright returns status error instead, so handle three statuses: partial, error, and ok, which is currently unreachable. Model, deprecation and rank sections are bounded and scoped to the requested window.";
 
 export function registerWhatsChanged(
   server: McpServer,

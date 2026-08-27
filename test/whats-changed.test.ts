@@ -1274,9 +1274,15 @@ test("ok is documented as unreachable, and is in fact unreachable", async () => 
   assert.equal(result.status, "partial");
 });
 
-test("the tool description warns a caller off the ok branch", () => {
-  assert.match(whatsChangedToolDescription, /always partial rather than ok/i);
+test("the tool description warns a caller off ok without hiding error", () => {
+  assert.match(
+    whatsChangedToolDescription,
+    /a successful report is always partial rather than ok/i,
+  );
   assert.match(whatsChangedToolDescription, /cannot be established/i);
+  // Steering a caller away from `ok` must not steer them away from `error`,
+  // which a failed read still returns.
+  assert.match(whatsChangedToolDescription, /status error/i);
 });
 
 test("both counts are floors on a capped mixed page, not just the paid one", async () => {
