@@ -965,3 +965,86 @@ test("the tool description does not deny the capability it ships", () => {
   // free-to-paid answer lives.
   assert.match(description, /free/i);
 });
+
+test("counts price movement in the change total, not just around it", async () => {
+  // One free-to-paid row and one rank movement is two changes. A total that
+  // counts one of them makes the reader trust the smaller number.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [historyRow("m/one", 2, "10")] },
+    { date: "2026-08-19", complete: true, rows: [historyRow("m/one", 1, "20")] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(priceChangesResponse([becamePaidRow]));
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [manifestEndpoint, historyEndpoint],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      throw new Error(`Unexpected test path: ${path}`);
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.match(result.summary, /stopped being free/);
+  assert.match(result.summary, /2 changes found/);
+});
+
+test("an incomplete scan cannot report no changes while a price moved", async () => {
+  // The incomplete branch had its own wording, and it was the one branch the
+  // price count did not reach. A capped scan plus a real price move said
+  // "No changes were found".
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [] },
+    { date: "2026-08-19", complete: true, rows: [] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(
+          priceChangesResponse([
+            {
+              modelId: "vendor/cheaper",
+              transition: "price_decreased",
+              basePromptPrice: "0.000003",
+              baseCompletionPrice: "0.000004",
+              headPromptPrice: "0.000001",
+              headCompletionPrice: "0.000002",
+              wasFree: false,
+              isFree: false,
+            },
+          ]),
+        );
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [
+            manifestEndpoint,
+            historyEndpoint,
+            deprecationsEndpoint,
+            liveModelsEndpoint,
+          ],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      if (path === deprecationsEndpoint) return schema.parse(collectionResponse());
+      if (path === liveModelsEndpoint) {
+        return schema.parse(
+          query.get("cursor") === null
+            ? collectionResponse([liveModelFixture], opaqueCursor)
+            : collectionResponse([liveModelFixture], "live-remaining+/=opaque"),
+        );
+      }
+      throw new Error(`Unexpected test path: ${path}`);
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.doesNotMatch(result.summary, /No changes were found/);
+  assert.match(result.summary, /1 change found/);
+});

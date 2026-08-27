@@ -452,6 +452,15 @@ function annotatePriceCoverage(
   };
 }
 
+/** The compared window in words, for a sentence rather than a field. */
+function priceWindowLabel(
+  observed: z.infer<typeof priceObservedWindowSchema>,
+): string {
+  const { start, end } = observed;
+  if (start === null || end === null) return "the latest catalogue comparison";
+  return start === end ? start : `${start} to ${end}`;
+}
+
 /** The one sentence a degraded or narrow price section owes the summary. */
 function priceSummarySentence(
   priceChanges: z.infer<typeof priceChangesSchema>,
@@ -464,13 +473,7 @@ function priceSummarySentence(
   }
   const count = priceChanges.becamePaid.length;
   if (count === 0) return null;
-  const { start, end } = priceChanges.observedWindow;
-  const label =
-    start === null || end === null
-      ? "the latest catalogue comparison"
-      : start === end
-        ? start
-        : `${start} to ${end}`;
+  const label = priceWindowLabel(priceChanges.observedWindow);
   return `${count} model${count === 1 ? "" : "s"} stopped being free in ${label}.`;
 }
 
@@ -920,18 +923,34 @@ export async function runWhatsChanged(
     const priceDegraded = annotatedPrices.status !== "available";
     const moneySentence = priceSummarySentence(annotatedPrices);
 
+    // Price rows are changes, and they belong in the total every branch prints.
+    // Counting them only well enough to suppress the zero wording still leaves a
+    // reader trusting a number that is short by however many prices moved.
+    const totalCount = changeCount + priceChangeCount;
+    const countedNoun = `change${totalCount === 1 ? "" : "s"}`;
+    // Price movement comes from the producer's own comparison, which is usually
+    // a narrower window than the caller asked for. Attributing it to `since`
+    // without saying so would launder the difference the section just declared.
+    const scope =
+      priceChangeCount === 0
+        ? `since ${effectiveSince}`
+        : `since ${effectiveSince}, including ${priceChangeCount} price ${
+            priceChangeCount === 1 ? "move" : "moves"
+          } over ${
+            annotatedPrices.status === "available"
+              ? priceWindowLabel(annotatedPrices.observedWindow)
+              : "the latest catalogue comparison"
+          }`;
+
     let windowSentence: string;
-    if (incompleteCount > 0 && changeCount === 0) {
+    if (incompleteCount > 0 && totalCount === 0) {
       windowSentence = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
     } else if (incompleteCount > 0) {
-      windowSentence = `${changeCount} change${changeCount === 1 ? "" : "s"} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
-    } else if (changeCount === 0) {
-      windowSentence =
-        priceChangeCount > 0
-          ? `No other changes were found in the available comparisons since ${effectiveSince}.`
-          : `Nothing changed in the available comparisons since ${effectiveSince}.`;
+      windowSentence = `${totalCount} ${countedNoun} found in scanned evidence ${scope}; the comparison is incomplete.`;
+    } else if (totalCount === 0) {
+      windowSentence = `Nothing changed in the available comparisons since ${effectiveSince}.`;
     } else {
-      windowSentence = `${changeCount} change${changeCount === 1 ? "" : "s"} found since ${effectiveSince}.`;
+      windowSentence = `${totalCount} ${countedNoun} found ${scope}.`;
     }
     const summary =
       moneySentence === null
