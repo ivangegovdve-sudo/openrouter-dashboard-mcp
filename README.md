@@ -51,6 +51,37 @@ Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
 When a source is unavailable the tools say so as structured data — `unavailable`, `partial`, `stale` — rather than failing or inventing a value. That is the intended behaviour, not an error.
 
+## Freshness, and what happens when the source is slow
+
+Every tool reads a **public, zero-credential HTTP API** at query time. That host is a hobby-tier deployment with no uptime obligation, and it is a dependency of every answer. Two things follow, and both are visible in the response rather than assumed.
+
+**Responses are cached, and every answer carries its own age.** A single `dashboard_model_economics` call can make two dozen upstream requests; reading live every time would put avoidable load on that host. Each `evidence[]` entry carries `freshness`:
+
+```json
+"freshness": {
+  "state": "cached",
+  "fetchedAt": "2026-08-27T20:21:52.494Z",
+  "ageSeconds": 30,
+  "expiresAt": "2026-08-27T20:26:52.494Z"
+}
+```
+
+`state` is `live` (fetched during this call), `cached` (inside its expiry), or `expired`. Default TTL is five minutes; pass `cache: { ttlMs: 0 }` to read live every time, or `cache: false` to disable it.
+
+**When the host is slow or down, you get an honest answer, never a silent fallback.** With nothing cached, the upstream failure is returned as structured data — `unavailable` with a reason. With an expired entry in hand, the last-known value *is* returned, but marked:
+
+```json
+"freshness": {
+  "state": "expired",
+  "fetchedAt": "2026-08-27T20:21:52.494Z",
+  "ageSeconds": 3600,
+  "note": "Upstream could not be reached, so this is the last known value,
+           measured 2026-08-27T20:21:52.494Z (3600s ago). It is not current."
+}
+```
+
+Stale pricing is the exact harm this tool exists to prevent, so a number is never handed back as current when it is not. **Unmeasured is not zero, and stale is not fresh** — the age arrives with the answer so a caller can refuse it.
+
 ## Providers
 
 | | catalogue | pricing | context | modality | lifecycle | discounts | spend API |
@@ -132,7 +163,9 @@ Only models present in **both** runs are compared. A model that appeared or vani
 
 ## Discounts
 
-Of the three providers, **only OpenRouter publishes discounts at all**, and it publishes them as a **provider-endpoint** fact rather than a model fact — measured 2026-08-19, zero of 550 models carry a `discount` key while 272 of 272 provider endpoints do. `dashboard_model_economics` therefore reads `/api/public/v2/models/{id}/providers` per model and reports the best published discount with the provider named, so the number is checkable. Groq and Cerebras rows report `not_published_by_provider` and cost no upstream request.
+**Discount coverage is rich for OpenRouter and absent everywhere else.** Of the three providers, **only OpenRouter publishes discounts at all** — Groq and Cerebras rows always report `not_published_by_provider`, which is a fact about those providers and not a gap this server can close. Do not read the discount features as working equally across providers; they do not.
+
+OpenRouter publishes discounts as a **provider-endpoint** fact rather than a model fact — measured 2026-08-19, zero of 550 models carry a `discount` key while 272 of 272 provider endpoints do. `dashboard_model_economics` therefore reads `/api/public/v2/models/{id}/providers` per model and reports the best published discount with the provider named, so the number is checkable. Groq and Cerebras rows report `not_published_by_provider` and cost no upstream request.
 
 Four distinctions the tool refuses to collapse:
 

@@ -4,6 +4,7 @@ import {
   dashboardBaseUrl,
   dashboardRequestTimeoutMs,
 } from "../config.js";
+import { withCache, type CachingClientOptions } from "./cache.js";
 import { DashboardRequestError } from "./errors.js";
 
 export interface DashboardClient {
@@ -19,6 +20,8 @@ export type DashboardClientOptions = {
   timeoutMs?: number;
   maxResponseBytes?: number;
   fetchImpl?: typeof fetch;
+  /** Response cache. Pass `{ ttlMs: 0 }` to read live on every call. */
+  cache?: CachingClientOptions | false;
 };
 
 export const DASHBOARD_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -140,6 +143,17 @@ async function boundedResponseText(
 }
 
 export function createDashboardClient(
+  options: DashboardClientOptions = {},
+): DashboardClient {
+  const direct = createDirectDashboardClient(options);
+  // Cached by default. The host relaunches this server per session and one
+  // economics call can make two dozen upstream requests, so reading live every
+  // time would put avoidable load on a host that owes nobody uptime. Every
+  // answer still carries how old it is.
+  return options.cache === false ? direct : withCache(direct, options.cache);
+}
+
+function createDirectDashboardClient(
   options: DashboardClientOptions = {},
 ): DashboardClient {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
