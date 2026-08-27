@@ -463,7 +463,7 @@ test("declines with the exact capability message before any fallback request", a
   assert.equal(output.summary, FREE_MODELS_CAPABILITY_MESSAGE);
   assert.equal(
     output.summary,
-    "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.",
+    "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.",
   );
   assert.equal(output.missingCapability, liveModelsEndpoint);
   assert.deepEqual(

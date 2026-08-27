@@ -13,6 +13,8 @@ import {
   type FreeModelsOutput,
 } from "../src/tools/free-models.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
+import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
 import {
   modelStatusInputSchema,
   modelStatusOutputSchema,
@@ -68,6 +70,8 @@ type VerificationEvidence = {
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_free_models",
   "dashboard_github_movers",
+  "dashboard_key_inventory",
+  "dashboard_model_economics",
   "dashboard_model_status",
   "dashboard_resolve_model",
   "dashboard_source_health",
@@ -106,6 +110,11 @@ export const STANDARD_CALLS = [
     name: "dashboard_github_movers",
     arguments: { category: "mcp", windowDays: 7, limit: 5 },
   },
+  {
+    name: "dashboard_model_economics",
+    arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
+  },
+  { name: "dashboard_key_inventory", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 export const DIAGNOSTIC_CALLS = [
@@ -143,6 +152,19 @@ export const DIAGNOSTIC_CALLS = [
     name: "dashboard_github_movers",
     arguments: { category: "mcp", windowDays: 7, limit: 3 },
   },
+  {
+    name: "dashboard_model_economics",
+    arguments: {
+      ids: [
+        "fixture/discounted",
+        "fixture-groq/priced",
+        "fixture-cerebras/bare",
+        "fixture/no-such-model",
+      ],
+      discountEnrichment: 3,
+    },
+  },
+  { name: "dashboard_key_inventory", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -166,7 +188,7 @@ const MAX_DEFINITIONS_BYTES = 512 * 1024;
 const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const CAPABILITY_MESSAGE =
-  "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
+  "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.";
 
 const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_resolve_model", resolveModelOutputSchema],
@@ -176,16 +198,24 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_usage_leaders", usageLeadersOutputSchema],
   ["dashboard_source_health", sourceHealthOutputSchema],
   ["dashboard_github_movers", githubMoversOutputSchema],
+  ["dashboard_model_economics", modelEconomicsOutputSchema],
+  ["dashboard_key_inventory", keyInventoryOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   "categorytokenshare",
+  "completionusdpermilliontokens",
   "completionusdpertoken",
   "ecosystemtokenvolume",
   "ecosystemtokenvolumemovement",
   "previousecosystemtokenvolume",
+  "promptusdpermilliontokens",
   "promptusdpertoken",
   "rolling30dayecosystemtokenvolume",
+  // A Secret Manager resource NAME, never a value. The value-level scanner below
+  // still applies to it, so a real key appearing here is still caught.
+  "secretname",
+  "tokenizer",
   "totaltokens",
 ]);
 
@@ -439,6 +469,119 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture resolver omitted unknown/disappeared exclusions");
     }
   }
+  if (name === "dashboard_model_economics") {
+    const models = Array.isArray(output.models) ? output.models : [];
+    const byId = new Map(
+      models.map((entry) => {
+        const record = asRecord(entry, "economics model");
+        return [String(record.id), record];
+      }),
+    );
+
+    // All three providers must survive into one comparable answer. A tool that
+    // silently returns only OpenRouter is the exact failure this server exists
+    // to avoid, so it is asserted rather than assumed.
+    const providers = Array.isArray(output.providers) ? output.providers : [];
+    const providerIds = providers
+      .map((entry) => String(asRecord(entry, "provider report").provider))
+      .sort();
+    if (!isDeepStrictEqual(providerIds, ["cerebras", "groq", "openrouter"])) {
+      throw new Error("fixture economics did not report all three providers");
+    }
+
+    const discounted = byId.get("fixture/discounted");
+    if (discounted === undefined) {
+      throw new Error("fixture economics omitted the discounted model");
+    }
+    if (discounted.discountCoverage !== "discounted") {
+      throw new Error("fixture economics did not report the published discount");
+    }
+    const discount = asRecord(discounted.bestDiscount, "fixture discount");
+    if (
+      discount.percentOff !== "43.2" ||
+      discount.providerName !== "FixtureProvider" ||
+      discount.expiresAt !== null ||
+      discount.expiryPublished !== false
+    ) {
+      throw new Error("fixture economics misreported the discount or invented an expiry");
+    }
+
+    // Groq publishes a price but no lifecycle, so its risk must read as
+    // unforeseeable rather than as a reassuring "none".
+    const groq = byId.get("fixture-groq/priced");
+    if (groq === undefined) throw new Error("fixture economics omitted the Groq model");
+    if (groq.priceComparable !== true) {
+      throw new Error("fixture economics failed to rank a priced Groq model");
+    }
+    if (groq.retirementRisk !== "not_published_by_provider") {
+      throw new Error("fixture economics claimed a lifecycle Groq does not publish");
+    }
+    if (groq.discountCoverage !== "not_published_by_provider") {
+      throw new Error("fixture economics implied Groq publishes discounts");
+    }
+    if (groq.supportsTools !== null) {
+      throw new Error("fixture economics claimed tool support Groq does not publish");
+    }
+
+    // Cerebras publishes nothing, so it must be kept and explained, never dropped
+    // and never allowed to read as free.
+    const cerebras = byId.get("fixture-cerebras/bare");
+    if (cerebras === undefined) {
+      throw new Error("fixture economics dropped the unpriced Cerebras model");
+    }
+    if (cerebras.priceComparable !== false || cerebras.genuinelyFree !== false) {
+      throw new Error("fixture economics treated an unpriced model as rankable or free");
+    }
+    if (cerebras.emitsText !== null) {
+      throw new Error("fixture economics invented a modality Cerebras does not publish");
+    }
+    if (typeof cerebras.unrankableReason !== "string" || cerebras.unrankableReason === "") {
+      throw new Error("fixture economics left an unpriced model unexplained");
+    }
+
+    // Priced rows rank ahead of unrankable ones.
+    const cheapest = asRecord(models[0], "cheapest economics model");
+    if (cheapest.id !== "fixture-groq/priced") {
+      throw new Error("fixture economics did not rank the cheapest priced model first");
+    }
+    if (String(asRecord(models[models.length - 1], "last model").id) !== "fixture-cerebras/bare") {
+      throw new Error("fixture economics did not place the unrankable model last");
+    }
+
+    const comparability = asRecord(output.comparability, "comparability");
+    if (comparability.priceComparable !== 2 || comparability.priceUnknown !== 1) {
+      throw new Error("fixture economics miscounted price comparability");
+    }
+
+    if (!Array.isArray(output.missingIds) || !output.missingIds.includes("fixture/no-such-model")) {
+      throw new Error("fixture economics did not name the vanished pinned id");
+    }
+  }
+  if (name === "dashboard_whats_changed") {
+    const price = asRecord(output.priceChanges, "price changes");
+    if (price.status !== "available") {
+      throw new Error(`fixture price changes were not available (${String(price.status)})`);
+    }
+    const becamePaid = Array.isArray(price.becamePaid) ? price.becamePaid : [];
+    const ids = becamePaid.map((entry) => asRecord(entry, "became paid").modelId);
+    if (!isDeepStrictEqual(ids, ["fixture/was-free"])) {
+      throw new Error("fixture did not surface the model that left free");
+    }
+    const row = asRecord(becamePaid[0], "became paid row");
+    if (row.wasFree !== true || row.isFree !== false) {
+      throw new Error("fixture misreported the free-to-paid transition");
+    }
+    // A price decrease must not be filed under the money-losing bucket.
+    const other = Array.isArray(price.otherChanges) ? price.otherChanges : [];
+    if (!isDeepStrictEqual(other.map((entry) => asRecord(entry, "other").modelId), ["fixture/got-cheaper"])) {
+      throw new Error("fixture mixed other price movement into becamePaid");
+    }
+  }
+  if (name === "dashboard_key_inventory") {
+    if (output.status !== "unconfigured") {
+      throw new Error("fixture key inventory must stay dormant without configured keys");
+    }
+  }
   if (name === "dashboard_model_status") {
     if (output.status !== "not_found") throw new Error("fixture model unexpectedly found");
     if (!Array.isArray(output.suggestions) || output.suggestions.length === 0) {
@@ -660,7 +803,15 @@ export function assertModeResult(
   }
   const schemaValidatedContent = parsed.data;
 
+  // The key inventory is the one tool that does not read DASHBOARD_BASE_URL, so
+  // pointing the dashboard at a dead or HTML-serving host says nothing about it.
+  // It must still parse its own schema — asserted above — but demanding dashboard
+  // failure evidence from a tool that never called the dashboard would be testing
+  // a claim the tool does not make. It is exercised by its own unit tests instead.
+  const readsDashboard = name !== "dashboard_key_inventory";
+
   if (mode === "offline") {
+    if (!readsDashboard) return;
     if (!containsFieldValue(schemaValidatedContent, "kind", "unreachable")) {
       throw new Error(`${name} did not return structured unreachable evidence`);
     }
@@ -670,6 +821,7 @@ export function assertModeResult(
     return;
   }
   if (mode === "html") {
+    if (!readsDashboard) return;
     if (!containsFieldValue(schemaValidatedContent, "kind", "non_json")) {
       throw new Error(`${name} did not return structured non_json evidence`);
     }
@@ -703,7 +855,7 @@ export function assertModeResult(
       output.summary !== CAPABILITY_MESSAGE ||
       output.message !== CAPABILITY_MESSAGE)
   ) {
-    throw new Error(`${name} returned the wrong PR #24 capability decline`);
+    throw new Error(`${name} returned the wrong live-models capability decline`);
   }
   if (name === "dashboard_resolve_model") {
     assertResolveModelLiveInvariants(

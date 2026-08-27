@@ -151,7 +151,7 @@ test("dead-port allocation returns a loopback URL that refuses connections", asy
   );
 });
 
-test("standard call matrix covers the exact seven tools and arguments", async () => {
+test("standard call matrix covers the exact nine tools and arguments", async () => {
   const { STANDARD_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(STANDARD_CALLS, [
@@ -185,10 +185,15 @@ test("standard call matrix covers the exact seven tools and arguments", async ()
       name: "dashboard_github_movers",
       arguments: { category: "mcp", windowDays: 7, limit: 5 },
     },
+    {
+      name: "dashboard_model_economics",
+      arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
+    },
+    { name: "dashboard_key_inventory", arguments: {} },
   ]);
 });
 
-test("diagnostic call matrix covers all seven deliberate assertions", async () => {
+test("diagnostic call matrix covers all nine deliberate assertions", async () => {
   const { DIAGNOSTIC_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(DIAGNOSTIC_CALLS, [
@@ -226,8 +231,21 @@ test("diagnostic call matrix covers all seven deliberate assertions", async () =
       name: "dashboard_github_movers",
       arguments: { category: "mcp", windowDays: 7, limit: 3 },
     },
+    {
+      name: "dashboard_model_economics",
+      arguments: {
+        ids: [
+          "fixture/discounted",
+          "fixture-groq/priced",
+          "fixture-cerebras/bare",
+          "fixture/no-such-model",
+        ],
+        discountEnrichment: 3,
+      },
+    },
+    { name: "dashboard_key_inventory", arguments: {} },
   ]);
-  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 7);
+  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 9);
 });
 
 test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {
@@ -265,7 +283,7 @@ test("HTML mode rejects a schema-invalid payload with nested non_json evidence",
 test("live capability declines require the exact route and PR 24 message", async () => {
   const { assertModeResult } = await loadStdioHarness();
   const capabilityMessage =
-    "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
+    "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.";
   const exact = {
     status: "unavailable",
     summary: capabilityMessage,

@@ -24,6 +24,16 @@ const sourceStatuses = [
   { ...sourceStatusFixture, sourceId: "task_classifications" },
   {
     ...sourceStatusFixture,
+    sourceId: "groq_models_current",
+    sourceTier: "supported" as const,
+  },
+  {
+    ...sourceStatusFixture,
+    sourceId: "cerebras_models_current",
+    sourceTier: "supported" as const,
+  },
+  {
+    ...sourceStatusFixture,
     sourceId: "benchmarks_current",
     stale: true,
     lastAttemptStatus: "failed" as const,
@@ -106,7 +116,7 @@ test("surfaces a stale failed collector in the response body", async () => {
   assert.match(result.summary, /failed/i);
 });
 
-test("fetches manifest and the six-source status view concurrently", async () => {
+test("fetches manifest and the eight-source status view concurrently", async () => {
   const deps = sourceHealthClient();
 
   const result = await runSourceHealth({}, { client: deps.client });
