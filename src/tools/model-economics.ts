@@ -369,6 +369,12 @@ const modelEconomicsSuccessSchema = z
         modelsEnriched: z.number().int().min(0),
         modelsDiscounted: z.number().int().min(0),
         modelsUnobserved: z.number().int().min(0),
+        /**
+         * Observed, but the endpoint listing was cut short before its end, so a
+         * discount may sit on a page never read. Counted apart from
+         * `modelsUnobserved` so the buckets do not overlap.
+         */
+        modelsTruncated: z.number().int().min(0),
         note: z.string(),
       })
       .strict(),
@@ -639,6 +645,9 @@ export async function runModelEconomics(
   let modelsEnriched = 0;
   let modelsDiscounted = 0;
   let modelsUnobserved = 0;
+  // Observed, but the endpoint listing was cut short. Distinct from unobserved:
+  // counting it as both would make the buckets overlap and the warning lie.
+  let modelsTruncated = 0;
   const enrichable = models.filter(
     (model) => PROVIDER_REGISTRY[model.provider].publishes.discounts !== "never",
   );
@@ -701,7 +710,7 @@ export async function runModelEconomics(
             ? "unavailable"
             : "no_discount";
       if (best !== null) modelsDiscounted += 1;
-      if (best === null && endpointsTruncated) modelsUnobserved += 1;
+      if (best === null && endpointsTruncated) modelsTruncated += 1;
     } catch {
       modelsUnobserved += 1;
       model.discountCoverage = "unavailable";
@@ -709,6 +718,11 @@ export async function runModelEconomics(
   }
 
   const sourceAvailable = enrichmentTargets.length === 0 || modelsEnriched > 0;
+  if (modelsTruncated > 0) {
+    warnings.push(
+      `${modelsTruncated} model${modelsTruncated === 1 ? "'s" : "s'"} endpoint listing was cut short before its end, so a discount may sit on a page that was never read. Those rows report unavailable rather than no_discount.`,
+    );
+  }
   if (modelsUnobserved > 0) {
     warnings.push(
       `${modelsUnobserved} model${modelsUnobserved === 1 ? " has" : "s have"} no upstream endpoint observation, so their discount state is unknown rather than absent. Upstream observes provider endpoints under a daily request budget, so most of the catalogue is unobserved at any moment.`,
@@ -763,7 +777,7 @@ export async function runModelEconomics(
   const priceUnknown = matchedBeforeLimit - priceComparable;
   if (priceUnknown > 0) {
     warnings.push(
-      `${priceUnknown} matching model${priceUnknown === 1 ? "" : "s"} could not be ranked because a published price is missing -- for some providers none is published at all, for others only one half of it. Each row states which. They are listed after the ranked rows, not dropped.`,
+      `${priceUnknown} matching model${priceUnknown === 1 ? "" : "s"} could not be ranked because a published price is missing; each returned row carries an unrankableReason saying whether the provider published none at all or only one half. They are listed after the ranked rows, not dropped.`,
     );
   }
 
@@ -781,7 +795,7 @@ export async function runModelEconomics(
 
   const discountNote = !sourceAvailable
     ? "No endpoint observation could be read for any attempted model, so no discount conclusion is available. Absence of a discount here is not evidence there is none."
-    : `${modelsEnriched} of ${enrichable.length} discount-capable returned models were checked; ${modelsUnobserved} were unobserved upstream and ${uncheckedCount} were not attempted. Only models marked no_discount are known to be at full price. No provider publishes a discount expiry.`;
+    : `${modelsEnriched} of ${enrichable.length} discount-capable returned models were checked; ${modelsUnobserved} had no upstream observation, ${modelsTruncated} were observed but their endpoint listing was cut short, and ${uncheckedCount} were not attempted. Only models marked no_discount are known to be at full price. No provider publishes a discount expiry.`;
 
   const comparabilityNote =
     priceUnknown === 0
@@ -809,6 +823,7 @@ export async function runModelEconomics(
       modelsEnriched,
       modelsDiscounted,
       modelsUnobserved,
+      modelsTruncated,
       note: discountNote,
     },
     evidence,

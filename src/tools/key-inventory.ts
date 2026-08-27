@@ -48,55 +48,69 @@ export const KEY_SOURCES_ENV = "OPEN_DASHBOARD_KEY_SOURCES";
 /**
  * Anything that looks like key material, in any field this tool echoes back.
  *
- * Two paths reach the caller and neither is under this server's control:
- * the operator writes the `secretName` half of each triple, and the provider
- * writes the `label`. OpenRouter's documented `label` is a MASKED KEY
- * FINGERPRINT — the key prefix, an ellipsis, then its last few characters — so
- * it is partial key material by construction. A prefix, a suffix, or "just the
- * last four to confirm it
- * loaded" is still key material, so it is replaced rather than trimmed.
+ * The operator writes the `secretName` half of each triple, so it is not under
+ * this server's control. A prefix, a suffix, or "just the last four to confirm
+ * it loaded" is still key material, so a match replaces the whole value rather
+ * than trimming it.
+ *
+ * The provider-supplied key `label` is not returned at all. OpenRouter documents
+ * it as a masked key fingerprint — the prefix, an ellipsis, and the last few
+ * characters — which is partial key material by construction, and no heuristic
+ * can promise to recognise every format a provider might put there. Dropping the
+ * field removes the question instead of answering it badly.
  *
  * Fails closed: on any match the whole value is dropped, because a value that
  * contains a key is not made safe by returning the rest of it.
  */
 const KEY_SHAPED = [
-  // Each is anchored on a word boundary so an ordinary label that merely embeds
-  // a prefix mid-word is not redacted. Without it, everyday hyphenated labels
-  // match and get destroyed.
-  /\bsk-[A-Za-z0-9_-]{8,}/i,
-  /\bgsk[_-][A-Za-z0-9]{8,}/i,
-  /\bcsk-[A-Za-z0-9]{8,}/i,
-  /\bBearer\s+\S+/i,
-  /\bAIza[A-Za-z0-9_-]{10,}/,
-  /\bgh[pousr]_[A-Za-z0-9]{10,}/,
-  /\bnpm_[A-Za-z0-9]{16,}/,
-  /\bxox[baprs]-[A-Za-z0-9-]{10,}/,
-  /\bAKIA[0-9A-Z]{12,}/,
+  // NOT anchored with \b: JavaScript counts `_` as a word character, so \b would
+  // let `key_sk-abc12345` through. A negative lookbehind for the alphanumerics
+  // only is the boundary that is actually wanted -- it still refuses to fire
+  // mid-word inside an ordinary label, but an underscore-prefixed credential
+  // does not slip past.
+  /(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{8,}/i,
+  /(?<![A-Za-z0-9])gsk[_-][A-Za-z0-9]{8,}/i,
+  /(?<![A-Za-z0-9])csk-[A-Za-z0-9]{8,}/i,
+  /(?<![A-Za-z0-9])Bearer\s+\S+/i,
+  /(?<![A-Za-z0-9])AIza[A-Za-z0-9_-]{10,}/,
+  /(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{10,}/,
+  /(?<![A-Za-z0-9])npm_[A-Za-z0-9]{16,}/,
+  /(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}/,
+  /(?<![A-Za-z0-9])AKIA[0-9A-Z]{12,}/,
   // A JSON Web Token: three base64url segments.
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/,
+  /(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   // A masked fingerprint: any key-ish prefix with an ellipsis in the middle.
   /[A-Za-z0-9_-]{6,}\.{3}[A-Za-z0-9_-]{3,}/,
+  // A UUID, which several providers use verbatim as a key.
+  /(?<![A-Za-z0-9])[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
 ];
 
 /**
- * A long opaque token of no recognised family.
+ * A long opaque run of no recognised family.
  *
  * The named patterns above are a denylist, and a denylist cannot know about a
- * credential family that did not exist when it was written. This is the catch-all:
- * a single run of 24+ characters that mixes letters with digits and contains no
- * separator a human would put in a label. "production router" and
- * "openrouter-primary-key" pass; an unknown vendor's 40-character opaque token
- * does not.
+ * credential family that did not exist when it was written. This is the
+ * catch-all, and it deliberately looks at RUNS rather than whitespace-delimited
+ * tokens, so that punctuation around a secret (`token:abc…`, `"abc…"`) cannot
+ * smuggle it past.
+ *
+ * A run of 20+ characters from the credential alphabet is treated as a secret
+ * unless it reads like words. Hex counts even with no digits in it -- an
+ * all-`a`-`f` token is still a token.
  */
 function looksLikeOpaqueToken(value: string): boolean {
-  for (const token of value.split(/[\s]+/)) {
-    if (token.length < 24) continue;
-    if (!/^[A-Za-z0-9_\-.=+/]+$/.test(token)) continue;
-    if (!/[A-Za-z]/.test(token) || !/[0-9]/.test(token)) continue;
-    // A hyphen/underscore-separated slug of short words reads as a name, not a
-    // secret. Require at least one long unbroken run.
-    if (!/[A-Za-z0-9]{16,}/.test(token)) continue;
+  // Runs of credential-alphabet characters, ignoring surrounding punctuation.
+  for (const run of value.match(/[A-Za-z0-9+/=_-]{20,}/g) ?? []) {
+    const alphanumeric = run.replace(/[^A-Za-z0-9]/g, "");
+    if (alphanumeric.length < 20) continue;
+    // Long hex is a secret whether or not it happens to contain a digit.
+    if (/^[0-9a-f]{20,}$/i.test(alphanumeric)) return true;
+    // Otherwise require the character-class mixing that random tokens have and
+    // hyphenated English labels do not: both cases, or letters plus digits.
+    const hasDigit = /[0-9]/.test(alphanumeric);
+    const mixedCase = /[a-z]/.test(alphanumeric) && /[A-Z]/.test(alphanumeric);
+    if (!hasDigit && !mixedCase) continue;
     return true;
   }
   return false;
@@ -117,6 +131,25 @@ export function redactKeyShaped(value: string | null): string | null {
   }
   return value;
 }
+
+/**
+ * What a Secret Manager resource name actually looks like.
+ *
+ * This is the half of the guarantee that heuristics cannot give. `secretName` is
+ * operator-supplied config, and rather than trying to recognise every credential
+ * that could be pasted there, this states positively what a NAME is: short,
+ * word-like, no long opaque runs. Anything else is refused and reported as
+ * refused, so an accident fails closed instead of being echoed back.
+ */
+export function isPlausibleSecretName(value: string): boolean {
+  if (value.length === 0 || value.length > 64) return false;
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(value)) return false;
+  // No unbroken alphanumeric run longer than a real word.
+  if (/[A-Za-z0-9]{20,}/.test(value)) return false;
+  return redactKeyShaped(value) === value;
+}
+
+export const OMITTED_SECRET_NAME = "[omitted: not a valid secret name]";
 
 /** Where each provider answers "is this key alive, and what has it spent". */
 const KEY_PROBE: Record<ProviderId, { url: string; readsSpend: boolean }> = {
@@ -155,11 +188,14 @@ export function parseKeySources(raw: string | undefined): KeySource[] {
     const dedupeKey = `${provider}:${secretName}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    // The operator writes this half. If they paste a real key here by mistake,
-    // it must not come back out in the report.
+    // The operator writes this half. Rather than trying to recognise every
+    // credential that could be pasted here, require it to look like a name; if
+    // it does not, refuse it and say so rather than echoing it back.
     sources.push({
       provider: parsed.data,
-      secretName: redactKeyShaped(secretName) ?? secretName,
+      secretName: isPlausibleSecretName(secretName)
+        ? secretName
+        : OMITTED_SECRET_NAME,
       envVar,
     });
   }
@@ -199,7 +235,6 @@ const openRouterKeyResponseSchema = z
   .object({
     data: z
       .object({
-        label: z.string().nullable().optional(),
         usage: z.number().nullable().optional(),
         limit: z.number().nullable().optional(),
         limit_remaining: z.number().nullable().optional(),
@@ -251,7 +286,6 @@ const keyReportSchema = z
     state: keyStateSchema,
     /** Whether the key authenticated, independent of whether spend is readable. */
     alive: z.boolean().nullable(),
-    label: z.string().nullable(),
     spendReadability: spendReadabilitySchema,
     usdSpent: z.number().nullable(),
     /**
@@ -341,7 +375,6 @@ function baseReport(source: KeySource): KeyReport {
     secretName: source.secretName,
     state: "unreachable",
     alive: null,
-    label: null,
     spendReadability: readsSpend ? "unread" : "no_billing_api",
     usdSpent: null,
     usdLimit: null,
@@ -455,7 +488,6 @@ async function readKey(
       secretName: source.secretName,
       state: "active",
       alive: true,
-      label: redactKeyShaped(data.label ?? null),
       spendReadability: "read",
       usdSpent: data.usage ?? null,
       usdLimit,

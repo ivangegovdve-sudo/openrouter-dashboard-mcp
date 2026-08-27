@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isPlausibleSecretName,
   KEY_SOURCES_ENV,
+  OMITTED_SECRET_NAME,
   redactKeyShaped,
   keyInventoryOutputSchema,
   parseKeySources,
@@ -308,10 +310,12 @@ test("redacts anything key-shaped rather than trimming it", () => {
   assert.equal(redactKeyShaped(null), null);
 });
 
-test("does not echo a provider label that is a masked key fingerprint", async () => {
+test("does not return the provider key label at all", async () => {
   const fetchImpl: typeof fetch = async () =>
     keyPayload({
-      // OpenRouter documents `label` as a masked key fingerprint.
+      // OpenRouter documents `label` as a masked key fingerprint. Rather than
+      // trying to recognise every format a provider might use, the field is not
+      // returned -- that removes the question instead of answering it badly.
       label: "sk-or-v1-au7...890",
       usage: 1,
       limit: null,
@@ -327,11 +331,13 @@ test("does not echo a provider label that is a masked key fingerprint", async ()
   );
   if (output.status === "unconfigured") assert.fail("expected a report");
 
-  assert.match(String(output.keys[0]?.label), /redacted/);
-  assert.doesNotMatch(JSON.stringify(output), /au7/);
+  const serialized = JSON.stringify(output);
+  assert.doesNotMatch(serialized, /au7/);
+  assert.doesNotMatch(serialized, /label/);
+  assert.equal(output.keys[0]?.secretName, "my-key");
 });
 
-test("does not echo a real key pasted into the secret-name position", async () => {
+test("omits, rather than echoes, a secret-name position that is not a name", async () => {
   const fetchImpl: typeof fetch = async () => modelsPayload();
 
   const output = await runKeyInventory(
@@ -349,7 +355,7 @@ test("does not echo a real key pasted into the secret-name position", async () =
 
   // The operator writes this half; a mistake there must not become a leak.
   assert.doesNotMatch(JSON.stringify(output), /cccccccc/);
-  assert.match(String(output.keys[0]?.secretName), /redacted/);
+  assert.equal(output.keys[0]?.secretName, OMITTED_SECRET_NAME);
 });
 
 test("does not redact an ordinary label that merely contains a key-ish substring", () => {
@@ -366,4 +372,57 @@ test("redacts an opaque token from a credential family it has never seen", () =>
   assert.match(String(redactKeyShaped("label: 8f3aB9c2D7e1F4g6H8j0K2l4M6n8P0q2R4s6")), /redacted/);
   // Prose and slugs are untouched.
   assert.equal(redactKeyShaped("production router for batch"), "production router for batch");
+});
+
+test("accepts real secret-manager names and refuses everything that is not one", () => {
+  for (const name of [
+    "openrouter-primary",
+    "groq_open_dashboard",
+    "cerebras.key.2",
+    "my-key",
+  ]) {
+    assert.equal(isPlausibleSecretName(name), true, name);
+  }
+
+  // Every bypass the reviewer found against the shape heuristic, refused here by
+  // the positive rule instead: a NAME is short and word-like.
+  for (const notAName of [
+    "deadbeefdeadbeefdeadbeefdeadbeef",
+    "550e8400-e29b-41d4-a716-446655440000",
+    "Ab3Cd5Ef7Gh9Jk2Lm4Np6Qr",
+    "Ab3Cd5Ef7Gh9Jk2-Lm4Np6Qr8St0Uv2",
+    "sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaa",
+    "key_sk-abc12345678",
+    "a".repeat(65),
+    "has spaces",
+    "-leading-hyphen",
+  ]) {
+    assert.equal(isPlausibleSecretName(notAName), false, notAName);
+  }
+});
+
+test("redacts underscore-prefixed credentials, which a word boundary would miss", () => {
+  // JavaScript \b counts _ as a word character, so \bsk- would let these pass.
+  assert.match(String(redactKeyShaped("key_sk-abc12345678")), /redacted/);
+  assert.match(String(redactKeyShaped("auth_Bearer abc123")), /redacted/);
+  assert.match(String(redactKeyShaped("x_gsk_abcdefghijkl")), /redacted/);
+});
+
+test("redacts the opaque shapes that slipped past the first heuristic", () => {
+  for (const token of [
+    "deadbeefdeadbeefdeadbeefdeadbeef",
+    "550e8400-e29b-41d4-a716-446655440000",
+    "token:Zx9Qw2Lm8Rt4Yv6Bn1Kp3Hd5Fg7Js0Aa",
+    '"Zx9Qw2Lm8Rt4Yv6Bn1Kp3Hd5Fg7"',
+  ]) {
+    assert.match(String(redactKeyShaped(token)), /redacted/, token);
+  }
+  // Ordinary prose and slugs still survive.
+  for (const ok of [
+    "production router",
+    "openrouter-primary-key",
+    "batch jobs europe",
+  ]) {
+    assert.equal(redactKeyShaped(ok), ok, ok);
+  }
 });
