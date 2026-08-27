@@ -1073,3 +1073,54 @@ test("a capped price page cannot state an exact free-to-paid count", async () =>
   assert.match(result.summary, /at least/i);
   assert.doesNotMatch(result.summary, /^1 model stopped being free/);
 });
+
+test("a capped page cannot rule out a free-to-paid row it never read", async () => {
+  // "At least N price moves" qualifies the count, but "none of them a model
+  // leaving free" is a categorical zero over the exact transition this server
+  // exists to catch -- asserted about rows the section never fetched.
+  const client = priceOnlyClient(
+    priceChangesResponse(
+      [
+        {
+          modelId: "vendor/cheaper",
+          transition: "price_decreased",
+          basePromptPrice: "0.000003",
+          baseCompletionPrice: "0.000004",
+          headPromptPrice: "0.000001",
+          headCompletionPrice: "0.000002",
+          wasFree: false,
+          isFree: false,
+        },
+      ],
+      undefined,
+      "price-next+/=opaque",
+    ),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.doesNotMatch(result.summary, /none of them a model leaving free/);
+  assert.match(result.summary, /rows read/);
+  assert.match(result.summary, /unread/);
+});
+
+test("an uncapped page may state the categorical zero, because it read everything", async () => {
+  // The counterpart: without a cursor the section holds the whole collection,
+  // so "none of them" is a claim it is entitled to make.
+  const client = priceOnlyClient(
+    priceChangesResponse([
+      {
+        modelId: "vendor/cheaper",
+        transition: "price_decreased",
+        basePromptPrice: "0.000003",
+        baseCompletionPrice: "0.000004",
+        headPromptPrice: "0.000001",
+        headCompletionPrice: "0.000002",
+        wasFree: false,
+        isFree: false,
+      },
+    ]),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.match(result.summary, /none of them a model leaving free/);
+});

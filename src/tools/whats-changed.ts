@@ -483,7 +483,13 @@ function priceSummarySentence(
     ? `; the price comparison was capped at ${priceChanges.cap.requestedLimit} rows with more unread.`
     : ".";
   if (paid === 0) {
-    return `${floor}${other} price move${other === 1 ? "" : "s"} in ${label}, none of them a model leaving free${tail}`;
+    const moves = `${floor}${other} price move${other === 1 ? "" : "s"} in ${label}`;
+    // "None of them left free" is a categorical zero over the one transition
+    // this server exists to catch. A capped page has not read the rows that
+    // would falsify it, so it may only speak for the rows it holds.
+    return capped
+      ? `${moves}. None of the rows read was a model leaving free, but the price comparison was capped at ${priceChanges.cap.requestedLimit} rows and an unread row still could be.`
+      : `${moves}, none of them a model leaving free.`;
   }
   const alongside =
     other === 0
