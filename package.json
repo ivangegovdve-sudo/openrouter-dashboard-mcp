@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "0.1.0",
-  "description": "Read-only MCP server that compares AI models across OpenRouter, Groq and Cerebras on price, discounts, context, modality and retirement risk — so a router can pick the cheapest capable model instead of a hardcoded slug.",
+  "version": "0.2.0",
+  "description": "Read-only MCP server that compares AI models across OpenRouter, Groq and Cerebras on price, published discounts, capability and retirement risk -- and reports models that quietly stopped being free.",
   "keywords": [
     "mcp",
     "model-context-protocol",
