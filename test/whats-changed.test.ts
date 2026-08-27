@@ -7,6 +7,7 @@ import {
   DEPRECATION_ITEM_LIMIT,
   DEPRECATION_PAGE_LIMIT,
   runWhatsChanged,
+  whatsChangedToolDescription,
 } from "../src/tools/whats-changed.js";
 import {
   liveModelFixture,
@@ -270,7 +271,9 @@ test("reports model appearances and disappearances when live-models exists", asy
 
   assert.notEqual(result.status, "error");
   if (result.status === "error") return;
-  assert.equal(result.status, "ok");
+  // Partial, not ok: this stub serves no /price-changes route, and a report that
+  // could not read price movement has not established that nothing changed.
+  assert.equal(result.status, "partial");
   assert.equal(result.modelAppearances.status, "available");
   assert.deepEqual(
     result.modelAppearances.items.map((model) => model.id),
@@ -780,4 +783,137 @@ test("distinguishes a deployment without the route from a quiet one", async () =
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
   assert.equal(result.priceChanges.status, "unsupported_by_public_api");
+});
+
+/**
+ * Fixture builder for a price-changes response whose observed comparison window
+ * is stated by the producer. The window matters more than the rows: an empty
+ * list read against the wrong window is the most expensive wrong answer here.
+ */
+function priceChangesResponse(
+  data: unknown[],
+  window: { start: string | null; end: string | null } = {
+    start: "2026-08-26",
+    end: "2026-08-26",
+  },
+) {
+  return {
+    schemaVersion: "2.0",
+    data,
+    cursor: null,
+    comparison: { baseRunId: runId, headRunId: runId },
+    window: { ...publicWindow, ...window, basis: "derived" },
+    completeness: publicCompleteness,
+    stale: false,
+    rank: null,
+    provenance: publicProvenance,
+  };
+}
+
+const becamePaidRow = {
+  modelId: "vendor/was-free",
+  transition: "became_paid",
+  basePromptPrice: "0",
+  baseCompletionPrice: "0",
+  headPromptPrice: "0.0000004",
+  headCompletionPrice: "0.0000012",
+  wasFree: true,
+  isFree: false,
+};
+
+function priceOnlyClient(response: unknown): DashboardClient {
+  return {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") return schema.parse(response);
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+}
+
+test("never says nothing changed while a model started charging", async () => {
+  const client = priceOnlyClient(priceChangesResponse([becamePaidRow]));
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+
+  // The summary is the one line a model relays verbatim. It cannot report an
+  // all-clear while the money bucket has an entry in it.
+  assert.doesNotMatch(result.summary, /^Nothing changed/);
+  assert.match(result.summary, /stopped being free/);
+});
+
+test("states the window price movement was actually compared over", async () => {
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: "2026-08-26", end: "2026-08-26" }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-01", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.priceChanges.status, "available");
+  if (result.priceChanges.status !== "available") return;
+
+  assert.equal(result.priceChanges.observedWindow.start, "2026-08-26");
+  assert.equal(result.priceChanges.observedWindow.end, "2026-08-26");
+  // The caller asked about August. The producer compared one day of it.
+  assert.equal(result.priceChanges.coversRequestedWindow, false);
+  assert.match(result.priceChanges.windowNote, /not evidence/);
+  assert.ok(
+    result.warnings.some((warning) => /narrower/.test(warning)),
+    "a narrower price window must be warned about, not left in a field",
+  );
+});
+
+test("confirms coverage when the compared window reaches back past the request", async () => {
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: "2026-08-17", end: "2026-08-26" }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.coversRequestedWindow, true);
+  assert.ok(!result.warnings.some((warning) => /narrower/.test(warning)));
+});
+
+test("reports unknown coverage rather than assuming it, when the window has no dates", async () => {
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: null, end: null }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.coversRequestedWindow, null);
+  assert.match(result.priceChanges.windowNote, /unknown/i);
+});
+
+test("an unreadable price source degrades the whole report, never leaves it ok", async () => {
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        throw new DashboardRequestError("timeout", "timed out", { retryable: true });
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.status, "partial");
+  assert.match(result.summary, /not evidence|could not be read/i);
+});
+
+test("the tool description does not deny the capability it ships", () => {
+  const description = whatsChangedToolDescription;
+  assert.doesNotMatch(description, /price changes are explicitly unsupported/i);
+  // The model selecting a tool has to be able to tell that this is where the
+  // free-to-paid answer lives.
+  assert.match(description, /free/i);
 });

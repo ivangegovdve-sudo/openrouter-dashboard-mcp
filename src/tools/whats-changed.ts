@@ -171,6 +171,14 @@ const priceChangeItemSchema = publicPriceChangeSchema.extend({
  * one of them would be a false all-clear -- the exact failure this section
  * exists to prevent.
  */
+const priceObservedWindowSchema = z
+  .object({
+    start: z.string().date().nullable(),
+    end: z.string().date().nullable(),
+    basis: z.enum(["source_meta", "query", "derived", "observed", "unknown"]),
+  })
+  .strict();
+
 const priceChangesSchema = z.discriminatedUnion("status", [
   z
     .object({
@@ -179,6 +187,21 @@ const priceChangesSchema = z.discriminatedUnion("status", [
       becamePaid: z.array(priceChangeItemSchema),
       /** Every other movement, including models that became free. */
       otherChanges: z.array(priceChangeItemSchema),
+      /**
+       * The window the producer actually compared, which is the two most recent
+       * archived runs and not the window the caller asked about. Carried because
+       * an empty `becamePaid` read against an unstated window is a false
+       * all-clear -- the one answer this section exists to prevent.
+       */
+      observedWindow: priceObservedWindowSchema,
+      /**
+       * Whether the compared window reaches back at least as far as the caller's
+       * `since`. Null when either side has no date, because unknown coverage is
+       * not the same as adequate coverage.
+       */
+      coversRequestedWindow: z.boolean().nullable(),
+      /** The same fact in words, for a reader who skips the booleans. */
+      windowNote: z.string(),
       comparison: z
         .object({ baseRunId: z.string(), headRunId: z.string() })
         .strict(),
@@ -345,6 +368,15 @@ async function readPriceChanges(
       status: "available",
       becamePaid: rows.filter((row) => row.transition === "became_paid"),
       otherChanges: rows.filter((row) => row.transition !== "became_paid"),
+      observedWindow: {
+        start: response.window.start,
+        end: response.window.end,
+        basis: response.window.basis,
+      },
+      // Coverage is decided against the caller's window, which is not known
+      // here. Filled in by annotatePriceCoverage once the window is resolved.
+      coversRequestedWindow: null,
+      windowNote: "",
       comparison: response.comparison,
       cap: {
         requestedLimit: PRICE_CHANGES_LIMIT,
@@ -362,6 +394,71 @@ async function readPriceChanges(
       reason: `Price changes could not be read (${safeError.message}). This is not evidence that nothing changed.`,
     };
   }
+}
+
+/**
+ * Decide, and say in words, whether the compared price window reaches back far
+ * enough to answer the question the caller asked.
+ *
+ * The upstream route takes no window parameter -- it always compares the two
+ * most recent archived runs. So a caller asking "what changed since the 1st"
+ * gets a price section that looked at one day of it. Saying so is the whole
+ * job: an empty list over a narrower window is not an all-clear over a wider
+ * one, and nothing else in the response distinguishes the two.
+ */
+function annotatePriceCoverage(
+  priceChanges: z.infer<typeof priceChangesSchema>,
+  since: string | null,
+): z.infer<typeof priceChangesSchema> {
+  if (priceChanges.status !== "available") return priceChanges;
+  const { start, end } = priceChanges.observedWindow;
+  const label =
+    start === null || end === null
+      ? "a window the producer did not date"
+      : start === end
+        ? start
+        : `${start} to ${end}`;
+  if (start === null || since === null) {
+    return {
+      ...priceChanges,
+      coversRequestedWindow: null,
+      windowNote: `Price movement was compared over ${label}. Coverage of the requested window is unknown, so an empty result is not evidence that nothing started charging.`,
+    };
+  }
+  if (start <= since) {
+    return {
+      ...priceChanges,
+      coversRequestedWindow: true,
+      windowNote: `Price movement was compared over ${label}, which reaches back at least as far as ${since}.`,
+    };
+  }
+  return {
+    ...priceChanges,
+    coversRequestedWindow: false,
+    windowNote: `Price movement was compared only over ${label}, which is narrower than the requested window starting ${since}. An empty result here is not evidence that nothing started charging earlier in that window.`,
+  };
+}
+
+/** The one sentence a degraded or narrow price section owes the summary. */
+function priceSummarySentence(
+  priceChanges: z.infer<typeof priceChangesSchema>,
+): string | null {
+  if (priceChanges.status === "unavailable") {
+    return "Price movement could not be read, so nothing here is evidence that no model started charging.";
+  }
+  if (priceChanges.status === "unsupported_by_public_api") {
+    return "This deployment does not publish price changes, so nothing here is evidence that no model started charging.";
+  }
+  const count = priceChanges.becamePaid.length;
+  if (count === 0) return null;
+  const { start, end } = priceChanges.observedWindow;
+  const label =
+    start === null || end === null
+      ? "the latest catalogue comparison"
+      : start === end
+        ? start
+        : `${start} to ${end}`;
+  return `${count} model${count === 1 ? "" : "s"} stopped being free in ${label}.`;
 }
 
 function staleWarning(endpoint: string, stale: boolean): string[] {
@@ -598,16 +695,20 @@ export async function runWhatsChanged(
           ? `${historyUnavailableReason} The prior complete ingestion bucket cannot be determined.`
           : "Fewer than two complete model-usage buckets are available, so the prior complete ingestion bucket cannot be determined.";
       const section = unavailable(reason);
+      const annotated = annotatePriceCoverage(priceChanges, null);
+      const money = priceSummarySentence(annotated);
       return {
         status: "partial",
-        summary: reason,
+        // Money first even here. A broken history window is no reason to bury
+        // the one change that costs the reader something.
+        summary: money === null ? reason : `${money} ${reason}`,
         since: null,
         through: null,
         sinceSource: "unavailable",
         modelAppearances: section,
         modelDisappearances: section,
         newDeprecations: section,
-        priceChanges,
+        priceChanges: annotated,
         rankMovements: section,
         evidence,
         warnings,
@@ -780,20 +881,51 @@ export async function runWhatsChanged(
     const incompleteCount = sections.filter(
       (section) => section.status === "partial",
     ).length;
-    let summary: string;
-    if (incompleteCount > 0 && changeCount === 0) {
-      summary = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
-    } else if (incompleteCount > 0) {
-      summary = `${changeCount} change${changeCount === 1 ? "" : "s"} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
-    } else if (changeCount === 0) {
-      summary = `Nothing changed in the available comparisons since ${effectiveSince}.`;
-    } else {
-      summary = `${changeCount} change${changeCount === 1 ? "" : "s"} found since ${effectiveSince}.`;
+    const annotatedPrices = annotatePriceCoverage(priceChanges, effectiveSince);
+    if (
+      annotatedPrices.status === "available" &&
+      annotatedPrices.coversRequestedWindow !== true
+    ) {
+      // A field nobody reads is not a disclosure. The narrower window belongs
+      // in the warnings a client surfaces alongside the answer.
+      warnings.push(
+        annotatedPrices.coversRequestedWindow === false
+          ? `Price movement covers a narrower window than requested: ${annotatedPrices.windowNote}`
+          : `Price movement coverage is unknown: ${annotatedPrices.windowNote}`,
+      );
     }
+    // Price movement counts as a change. Excluding it is how a report ends up
+    // saying nothing changed on the day a pinned model started billing.
+    const priceChangeCount =
+      annotatedPrices.status === "available"
+        ? annotatedPrices.becamePaid.length + annotatedPrices.otherChanges.length
+        : 0;
+    const priceDegraded = annotatedPrices.status !== "available";
+    const moneySentence = priceSummarySentence(annotatedPrices);
+
+    let windowSentence: string;
+    if (incompleteCount > 0 && changeCount === 0) {
+      windowSentence = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
+    } else if (incompleteCount > 0) {
+      windowSentence = `${changeCount} change${changeCount === 1 ? "" : "s"} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
+    } else if (changeCount === 0) {
+      windowSentence =
+        priceChangeCount > 0
+          ? `No other changes were found in the available comparisons since ${effectiveSince}.`
+          : `Nothing changed in the available comparisons since ${effectiveSince}.`;
+    } else {
+      windowSentence = `${changeCount} change${changeCount === 1 ? "" : "s"} found since ${effectiveSince}.`;
+    }
+    const summary =
+      moneySentence === null
+        ? windowSentence
+        : `${moneySentence} ${windowSentence}`;
 
     return {
       status:
-        unavailableCount === 0 && incompleteCount === 0 ? "ok" : "partial",
+        unavailableCount === 0 && incompleteCount === 0 && !priceDegraded
+          ? "ok"
+          : "partial",
       summary,
       since: effectiveSince,
       through,
@@ -801,7 +933,7 @@ export async function runWhatsChanged(
       modelAppearances,
       modelDisappearances,
       newDeprecations,
-      priceChanges,
+      priceChanges: annotatedPrices,
       rankMovements,
       evidence,
       warnings,
@@ -820,6 +952,15 @@ export async function runWhatsChanged(
   }
 }
 
+/**
+ * The text a model reads when deciding whether this is the tool for "did any of
+ * my free models start charging me". Until 0.4.0 it said price changes were
+ * unsupported -- a claim 0.2.0 had already made false, and one that steered the
+ * caller away from the answer this server exists to give.
+ */
+export const whatsChangedToolDescription =
+  "Report what changed for a set of models: which stopped being free and now bill against the same id, other price movement, appearances, disappearances, deprecations, and public ecosystem token-usage rank changes. Free-to-paid transitions are reported in their own bucket, with the window they were actually compared over, because an empty result over a narrow window is not evidence that nothing started charging. Model, deprecation and rank sections are bounded and scoped to the requested window.";
+
 export function registerWhatsChanged(
   server: McpServer,
   dependencies: WhatsChangedDependencies,
@@ -828,8 +969,7 @@ export function registerWhatsChanged(
     "dashboard_whats_changed",
     {
       title: "Dashboard changes",
-      description:
-        "Report bounded model appearance, disappearance, deprecation, and public ecosystem token-usage rank changes since a complete ingestion bucket. Historical price changes are explicitly unsupported by the public API.",
+      description: whatsChangedToolDescription,
       inputSchema: whatsChangedInputSchema,
       outputSchema: whatsChangedOutputSchema,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,

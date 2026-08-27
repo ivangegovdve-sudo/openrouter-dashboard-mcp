@@ -16,6 +16,7 @@ import { registerResolveModel } from "./tools/resolve-model.js";
 import { registerSourceHealth } from "./tools/source-health.js";
 import { registerUsageLeaders } from "./tools/usage-leaders.js";
 import { registerWhatsChanged } from "./tools/whats-changed.js";
+import { SERVER_VERSION } from "./version.js";
 
 export type CreateServerOptions = DashboardClientOptions;
 
@@ -26,7 +27,7 @@ export function createServer(
     "era" in optionsOrContext ? {} : optionsOrContext;
   const server = new McpServer({
     name: "open-dashboard-mcp",
-    version: "0.3.0",
+    version: SERVER_VERSION,
   });
   const client = createDashboardClient(options);
   registerSourceHealth(server, { client });

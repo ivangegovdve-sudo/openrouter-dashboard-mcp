@@ -120,7 +120,7 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | `dashboard_key_inventory` | Report configured OpenRouter, Groq and Cerebras keys by Secret Manager name: liveness for all three, spend and ceiling for OpenRouter. Opt-in; read-only. |
 | `dashboard_resolve_model` | Resolve bounded, evidence-backed model fallbacks from intent and capability constraints. |
 | `dashboard_model_status` | Check an exact model id, lifecycle evidence, and bounded suggestions. |
-| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. |
+| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. Price movement states the window it was actually compared over. |
 | `dashboard_free_models` | List usable free models and public frontier evidence without treating unknown prices as free. |
 | `dashboard_usage_leaders` | Compare bounded public model/app usage and latest complete app-model evidence. |
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
@@ -151,11 +151,25 @@ A free model does not announce itself when it starts charging. Its id does not c
     }
   ],
   "otherChanges": [],
+  "observedWindow": { "start": "2026-08-26", "end": "2026-08-26", "basis": "derived" },
+  "coversRequestedWindow": false,
+  "windowNote": "Price movement was compared only over 2026-08-26, which is
+                 narrower than the requested window starting 2026-08-18. An
+                 empty result here is not evidence that nothing started
+                 charging earlier in that window.",
   "comparison": { "baseRunId": "…", "headRunId": "…" }
 }
 ```
 
-The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
+The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh.
+
+### The window you asked for is not the window prices were compared over
+
+Every other section of `dashboard_whats_changed` honours the `since` you pass. Price movement cannot: the public route takes no window parameter and always compares the two most recent archived runs. So a caller asking *what changed since the 1st* gets a price section that looked at one day of it, and an empty `becamePaid` inside a month-wide response reads as a month-wide all-clear it never was.
+
+Since 0.4.0 the section states its own window instead. `observedWindow` carries the dates actually compared, `coversRequestedWindow` says whether they reach back as far as your `since` — `null` when either side is undated, because unknown coverage is not adequate coverage — and `windowNote` says the same thing in a sentence. When coverage falls short it is also pushed into the response `warnings`, because a field nobody reads is not a disclosure. Measured against production on 2026-08-27: a request `since: 2026-08-18` returned a price comparison spanning `2026-08-26` alone.
+
+**Price movement counts as a change, and a price section that failed to read degrades the report.** The summary can no longer say *nothing changed* while a model sits in `becamePaid` — it leads with the money — and a `whats_changed` whose price section is `unavailable` or `unsupported_by_public_api` returns `status: "partial"`, never `"ok"`. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
 
 **Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
 
