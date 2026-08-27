@@ -459,6 +459,22 @@ function priceComparisonLabel(headPublishedOn: string | null): string {
     : `the comparison ending ${headPublishedOn}`;
 }
 
+/**
+ * The coverage disclosure, in the words the section itself used.
+ *
+ * A field nobody reads is not a disclosure, and this was previously pushed on
+ * only one of the three return paths -- leaving the field as the sole notice on
+ * exactly the paths a caller is most likely to be skimming.
+ */
+function coverageWarning(
+  priceChanges: z.infer<typeof priceChangesSchema>,
+): string | null {
+  if (priceChanges.status !== "available") return null;
+  return priceChanges.coverage.status === "incomplete"
+    ? `Price movement coverage is incomplete: ${priceChanges.coverage.reason}`
+    : `Price movement coverage could not be determined: ${priceChanges.coverage.reason}`;
+}
+
 /** The one sentence a degraded or narrow price section owes the summary. */
 function priceSummarySentence(
   priceChanges: z.infer<typeof priceChangesSchema>,
@@ -731,6 +747,8 @@ export async function runWhatsChanged(
           : "Fewer than two complete model-usage buckets are available, so the prior complete ingestion bucket cannot be determined.";
       const section = unavailable(reason);
       const annotated = annotatePriceCoverage(priceChanges, null, null);
+      const coverageNote = coverageWarning(annotated);
+      if (coverageNote !== null) warnings.push(coverageNote);
       const money = priceSummarySentence(annotated);
       return {
         status: "partial",
@@ -762,6 +780,8 @@ export async function runWhatsChanged(
       const reason = `The requested window is inverted: since ${effectiveSince} is later than ${through}, the latest evidence available, so it describes no interval and nothing window-scoped can be reported. This is not evidence that nothing changed.`;
       const section = unavailable(reason);
       const annotated = annotatePriceCoverage(priceChanges, null, null);
+      const coverageNote = coverageWarning(annotated);
+      if (coverageNote !== null) warnings.push(coverageNote);
       const money = priceSummarySentence(annotated);
       return {
         status: "partial",
@@ -950,16 +970,8 @@ export async function runWhatsChanged(
       effectiveSince,
       through,
     );
-    // A field nobody reads is not a disclosure. Coverage is never established
-    // here, so this warning is never suppressed -- it is surfaced alongside the
-    // answer every time, in the words the section itself used.
-    if (annotatedPrices.status === "available") {
-      warnings.push(
-        annotatedPrices.coverage.status === "incomplete"
-          ? `Price movement did not cover the whole reported window: ${annotatedPrices.coverage.reason}`
-          : `Price movement coverage could not be determined: ${annotatedPrices.coverage.reason}`,
-      );
-    }
+    const mainCoverageNote = coverageWarning(annotatedPrices);
+    if (mainCoverageNote !== null) warnings.push(mainCoverageNote);
     // Price movement counts as a change. Excluding it is how a report ends up
     // saying nothing changed on the day a pinned model started billing.
     const priceChangeCount =
@@ -979,6 +991,16 @@ export async function runWhatsChanged(
     //
     // What must never happen is this sentence reading as an all-clear while the
     // price sentence reports movement. `other` and `else` carry that.
+    // An available price section can never establish that it covered the
+    // requested window: `complete` is not a value coverage can take, because the
+    // producer publishes no date for the base run. So an empty `becamePaid`
+    // never answers the free-to-paid question for the caller's window, and a
+    // report that returns "ok" with "Nothing changed" claims that it did.
+    //
+    // The consequence is deliberate and worth stating plainly: while the route
+    // stays undated, this tool cannot return "ok". It is not a complete answer,
+    // and saying so is the whole point of the release.
+    const priceCoverageOpen = annotatedPrices.status === "available";
     const hasPriceMovement = priceChangeCount > 0;
     const other = hasPriceMovement ? "other " : "";
     const noun = `${other}change${changeCount === 1 ? "" : "s"}`;
@@ -989,18 +1011,28 @@ export async function runWhatsChanged(
     } else if (incompleteCount > 0) {
       windowSentence = `${changeCount} ${noun} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
     } else if (changeCount === 0) {
-      windowSentence = `Nothing ${hasPriceMovement ? "else " : ""}changed in the available comparisons since ${effectiveSince}.`;
+      windowSentence = `Nothing ${
+        hasPriceMovement || priceCoverageOpen ? "else " : ""
+      }changed in the available comparisons since ${effectiveSince}.`;
     } else {
       windowSentence = `${changeCount} ${noun} found since ${effectiveSince}.`;
     }
+    // The caveat rides with the summary, not only in a warning, because the
+    // summary is the line that gets relayed.
+    const coverageCaveat = priceCoverageOpen
+      ? ` Price movement could not be shown to cover ${effectiveSince} to ${through}, so this is not an all-clear on models that started charging.`
+      : "";
     const summary =
-      moneySentence === null
+      (moneySentence === null
         ? windowSentence
-        : `${moneySentence} ${windowSentence}`;
+        : `${moneySentence} ${windowSentence}`) + coverageCaveat;
 
     return {
       status:
-        unavailableCount === 0 && incompleteCount === 0 && !priceDegraded
+        unavailableCount === 0 &&
+        incompleteCount === 0 &&
+        !priceDegraded &&
+        !priceCoverageOpen
           ? "ok"
           : "partial",
       summary,

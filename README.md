@@ -180,6 +180,12 @@ So the section reports only what the payload supports:
 
 `indeterminate` is not a softer way of saying fine. It means an empty result is not evidence about your window.
 
+**So `dashboard_whats_changed` does not return `"ok"`.** While the route stays undated, an available price section can never establish that it covered what you asked about, and a status of `ok` beside `Nothing changed` would claim it did. The tool returns `partial`, and the summary carries the caveat rather than leaving it to a warning — because the summary is the line a caller relays:
+
+> 5 changes found in scanned evidence since 2026-08-18; the comparison is incomplete. **Price movement could not be shown to cover 2026-08-18 to 2026-08-25, so this is not an all-clear on models that started charging.**
+
+Measured against production, 2026-08-27. `ok` becomes reachable again the day the producer publishes the dates of the runs it compared, and not before.
+
 **An inverted window is an outcome, not a warning.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section would then report nothing — which is exactly what a satisfied query looks like. A warning beside a normal summary does not fix that, because the summary is the line a caller relays and it would read *Nothing changed since 2027-01-01*. So an inverted range returns `status: "partial"` with the window-scoped sections `unavailable` and a summary that names the inversion. Price movement is independent of your window, so it still reports.
 
 **The summary can no longer read as an all-clear while prices moved.** It leads with the money — `1 model stopped being free in the comparison ending 2026-08-26` — and price movement with no free-to-paid row still gets its own sentence rather than passing unmentioned. Where the summary used to say *no changes* and *nothing changed*, it says *no other changes* and *nothing else changed* whenever the price section reports movement.

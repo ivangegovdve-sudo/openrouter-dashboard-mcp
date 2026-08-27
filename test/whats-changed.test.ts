@@ -1147,3 +1147,89 @@ test("an inverted requested window is reported, not silently satisfied", async (
   if (result.priceChanges.status !== "available") assert.fail("expected prices");
   assert.equal(result.priceChanges.coverage.status, "indeterminate");
 });
+
+test("an empty price comparison of unestablished coverage is never an all-clear", async () => {
+  // Coverage can never be `complete`, so an empty becamePaid never establishes
+  // that nothing started charging in the caller's window. A summary saying
+  // "Nothing changed" and a status of "ok" both claim otherwise.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [historyRow("m/one", 1, "10")] },
+    { date: "2026-08-19", complete: true, rows: [historyRow("m/one", 1, "10")] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(priceChangesResponse([]));
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [manifestEndpoint, historyEndpoint],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.notEqual(result.status, "ok");
+  assert.doesNotMatch(result.summary, /Nothing changed/);
+  assert.match(result.summary, /price movement|could not be shown/i);
+});
+
+test("the coverage disclosure reaches warnings on every return path", async () => {
+  // Two early returns annotated coverage and then never surfaced it, leaving a
+  // field as the only disclosure on exactly the paths a caller is most likely
+  // to be reading in a hurry.
+  const invertedHistory = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [] },
+    { date: "2026-08-19", complete: true, rows: [] },
+  ]);
+  function clientWith(history: unknown, routes: string[]): DashboardClient {
+    return {
+      async get(path, _query, schema) {
+        if (path === "/api/public/v2/price-changes") {
+          return schema.parse(priceChangesResponse([]));
+        }
+        if (path === manifestEndpoint) {
+          return schema.parse({ ...manifestFixture, routes });
+        }
+        if (path === historyEndpoint && history !== null) {
+          return schema.parse(history);
+        }
+        throw new DashboardRequestError("http_error", "unavailable", {
+          retryable: true,
+          status: 503,
+        });
+      },
+    };
+  }
+
+  // Path 1: the window cannot be determined at all.
+  const noWindow = await runWhatsChanged(
+    { limit: 5 },
+    { client: clientWith(null, [manifestEndpoint]) },
+  );
+  if (noWindow.status === "error") assert.fail("expected a report");
+  assert.equal(noWindow.since, null);
+  assert.ok(
+    noWindow.warnings.some((w) => /price movement coverage/i.test(w)),
+    "coverage must be warned about when the window is undeterminable",
+  );
+
+  // Path 2: the requested window is inverted.
+  const inverted = await runWhatsChanged(
+    { since: "2027-01-01", limit: 5 },
+    { client: clientWith(invertedHistory, [manifestEndpoint, historyEndpoint]) },
+  );
+  if (inverted.status === "error") assert.fail("expected a report");
+  assert.equal(inverted.since, null);
+  assert.ok(
+    inverted.warnings.some((w) => /price movement coverage/i.test(w)),
+    "coverage must be warned about on the inverted-window path too",
+  );
+});
