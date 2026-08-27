@@ -520,7 +520,13 @@ export async function runModelEconomics(
         completionUsdPerMillionTokens: usdPerMillionTokens(completionPrice),
       },
       priceComparable,
-      unrankableReason: priceComparable ? null : unpricedReason(row.provider),
+      unrankableReason: priceComparable
+        ? null
+        : promptPrice !== null || completionPrice !== null
+          ? // Half a price is not a price. Saying the provider "publishes none"
+            // here would be false -- it published one of the two.
+            `${PROVIDER_REGISTRY[row.provider].displayName} published only the ${promptPrice !== null ? "prompt" : "completion"} price for this model, so its total cost is unknown — not free, and not comparable.`
+          : unpricedReason(row.provider),
       freeKind: row.freeKind,
       genuinelyFree: row.freeKind === "concrete_free",
       performance: row.performance,
@@ -610,6 +616,9 @@ export async function runModelEconomics(
       input.genuinelyFreeOnly ? "genuinelyFreeOnly" : null,
       input.minContextLength !== undefined ? "minContextLength" : null,
       input.includeUnknownCapability === false ? "includeUnknownCapability" : null,
+      // These two have defaults, and the defaults are bypassed too.
+      "outputModality",
+      input.availableOnly ? "availableOnly" : null,
     ].filter((name): name is string => name !== null);
     if (ignored.length > 0) {
       warnings.push(
@@ -656,10 +665,17 @@ export async function runModelEconomics(
         firstPage ??= response;
         rows.push(...response.data);
         providerCursor = response.cursor;
-        // A cursor that repeats would loop; stop rather than duplicate rows.
-        if (providerCursor === null || seenCursors.has(providerCursor)) break;
+        if (providerCursor === null) break;
+        // A cursor that repeats would loop forever. Stop -- but the listing was
+        // not read to the end, and the cursor is deliberately left non-null so
+        // that fact survives below.
+        if (seenCursors.has(providerCursor)) break;
         seenCursors.add(providerCursor);
       }
+      // Leaving the loop still holding a cursor means the endpoint list was
+      // truncated, so a discount may sit on a page that was never read. That is
+      // unknown coverage, not a positive observation of full price.
+      const endpointsTruncated = providerCursor !== null;
       modelsEnriched += 1;
       if (firstPage !== null) evidence.push(sourceEvidence(endpoint, firstPage));
       let best: z.infer<typeof modelDiscountSchema> | null = null;
@@ -678,8 +694,14 @@ export async function runModelEconomics(
         };
       }
       model.bestDiscount = best;
-      model.discountCoverage = best === null ? "no_discount" : "discounted";
+      model.discountCoverage =
+        best !== null
+          ? "discounted"
+          : endpointsTruncated
+            ? "unavailable"
+            : "no_discount";
       if (best !== null) modelsDiscounted += 1;
+      if (best === null && endpointsTruncated) modelsUnobserved += 1;
     } catch {
       modelsUnobserved += 1;
       model.discountCoverage = "unavailable";
@@ -741,7 +763,7 @@ export async function runModelEconomics(
   const priceUnknown = matchedBeforeLimit - priceComparable;
   if (priceUnknown > 0) {
     warnings.push(
-      `${priceUnknown} matching model${priceUnknown === 1 ? "" : "s"} could not be ranked on price because their provider publishes none; they are listed after the ranked rows, not dropped.`,
+      `${priceUnknown} matching model${priceUnknown === 1 ? "" : "s"} could not be ranked because a published price is missing -- for some providers none is published at all, for others only one half of it. Each row states which. They are listed after the ranked rows, not dropped.`,
     );
   }
 

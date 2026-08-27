@@ -351,3 +351,19 @@ test("does not echo a real key pasted into the secret-name position", async () =
   assert.doesNotMatch(JSON.stringify(output), /cccccccc/);
   assert.match(String(output.keys[0]?.secretName), /redacted/);
 });
+
+test("does not redact an ordinary label that merely contains a key-ish substring", () => {
+  // "task-production" contains "sk-production"; a left word boundary keeps it.
+  assert.equal(redactKeyShaped("task-production"), "task-production");
+  assert.equal(redactKeyShaped("openrouter-primary-key"), "openrouter-primary-key");
+  assert.equal(redactKeyShaped("my-groq-key-for-batch-jobs"), "my-groq-key-for-batch-jobs");
+});
+
+test("redacts an opaque token from a credential family it has never seen", () => {
+  // The named patterns are a denylist and cannot know about future families,
+  // so a long high-entropy run is redacted on shape alone.
+  assert.match(String(redactKeyShaped("Zx9Qw2Lm8Rt4Yv6Bn1Kp3Hd5Fg7Js0Aa")), /redacted/);
+  assert.match(String(redactKeyShaped("label: 8f3aB9c2D7e1F4g6H8j0K2l4M6n8P0q2R4s6")), /redacted/);
+  // Prose and slugs are untouched.
+  assert.equal(redactKeyShaped("production router for batch"), "production router for batch");
+});

@@ -68,23 +68,26 @@ test("phrases an unpriced model as a provider fact and never as free", () => {
 });
 
 test("tells a Cloudflare edge block apart from a credential rejection", () => {
-  // 1020 is a plain firewall-rule denial and is at least as common as 1010.
-  // Classifying it as a credential rejection is what makes someone rotate a
-  // working key.
-  assert.equal(classifyProviderBlock(403, "error code: 1020"), "edge_blocked");
+  // Edge blocks: rejected before reaching the provider. Not a dead key.
+  // Every one of these carries a Cloudflare marker.
+  assert.equal(
+    classifyProviderBlock(403, "error code: 1010 -- Cloudflare"),
+    "edge_blocked",
+  );
+  // 1020 is a plain firewall-rule denial, at least as common as 1010.
+  assert.equal(
+    classifyProviderBlock(403, "Cloudflare: error code: 1020"),
+    "edge_blocked",
+  );
   assert.equal(
     classifyProviderBlock(403, "Attention Required! | Cloudflare"),
     "edge_blocked",
   );
-  // The 1010 case: rejected before reaching the provider. Not a dead key.
   assert.equal(
-    classifyProviderBlock(403, "error code: 1010"),
+    classifyProviderBlock(403, "access denied; cf-ray: 8abc123"),
     "edge_blocked",
   );
-  assert.equal(
-    classifyProviderBlock(403, "Cloudflare blocked this request (1010)"),
-    "edge_blocked",
-  );
+
   // Real provider auth errors, verified live 2026-08-27.
   assert.equal(
     classifyProviderBlock(401, '{"error":{"code":"invalid_api_key"}}'),
@@ -94,7 +97,20 @@ test("tells a Cloudflare edge block apart from a credential rejection", () => {
     classifyProviderBlock(403, '{"detail":"Not authenticated"}'),
     "provider_rejected",
   );
+
+  // The inverse error, which is the more dangerous one: a provider that numbers
+  // its OWN auth errors must not be read as an edge block, because that would
+  // report a genuinely dead key as maybe-alive. A Cloudflare marker is required.
+  assert.equal(
+    classifyProviderBlock(401, "invalid API key; error code: 1001"),
+    "provider_rejected",
+  );
+  assert.equal(
+    classifyProviderBlock(403, "forbidden (1020)"),
+    "provider_rejected",
+  );
+
   // Anything that is not an auth status is neither.
-  assert.equal(classifyProviderBlock(500, "error code: 1010"), null);
+  assert.equal(classifyProviderBlock(500, "error code: 1010 Cloudflare"), null);
   assert.equal(classifyProviderBlock(200, "fine"), null);
 });

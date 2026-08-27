@@ -200,16 +200,22 @@ export function classifyProviderBlock(
   body: string,
 ): ProviderBlockKind | null {
   if (status !== 401 && status !== 403) return null;
-  // Cloudflare's whole 1xxx access-denied family, not just 1010. Error 1020 is a
-  // plain firewall-rule denial and is at least as common; classifying it as a
-  // credential rejection is exactly what makes someone rotate a working key.
+
+  // Every edge verdict requires a Cloudflare marker. Matching a bare
+  // "error code: 1xxx" would be worse than the bug it replaced: a provider that
+  // numbers its own auth errors ("invalid API key; error code: 1001") would be
+  // reported maybe-alive, and a genuinely dead key that reads as maybe-alive is
+  // the more dangerous of the two mistakes.
+  const cloudflare =
+    /cloudflare/i.test(body) || /cf-ray/i.test(body) || /__cf_/i.test(body);
+  if (!cloudflare) return "provider_rejected";
+
+  // The 1xxx access-denied family, not just 1010. Error 1020 is a plain
+  // firewall-rule denial and is at least as common.
   if (/error code:\s*1\d{3}/i.test(body)) return "edge_blocked";
-  if (/\b1\d{3}\b/.test(body) && /cloudflare/i.test(body)) return "edge_blocked";
+  if (/\b1\d{3}\b/.test(body)) return "edge_blocked";
   // The interstitial does not always carry a numeric code.
-  if (
-    /cloudflare/i.test(body) &&
-    /(attention required|access denied|blocked)/i.test(body)
-  ) {
+  if (/(attention required|access denied|blocked)/i.test(body)) {
     return "edge_blocked";
   }
   return "provider_rejected";

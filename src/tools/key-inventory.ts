@@ -51,29 +51,69 @@ export const KEY_SOURCES_ENV = "OPEN_DASHBOARD_KEY_SOURCES";
  * Two paths reach the caller and neither is under this server's control:
  * the operator writes the `secretName` half of each triple, and the provider
  * writes the `label`. OpenRouter's documented `label` is a MASKED KEY
- * FINGERPRINT — the key prefix, an ellipsis, then its last few characters —
- * construction. A prefix, a suffix, or "just the last four to confirm it
+ * FINGERPRINT — the key prefix, an ellipsis, then its last few characters — so
+ * it is partial key material by construction. A prefix, a suffix, or "just the
+ * last four to confirm it
  * loaded" is still key material, so it is replaced rather than trimmed.
  *
  * Fails closed: on any match the whole value is dropped, because a value that
  * contains a key is not made safe by returning the rest of it.
  */
 const KEY_SHAPED = [
-  /sk-[A-Za-z0-9_-]{8,}/i,
-  /gsk[_-][A-Za-z0-9]{8,}/i,
-  /csk-[A-Za-z0-9]{8,}/i,
-  /Bearer\s+\S+/i,
-  /AIza[A-Za-z0-9_-]{10,}/,
-  /gh[pousr]_[A-Za-z0-9]{10,}/,
+  // Each is anchored on a word boundary so an ordinary label that merely embeds
+  // a prefix mid-word is not redacted. Without it, everyday hyphenated labels
+  // match and get destroyed.
+  /\bsk-[A-Za-z0-9_-]{8,}/i,
+  /\bgsk[_-][A-Za-z0-9]{8,}/i,
+  /\bcsk-[A-Za-z0-9]{8,}/i,
+  /\bBearer\s+\S+/i,
+  /\bAIza[A-Za-z0-9_-]{10,}/,
+  /\bgh[pousr]_[A-Za-z0-9]{10,}/,
+  /\bnpm_[A-Za-z0-9]{16,}/,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}/,
+  /\bAKIA[0-9A-Z]{12,}/,
+  // A JSON Web Token: three base64url segments.
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
   // A masked fingerprint: any key-ish prefix with an ellipsis in the middle.
   /[A-Za-z0-9_-]{6,}\.{3}[A-Za-z0-9_-]{3,}/,
 ];
 
+/**
+ * A long opaque token of no recognised family.
+ *
+ * The named patterns above are a denylist, and a denylist cannot know about a
+ * credential family that did not exist when it was written. This is the catch-all:
+ * a single run of 24+ characters that mixes letters with digits and contains no
+ * separator a human would put in a label. "production router" and
+ * "openrouter-primary-key" pass; an unknown vendor's 40-character opaque token
+ * does not.
+ */
+function looksLikeOpaqueToken(value: string): boolean {
+  for (const token of value.split(/[\s]+/)) {
+    if (token.length < 24) continue;
+    if (!/^[A-Za-z0-9_\-.=+/]+$/.test(token)) continue;
+    if (!/[A-Za-z]/.test(token) || !/[0-9]/.test(token)) continue;
+    // A hyphen/underscore-separated slug of short words reads as a name, not a
+    // secret. Require at least one long unbroken run.
+    if (!/[A-Za-z0-9]{16,}/.test(token)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Fails closed on anything key-shaped. The whole value is dropped rather than
+ * trimmed, because a value that contains a key is not made safe by returning
+ * the rest of it.
+ */
 export function redactKeyShaped(value: string | null): string | null {
   if (value === null) return null;
   for (const pattern of KEY_SHAPED) {
     if (pattern.test(value)) return "[redacted: looked like key material]";
+  }
+  if (looksLikeOpaqueToken(value)) {
+    return "[redacted: looked like key material]";
   }
   return value;
 }
@@ -126,13 +166,34 @@ export function parseKeySources(raw: string | undefined): KeySource[] {
   return sources;
 }
 
+/**
+ * Only the two documented fields. The upstream object is read loosely because
+ * providers add fields, but the OUTPUT is narrowed to these two so an unexpected
+ * upstream addition cannot ride through this tool into a caller's context.
+ */
 const rateLimitSchema = z
+  .object({
+    requests: z.number().nullable().optional(),
+    interval: z.string().nullable().optional(),
+  })
+  .strict()
+  .nullable();
+
+const upstreamRateLimitSchema = z
   .object({
     requests: z.number().nullable().optional(),
     interval: z.string().nullable().optional(),
   })
   .loose()
   .nullable();
+
+function narrowRateLimit(
+  value: z.infer<typeof upstreamRateLimitSchema> | undefined,
+): z.infer<typeof rateLimitSchema> | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  return { requests: value.requests ?? null, interval: value.interval ?? null };
+}
 
 const openRouterKeyResponseSchema = z
   .object({
@@ -143,7 +204,7 @@ const openRouterKeyResponseSchema = z
         limit: z.number().nullable().optional(),
         limit_remaining: z.number().nullable().optional(),
         is_free_tier: z.boolean().nullable().optional(),
-        rate_limit: rateLimitSchema.optional(),
+        rate_limit: upstreamRateLimitSchema.optional(),
       })
       .loose(),
   })
@@ -336,7 +397,7 @@ async function readKey(
           ...report,
           state: "edge_blocked",
           alive: null,
-          note: `The request for ${source.secretName} was rejected at a Cloudflare edge (code 1010) before reaching ${PROVIDER_REGISTRY[source.provider].displayName}. This says nothing about whether the key is valid — do not rotate it on this signal.`,
+          note: `The request for ${source.secretName} was rejected at a Cloudflare edge before reaching ${PROVIDER_REGISTRY[source.provider].displayName}. This says nothing about whether the key is valid — do not rotate it on this signal.`,
         };
       }
       return {
@@ -401,7 +462,7 @@ async function readKey(
       usdRemaining: data.limit_remaining ?? null,
       uncapped: usdLimit === null,
       isFreeTier: data.is_free_tier ?? null,
-      rateLimit: data.rate_limit ?? null,
+      rateLimit: narrowRateLimit(data.rate_limit) ?? null,
       note: null,
     };
   } catch {
@@ -471,7 +532,7 @@ export async function runKeyInventory(
   const edgeBlocked = keys.filter((key) => key.state === "edge_blocked");
   if (edgeBlocked.length > 0) {
     warnings.push(
-      `${edgeBlocked.length} key${edgeBlocked.length === 1 ? " was" : "s were"} blocked at a Cloudflare edge (code 1010) rather than rejected by the provider: ${edgeBlocked.map((key) => key.secretName).join(", ")}. Do not rotate on this signal — it means the request never reached the provider.`,
+      `${edgeBlocked.length} key${edgeBlocked.length === 1 ? " was" : "s were"} blocked at a Cloudflare edge rather than rejected by the provider: ${edgeBlocked.map((key) => key.secretName).join(", ")}. Do not rotate on this signal — it means the request never reached the provider.`,
     );
   }
   const rejected = keys.filter((key) => key.state === "rejected");
