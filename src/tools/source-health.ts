@@ -19,7 +19,12 @@ import {
 const MANIFEST_ENDPOINT = "/api/public/v2/manifest";
 const SOURCE_STATUS_ENDPOINT = "/api/public/v2/source-status";
 
-export const SOURCE_STATUS_LIMIT = 6;
+/**
+ * Six OpenRouter sources plus Groq and Cerebras. The two provider sources are
+ * published on /source-status so a collector that stops refreshing is visible;
+ * without them two of the three provider catalogues had no health surface.
+ */
+export const SOURCE_STATUS_LIMIT = 8;
 
 export const sourceHealthInputSchema = z.object({}).strict();
 

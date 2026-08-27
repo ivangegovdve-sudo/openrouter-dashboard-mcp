@@ -191,7 +191,12 @@ export const publicDeprecationsResponseSchema = publicCollectionSchema(
 export const publicSourceStatusSchema = z
   .object({
     sourceId: z.string(),
-    sourceTier: z.literal("stable"),
+    /**
+     * `supported` covers the Groq and Cerebras catalogues: plain
+     * OpenAI-compatible listings with no published freshness contract, unlike the
+     * `stable` OpenRouter sources. Both appear on /source-status.
+     */
+    sourceTier: z.enum(["stable", "supported"]),
     cadenceSeconds: z.number().int().positive(),
     staleAfterSeconds: z.number().int().positive(),
     publishedRunId: z.string().uuid().nullable(),
