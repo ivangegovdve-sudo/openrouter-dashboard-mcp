@@ -177,6 +177,9 @@ test("source evidence preserves endpoint metadata and a manifest watermark", () 
     stale: true,
     watermark: null,
     provenance: publicProvenance,
+    // Null when the value did not pass through the cache -- a raw fixture object
+    // carries no freshness stamp, and evidence must not invent one.
+    freshness: null,
   });
 
   assert.equal(

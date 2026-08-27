@@ -4,6 +4,7 @@ import type {
 } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { freshnessOf } from "../dashboard/cache.js";
 import { DashboardRequestError } from "../dashboard/errors.js";
 import {
   publicCompletenessSchema,
@@ -17,6 +18,22 @@ export const READ_ONLY_TOOL_ANNOTATIONS = {
   openWorldHint: true,
 } as const satisfies ToolAnnotations;
 
+/**
+ * How old this source read is, carried in the answer rather than left for the
+ * caller to ask about. `expired` means upstream could not be reached and the
+ * value is last-known, with the time it was last known -- it is never presented
+ * as current.
+ */
+export const freshnessSchema = z
+  .object({
+    state: z.enum(["live", "cached", "expired"]),
+    fetchedAt: z.string(),
+    ageSeconds: z.number().int().nonnegative(),
+    expiresAt: z.string(),
+    note: z.string().optional(),
+  })
+  .strict();
+
 export const sourceEvidenceSchema = z
   .object({
     endpoint: z.string().min(1),
@@ -25,6 +42,8 @@ export const sourceEvidenceSchema = z
     stale: z.boolean().nullable(),
     watermark: z.string().nullable(),
     provenance: z.array(publicProvenanceSchema),
+    /** Null only when the read did not pass through the cache at all. */
+    freshness: freshnessSchema.nullable(),
   })
   .strict();
 
@@ -55,6 +74,9 @@ export function sourceEvidence(
           ? upstream.publishedAt
           : null,
     provenance: Array.isArray(upstream.provenance) ? upstream.provenance : [],
+    // Read off the response object itself, so two clients in one process cannot
+    // pick up each other's metadata.
+    freshness: freshnessOf(upstream),
   });
 }
 
