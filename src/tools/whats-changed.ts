@@ -241,6 +241,19 @@ const priceChangesSchema = z.discriminatedUnion("status", [
 
 const whatsChangedSuccessSchema = z
   .object({
+    /**
+     * `ok` is currently unreachable, and a consumer should not write a branch
+     * that waits for it.
+     *
+     * A readable price section can never establish that it covered the
+     * requested window -- the producer publishes no date for the base run of
+     * its comparison -- and a section that cannot be read is degraded. Either
+     * way the report is partial. Making `ok` reachable needs the producer to
+     * date its runs AND this client to read those dates; neither exists, and
+     * this comment does not predict the shape of either. The value is kept in
+     * the enum because it is the honest name for a complete report, not because
+     * one can be produced today.
+     */
     status: z.enum(["ok", "partial"]),
     summary: z.string(),
     since: z.string().date(),
@@ -1068,7 +1081,7 @@ export async function runWhatsChanged(
  * caller away from the answer this server exists to give.
  */
 export const whatsChangedToolDescription =
-  "Report what changed for a set of models: which stopped being free and now bill against the same id, other price movement, appearances, disappearances, deprecations, and public ecosystem token-usage rank changes. Free-to-paid transitions are reported in their own bucket, with the window they were actually compared over, because an empty result over a narrow window is not evidence that nothing started charging. Model, deprecation and rank sections are bounded and scoped to the requested window.";
+  "Report what changed for a set of models: which stopped being free and now bill against the same id, other price movement, appearances, disappearances, deprecations, and public ecosystem token-usage rank changes. Free-to-paid transitions are reported in their own bucket. The upstream route compares its own two most recent archived runs and publishes no date for the base run, so how much of the requested window it covered cannot be established: the report says so, its status is always partial rather than ok, and an empty result is never an all-clear on models that started charging. Model, deprecation and rank sections are bounded and scoped to the requested window.";
 
 export function registerWhatsChanged(
   server: McpServer,

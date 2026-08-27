@@ -184,7 +184,9 @@ So the section reports only what the payload supports:
 
 > 5 changes found in scanned evidence since 2026-08-18; the comparison is incomplete. **Price movement could not be shown to cover 2026-08-18 to 2026-08-25, so this is not an all-clear on models that started charging.**
 
-Measured against production, 2026-08-27. `ok` becomes reachable again the day the producer publishes the dates of the runs it compared, and not before.
+Measured against production, 2026-08-27.
+
+To be exact about what that costs: **`ok` is unreachable in this version.** A readable price section can never establish coverage, and an unreadable one is degraded — either way the report is partial. Do not write a branch waiting for `ok`. Making it reachable would need the producer to publish dates for the runs it compares *and* this client to read them; neither exists today, and this README will not guess at the shape of either.
 
 **An inverted window is an outcome, not a warning.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section would then report nothing — which is exactly what a satisfied query looks like. A warning beside a normal summary does not fix that, because the summary is the line a caller relays and it would read *Nothing changed since 2027-01-01*. So an inverted range returns `status: "partial"` with the window-scoped sections `unavailable` and a summary that names the inversion. Price movement is independent of your window, so it still reports.
 

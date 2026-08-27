@@ -1233,3 +1233,48 @@ test("the coverage disclosure reaches warnings on every return path", async () =
     "coverage must be warned about on the inverted-window path too",
   );
 });
+
+test("ok is documented as unreachable, and is in fact unreachable", async () => {
+  // The README and the tool description both tell a consumer not to wait for
+  // `ok`. This holds the code to that: the cleanest possible report -- every
+  // section available, nothing capped, prices readable -- is still partial.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [historyRow("m/one", 1, "10")] },
+    { date: "2026-08-19", complete: true, rows: [historyRow("m/one", 1, "10")] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(priceChangesResponse([]));
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [
+            manifestEndpoint,
+            historyEndpoint,
+            deprecationsEndpoint,
+            liveModelsEndpoint,
+          ],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      if (path === deprecationsEndpoint) return schema.parse(collectionResponse());
+      if (path === liveModelsEndpoint) return schema.parse(collectionResponse());
+      throw new Error(`Unexpected test path: ${path}`);
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.modelAppearances.status, "available");
+  assert.equal(result.newDeprecations.status, "available");
+  assert.equal(result.rankMovements.status, "available");
+  assert.equal(result.priceChanges.status, "available");
+  // Every section clean, and still not ok.
+  assert.equal(result.status, "partial");
+});
+
+test("the tool description warns a caller off the ok branch", () => {
+  assert.match(whatsChangedToolDescription, /always partial rather than ok/i);
+  assert.match(whatsChangedToolDescription, /cannot be established/i);
+});
