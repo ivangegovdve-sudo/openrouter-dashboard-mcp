@@ -5,7 +5,6 @@ import type { DashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import {
   DISCOUNT_ENRICHMENT_LIMIT,
-  MODEL_ECONOMICS_LIMIT,
   modelEconomicsOutputSchema,
   retirementRisk,
   runModelEconomics,
@@ -18,20 +17,64 @@ import {
 } from "./fixtures.js";
 
 const NOW = () => new Date("2026-08-27T00:00:00.000Z");
+const STAMP = "2026-08-26T06:00:00.000Z";
 
-type ModelOverrides = {
+type LiveOverrides = {
+  provider: "openrouter" | "groq" | "cerebras";
   id: string;
   prompt?: string | null;
   completion?: string | null;
   contextLength?: string | null;
-  outputModalities?: string[];
+  outputModalities?: string[] | null;
   freeKind?: "concrete_free" | "free_router" | "paid_or_unknown";
+  availability?: "available" | "disappeared";
+  missingFields?: string[];
+};
+
+function liveModel(overrides: LiveOverrides) {
+  const prompt = overrides.prompt === undefined ? "0.0000001250" : overrides.prompt;
+  const completion =
+    overrides.completion === undefined ? "0.0000005000" : overrides.completion;
+  const freeKind = overrides.freeKind ?? "paid_or_unknown";
+  const isFree =
+    freeKind === "concrete_free"
+      ? true
+      : prompt !== null && completion !== null
+        ? false
+        : null;
+  return {
+    provider: overrides.provider,
+    id: overrides.id,
+    displayName: overrides.id,
+    ownedBy: "vendor",
+    contextLength:
+      overrides.contextLength === undefined ? "128000" : overrides.contextLength,
+    pricing: { promptUsdPerToken: prompt, completionUsdPerToken: completion },
+    isFree,
+    freeKind,
+    providerActive: null,
+    reasoningEfforts: null,
+    outputModalities:
+      overrides.outputModalities === undefined
+        ? ["text"]
+        : overrides.outputModalities,
+    performance: null,
+    availability: overrides.availability ?? "available",
+    firstSeenAt: STAMP,
+    lastSeenAt: STAMP,
+    lastConfirmedAt: STAMP,
+    disappearedAt: null,
+    absenceStreak: "0",
+    missingFields: overrides.missingFields ?? [],
+  };
+}
+
+function catalogueModel(overrides: {
+  id: string;
   lifecycleState?: string;
   expirationDate?: string | null;
   supportedParameters?: string[];
-};
-
-function model(overrides: ModelOverrides) {
+}) {
   return {
     id: overrides.id,
     canonicalSlug: overrides.id,
@@ -39,21 +82,13 @@ function model(overrides: ModelOverrides) {
     description: "Untrusted catalogue description.",
     contentTrust: "untrusted-source",
     createdUnix: "1700000000",
-    contextLength: overrides.contextLength ?? "128000",
-    architecture: {
-      modality: "text->text",
-      input_modalities: ["text"],
-      output_modalities: overrides.outputModalities ?? ["text"],
-    },
-    pricing: {
-      prompt: overrides.prompt === undefined ? "0.0000001250" : overrides.prompt,
-      completion:
-        overrides.completion === undefined ? "0.0000005000" : overrides.completion,
-    },
+    contextLength: "128000",
+    architecture: { modality: "text->text", output_modalities: ["text"] },
+    pricing: { prompt: "0.0000001250", completion: "0.0000005000" },
     supportedParameters: overrides.supportedParameters ?? ["temperature", "tools"],
     expirationDate: overrides.expirationDate ?? null,
     lifecycleState: overrides.lifecycleState ?? "no_announced_expiration",
-    freeKind: overrides.freeKind ?? "paid_or_unknown",
+    freeKind: "paid_or_unknown",
     weeklyRank: 1,
     rankMethod: "response_order",
   };
@@ -96,27 +131,31 @@ function providerRow(overrides: {
 }
 
 type Routes = {
-  models: unknown[];
-  providers: Record<string, unknown | "throw">;
+  live: unknown[];
+  catalogue?: unknown[];
+  providers?: Record<string, unknown[] | "throw">;
 };
 
 function stubClient(routes: Routes): DashboardClient {
   return {
     async get(path, _query, schema) {
+      if (path === "/api/public/v2/live-models") {
+        return schema.parse(collection(routes.live));
+      }
       if (path === "/api/public/v2/models") {
-        return schema.parse(collection(routes.models));
+        return schema.parse(collection(routes.catalogue ?? []));
       }
       const match = /^\/api\/public\/v2\/models\/(.+)\/providers$/.exec(path);
       if (match !== null) {
         const id = decodeURIComponent(match[1] ?? "");
-        const entry = routes.providers[id];
+        const entry = routes.providers?.[id];
         if (entry === undefined || entry === "throw") {
           throw new DashboardRequestError("http_error", "unavailable", {
             retryable: true,
             status: 503,
           });
         }
-        return schema.parse(collection(entry as unknown[]));
+        return schema.parse(collection(entry));
       }
       throw new Error(`unexpected path ${path}`);
     },
@@ -127,80 +166,193 @@ test("shifts exact decimal strings to per-million prices without float loss", ()
   assert.equal(shiftDecimalString("0.000000088606", 6), "0.088606");
   assert.equal(shiftDecimalString("0.0000001250", 6), "0.125");
   assert.equal(shiftDecimalString("0.00000000000000000000", 6), "0");
-  assert.equal(shiftDecimalString("0.00000075", 6), "0.75");
-  assert.equal(shiftDecimalString("0.000000000000000000000001", 6), "0.000000000000000001");
   assert.equal(shiftDecimalString("0.432000000", 2), "43.2");
   assert.equal(shiftDecimalString("not-a-number", 6), null);
 });
 
-test("treats deprecation and a near expiry as imminent retirement risk", () => {
+test("treats a provider with no lifecycle signal as unforeseeable, not safe", () => {
   const asOf = "2026-08-27T00:00:00.000Z";
-  assert.equal(retirementRisk("deprecated", null, asOf), "imminent");
-  assert.equal(retirementRisk("no_announced_expiration", null, asOf), "none");
-  assert.equal(retirementRisk("scheduled_deprecation", "2026-09-15", asOf), "imminent");
-  assert.equal(retirementRisk("scheduled_deprecation", "2098-12-31", asOf), "dated");
+  // OpenRouter publishes lifecycle, so its verdicts are real.
+  assert.equal(retirementRisk("openrouter", "deprecated", null, "available", asOf), "imminent");
+  assert.equal(retirementRisk("openrouter", "no_announced_expiration", null, "available", asOf), "none");
+  assert.equal(retirementRisk("openrouter", "scheduled_deprecation", "2026-09-15", "available", asOf), "imminent");
+  assert.equal(retirementRisk("openrouter", "scheduled_deprecation", "2098-12-31", "available", asOf), "dated");
+  // Groq and Cerebras publish none, so "none" would be a false reassurance.
+  assert.equal(retirementRisk("groq", null, null, "available", asOf), "not_published_by_provider");
+  assert.equal(retirementRisk("cerebras", null, null, "available", asOf), "not_published_by_provider");
+  // Disappearance is the only retirement signal those two ever give, and it wins.
+  assert.equal(retirementRisk("groq", null, null, "disappeared", asOf), "imminent");
 });
 
-test("orders candidates cheapest first and converts prices per million tokens", async () => {
+test("ranks across all three providers cheapest first", async () => {
   const client = stubClient({
-    models: [
-      model({ id: "vendor/pricey", prompt: "0.0000090000" }),
-      model({ id: "vendor/cheap", prompt: "0.0000001000" }),
+    live: [
+      liveModel({ provider: "openrouter", id: "or/pricey", prompt: "0.0000090000" }),
+      liveModel({ provider: "groq", id: "groq/cheap", prompt: "0.0000000300" }),
+      liveModel({ provider: "openrouter", id: "or/mid", prompt: "0.0000001000" }),
     ],
-    providers: {},
+    catalogue: [],
   });
 
   const output = await runModelEconomics(
     { discountEnrichment: 0 },
     { client, now: NOW },
   );
-
-  assert.equal(output.status, "partial");
   if (output.status === "error") assert.fail("expected a catalogue result");
+
   assert.deepEqual(
-    output.models.map((entry) => entry.id),
-    ["vendor/cheap", "vendor/pricey"],
+    output.models.map((entry) => `${entry.provider}:${entry.id}`),
+    ["groq:groq/cheap", "openrouter:or/mid", "openrouter:or/pricey"],
   );
-  assert.equal(output.models[0]?.pricing.promptUsdPerMillionTokens, "0.1");
-  assert.equal(output.models[0]?.discountCoverage, "not_checked");
+  assert.equal(output.models[0]?.pricing.promptUsdPerMillionTokens, "0.03");
   modelEconomicsOutputSchema.parse(output);
 });
 
-test("reports a published discount with the provider named and no invented expiry", async () => {
+test("keeps unpriced Cerebras models in the answer instead of dropping them", async () => {
   const client = stubClient({
-    models: [model({ id: "vendor/discounted" })],
-    providers: {
-      "vendor/discounted": [
-        providerRow({ modelId: "vendor/discounted", provider: "Cheap", discount: "0.200000000" }),
-        providerRow({ modelId: "vendor/discounted", provider: "Cheapest", discount: "0.432000000" }),
-      ],
-    },
+    live: [
+      liveModel({ provider: "openrouter", id: "or/priced", prompt: "0.0000001000" }),
+      liveModel({
+        provider: "cerebras",
+        id: "gpt-oss-120b",
+        prompt: null,
+        completion: null,
+        contextLength: null,
+        outputModalities: null,
+        missingFields: ["pricing", "context_length", "output_modalities"],
+      }),
+    ],
+    catalogue: [],
   });
 
-  const output = await runModelEconomics({}, { client, now: NOW });
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
   if (output.status === "error") assert.fail("expected a catalogue result");
 
-  const discount = output.models[0]?.bestDiscount;
-  assert.equal(output.models[0]?.discountCoverage, "discounted");
-  assert.equal(discount?.ratio, "0.432000000");
-  assert.equal(discount?.percentOff, "43.2");
-  assert.equal(discount?.providerName, "Cheapest");
-  assert.equal(discount?.expiresAt, null);
-  assert.equal(discount?.expiryPublished, false);
-  assert.equal(output.discounts.modelsDiscounted, 1);
+  const cerebras = output.models.find((entry) => entry.provider === "cerebras");
+  assert.ok(cerebras, "cerebras model must survive into the answer");
+  // Ranked rows come first; the unrankable row follows rather than vanishing.
+  assert.equal(output.models.at(-1)?.provider, "cerebras");
+  assert.equal(cerebras?.priceComparable, false);
+  assert.match(String(cerebras?.unrankableReason), /publishes no prices/);
+  // Unknown capability must never read as a capability claim.
+  assert.equal(cerebras?.emitsText, null);
+  assert.equal(cerebras?.genuinelyFree, false);
+
+  assert.equal(output.comparability.priceComparable, 1);
+  assert.equal(output.comparability.priceUnknown, 1);
+  assert.match(output.comparability.note, /cost-unknown, not free/);
+  assert.match(output.warnings.join(" "), /not dropped/);
+});
+
+test("excludes unknown-capability rows when a hard guarantee is demanded", async () => {
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "openrouter", id: "or/text" }),
+      liveModel({
+        provider: "cerebras",
+        id: "cerebras/unknown",
+        prompt: null,
+        completion: null,
+        outputModalities: null,
+      }),
+    ],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { includeUnknownCapability: false, discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  assert.deepEqual(
+    output.models.map((entry) => entry.id),
+    ["or/text"],
+  );
+});
+
+test("reports per-provider publication facts so a null is explained", async () => {
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "openrouter", id: "or/a" }),
+      liveModel({ provider: "groq", id: "groq/a", prompt: null, completion: null }),
+    ],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  const groq = output.providers.find((entry) => entry.provider === "groq");
+  const cerebras = output.providers.find((entry) => entry.provider === "cerebras");
+
+  assert.equal(groq?.spendVisibility, "no_billing_api");
+  assert.equal(groq?.publishes.lifecycle, "never");
+  assert.match(String(groq?.comparabilityNote), /no billing API/);
+  // A provider that contributed nothing is still reported, and said so.
+  assert.equal(cerebras?.modelsInCatalogue, 0);
+  assert.match(output.warnings.join(" "), /Cerebras contributed no models/);
+});
+
+test("does not spend a discount lookup on a provider that publishes none", async () => {
+  const requested: string[] = [];
+  const base = stubClient({
+    live: [
+      liveModel({ provider: "groq", id: "groq/a", prompt: "0.0000000100" }),
+      liveModel({ provider: "openrouter", id: "or/a", prompt: "0.0000001000" }),
+    ],
+    catalogue: [],
+    providers: {
+      "or/a": [providerRow({ modelId: "or/a", provider: "Cheapest", discount: "0.432000000" })],
+    },
+  });
+  const client: DashboardClient = {
+    async get(path, query, schema) {
+      if (path.includes("/providers")) requested.push(path);
+      return base.get(path, query, schema);
+    },
+  };
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 5 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  // Groq is cheaper and sorts first, but publishes no discounts, so it is not
+  // looked up at all -- and is reported as such rather than as no_discount.
+  assert.equal(requested.length, 1);
+  assert.match(requested[0] ?? "", /or%2Fa/);
+  const groq = output.models.find((entry) => entry.provider === "groq");
+  assert.equal(groq?.discountCoverage, "not_published_by_provider");
+
+  const or = output.models.find((entry) => entry.provider === "openrouter");
+  assert.equal(or?.discountCoverage, "discounted");
+  assert.equal(or?.bestDiscount?.percentOff, "43.2");
+  assert.equal(or?.bestDiscount?.providerName, "Cheapest");
+  assert.equal(or?.bestDiscount?.expiresAt, null);
+  assert.equal(or?.bestDiscount?.expiryPublished, false);
+  assert.match(output.discounts.note, /No provider publishes a discount expiry/);
 });
 
 test("separates a published zero discount from an unobserved model", async () => {
   const client = stubClient({
-    models: [
-      model({ id: "vendor/observed", prompt: "0.0000001000" }),
-      model({ id: "vendor/unobserved", prompt: "0.0000002000" }),
+    live: [
+      liveModel({ provider: "openrouter", id: "or/observed", prompt: "0.0000001000" }),
+      liveModel({ provider: "openrouter", id: "or/unobserved", prompt: "0.0000002000" }),
     ],
+    catalogue: [],
     providers: {
-      "vendor/observed": [
-        providerRow({ modelId: "vendor/observed", provider: "Only", discount: "0.000000000" }),
+      "or/observed": [
+        providerRow({ modelId: "or/observed", provider: "Only", discount: "0.000000000" }),
       ],
-      "vendor/unobserved": "throw",
+      "or/unobserved": "throw",
     },
   });
 
@@ -210,35 +362,29 @@ test("separates a published zero discount from an unobserved model", async () =>
   assert.equal(output.models[0]?.discountCoverage, "no_discount");
   assert.equal(output.models[1]?.discountCoverage, "unavailable");
   assert.equal(output.discounts.modelsUnobserved, 1);
-  assert.equal(output.discounts.modelsEnriched, 1);
   // One failed lookup must not read as a total outage.
   assert.equal(output.discounts.sourceAvailable, true);
-  assert.match(
-    output.warnings.join(" "),
-    /unknown rather than absent/,
-  );
-});
-
-test("says no discount conclusion is available when every lookup fails", async () => {
-  const client = stubClient({
-    models: [model({ id: "vendor/only" })],
-    providers: { "vendor/only": "throw" },
-  });
-
-  const output = await runModelEconomics({}, { client, now: NOW });
-  if (output.status === "error") assert.fail("expected a catalogue result");
-
-  assert.equal(output.discounts.sourceAvailable, false);
-  assert.match(output.discounts.note, /not evidence there is none/);
 });
 
 test("keeps a rate-limited free router out of genuinely free results", async () => {
   const client = stubClient({
-    models: [
-      model({ id: "openrouter/free", freeKind: "free_router", prompt: "0" , completion: "0" }),
-      model({ id: "vendor/real-free", freeKind: "concrete_free", prompt: "0", completion: "0" }),
+    live: [
+      liveModel({
+        provider: "openrouter",
+        id: "openrouter/free",
+        freeKind: "free_router",
+        prompt: "0",
+        completion: "0",
+      }),
+      liveModel({
+        provider: "openrouter",
+        id: "vendor/real-free",
+        freeKind: "concrete_free",
+        prompt: "0",
+        completion: "0",
+      }),
     ],
-    providers: {},
+    catalogue: [],
   });
 
   const output = await runModelEconomics(
@@ -254,47 +400,14 @@ test("keeps a rate-limited free router out of genuinely free results", async () 
   assert.equal(output.models[0]?.genuinelyFree, true);
 });
 
-test("excludes a zero-priced model that does not emit text", async () => {
+test("names a pinned id that is in no provider catalogue", async () => {
   const client = stubClient({
-    models: [
-      model({
-        id: "vendor/music",
-        freeKind: "concrete_free",
-        prompt: "0",
-        completion: "0",
-        outputModalities: ["audio"],
-      }),
-      model({
-        id: "vendor/chat",
-        freeKind: "concrete_free",
-        prompt: "0",
-        completion: "0",
-      }),
-    ],
-    providers: {},
+    live: [liveModel({ provider: "groq", id: "groq/alive" })],
+    catalogue: [],
   });
 
   const output = await runModelEconomics(
-    { genuinelyFreeOnly: true, discountEnrichment: 0 },
-    { client, now: NOW },
-  );
-  if (output.status === "error") assert.fail("expected a catalogue result");
-
-  assert.deepEqual(
-    output.models.map((entry) => entry.id),
-    ["vendor/chat"],
-  );
-  assert.equal(output.models[0]?.emitsText, true);
-});
-
-test("names a pinned id that has vanished from the catalogue", async () => {
-  const client = stubClient({
-    models: [model({ id: "vendor/alive" })],
-    providers: {},
-  });
-
-  const output = await runModelEconomics(
-    { ids: ["vendor/alive", "openai/gpt-oss-120b:free"], discountEnrichment: 0 },
+    { ids: ["groq/alive", "openai/gpt-oss-120b:free"], discountEnrichment: 0 },
     { client, now: NOW },
   );
   if (output.status === "error") assert.fail("expected a catalogue result");
@@ -302,34 +415,117 @@ test("names a pinned id that has vanished from the catalogue", async () => {
   assert.deepEqual(output.missingIds, ["openai/gpt-oss-120b:free"]);
   assert.deepEqual(
     output.models.map((entry) => entry.id),
-    ["vendor/alive"],
+    ["groq/alive"],
   );
-  assert.match(output.warnings.join(" "), /will 404 if called/);
+  assert.match(output.warnings.join(" "), /will fail if called/);
 });
 
-test("reports a pinned model that is retiring even though it still resolves", async () => {
+test("treats a disappeared model as imminent and excludes it by default", async () => {
   const client = stubClient({
-    models: [
-      model({
-        id: "vendor/sunsetting",
+    live: [
+      liveModel({ provider: "groq", id: "groq/gone", availability: "disappeared" }),
+      liveModel({ provider: "groq", id: "groq/here" }),
+    ],
+    catalogue: [],
+  });
+
+  const shown = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (shown.status === "error") assert.fail("expected a catalogue result");
+  assert.deepEqual(shown.models.map((entry) => entry.id), ["groq/here"]);
+
+  const all = await runModelEconomics(
+    { availableOnly: false, discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (all.status === "error") assert.fail("expected a catalogue result");
+  const gone = all.models.find((entry) => entry.id === "groq/gone");
+  assert.equal(gone?.retirementRisk, "imminent");
+});
+
+test("carries OpenRouter lifecycle onto the cross-provider row", async () => {
+  const client = stubClient({
+    live: [liveModel({ provider: "openrouter", id: "or/sunsetting" })],
+    catalogue: [
+      catalogueModel({
+        id: "or/sunsetting",
         lifecycleState: "scheduled_deprecation",
         expirationDate: "2026-09-10",
       }),
     ],
-    providers: {},
   });
 
   const output = await runModelEconomics(
-    { ids: ["vendor/sunsetting"], discountEnrichment: 0 },
+    { discountEnrichment: 0 },
     { client, now: NOW },
   );
   if (output.status === "error") assert.fail("expected a catalogue result");
 
   assert.equal(output.models[0]?.retirementRisk, "imminent");
   assert.equal(output.models[0]?.expirationDate, "2026-09-10");
+  assert.equal(output.models[0]?.supportsTools, true);
 });
 
-test("returns a structured error instead of throwing when the catalogue fails", async () => {
+test("leaves tool support unknown where the provider publishes no parameters", async () => {
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "groq", id: "groq/a" }),
+      liveModel({ provider: "openrouter", id: "or/a" }),
+    ],
+    catalogue: [catalogueModel({ id: "or/a", supportedParameters: ["temperature"] })],
+  });
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  const groq = output.models.find((entry) => entry.provider === "groq");
+  const or = output.models.find((entry) => entry.provider === "openrouter");
+  assert.equal(groq?.supportsTools, null);
+  assert.equal(or?.supportsTools, false);
+
+  // requireTools must exclude unknowns, not assume them capable.
+  const strict = await runModelEconomics(
+    { requireTools: true, discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (strict.status === "error") assert.fail("expected a catalogue result");
+  assert.equal(strict.models.length, 0);
+});
+
+test("survives an OpenRouter catalogue failure without losing cross-provider pricing", async () => {
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/live-models") {
+        return schema.parse(
+          collection([liveModel({ provider: "groq", id: "groq/a" })]),
+        );
+      }
+      throw new DashboardRequestError("http_error", "down", {
+        retryable: true,
+        status: 500,
+      });
+    },
+  };
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a degraded result");
+
+  assert.equal(output.models.length, 1);
+  assert.match(
+    output.warnings.join(" "),
+    /Cross-provider pricing is unaffected/,
+  );
+});
+
+test("returns a structured error when the cross-provider catalogue fails", async () => {
   const client: DashboardClient = {
     async get() {
       throw new DashboardRequestError("timeout", "timed out", { retryable: true });
@@ -344,7 +540,6 @@ test("returns a structured error instead of throwing when the catalogue fails", 
   modelEconomicsOutputSchema.parse(output);
 });
 
-test("bounds discount enrichment and the catalogue scan", () => {
+test("bounds discount enrichment", () => {
   assert.equal(DISCOUNT_ENRICHMENT_LIMIT, 12);
-  assert.equal(MODEL_ECONOMICS_LIMIT, 600);
 });

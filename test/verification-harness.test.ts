@@ -234,8 +234,13 @@ test("diagnostic call matrix covers all nine deliberate assertions", async () =>
     {
       name: "dashboard_model_economics",
       arguments: {
-        ids: ["fixture/discounted", "fixture/free-text", "fixture/no-such-model"],
-        discountEnrichment: 2,
+        ids: [
+          "fixture/discounted",
+          "fixture-groq/priced",
+          "fixture-cerebras/bare",
+          "fixture/no-such-model",
+        ],
+        discountEnrichment: 3,
       },
     },
     { name: "dashboard_key_inventory", arguments: {} },

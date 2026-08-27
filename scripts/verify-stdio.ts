@@ -155,8 +155,13 @@ export const DIAGNOSTIC_CALLS = [
   {
     name: "dashboard_model_economics",
     arguments: {
-      ids: ["fixture/discounted", "fixture/free-text", "fixture/no-such-model"],
-      discountEnrichment: 2,
+      ids: [
+        "fixture/discounted",
+        "fixture-groq/priced",
+        "fixture-cerebras/bare",
+        "fixture/no-such-model",
+      ],
+      discountEnrichment: 3,
     },
   },
   { name: "dashboard_key_inventory", arguments: {} },
@@ -466,17 +471,32 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
   }
   if (name === "dashboard_model_economics") {
     const models = Array.isArray(output.models) ? output.models : [];
-    const discounted = models.find(
-      (entry) => asRecord(entry, "economics model").id === "fixture/discounted",
+    const byId = new Map(
+      models.map((entry) => {
+        const record = asRecord(entry, "economics model");
+        return [String(record.id), record];
+      }),
     );
+
+    // All three providers must survive into one comparable answer. A tool that
+    // silently returns only OpenRouter is the exact failure this server exists
+    // to avoid, so it is asserted rather than assumed.
+    const providers = Array.isArray(output.providers) ? output.providers : [];
+    const providerIds = providers
+      .map((entry) => String(asRecord(entry, "provider report").provider))
+      .sort();
+    if (!isDeepStrictEqual(providerIds, ["cerebras", "groq", "openrouter"])) {
+      throw new Error("fixture economics did not report all three providers");
+    }
+
+    const discounted = byId.get("fixture/discounted");
     if (discounted === undefined) {
       throw new Error("fixture economics omitted the discounted model");
     }
-    const record = asRecord(discounted, "fixture discounted model");
-    if (record.discountCoverage !== "discounted") {
+    if (discounted.discountCoverage !== "discounted") {
       throw new Error("fixture economics did not report the published discount");
     }
-    const discount = asRecord(record.bestDiscount, "fixture discount");
+    const discount = asRecord(discounted.bestDiscount, "fixture discount");
     if (
       discount.percentOff !== "43.2" ||
       discount.providerName !== "FixtureProvider" ||
@@ -485,18 +505,56 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
     ) {
       throw new Error("fixture economics misreported the discount or invented an expiry");
     }
+
+    // Groq publishes a price but no lifecycle, so its risk must read as
+    // unforeseeable rather than as a reassuring "none".
+    const groq = byId.get("fixture-groq/priced");
+    if (groq === undefined) throw new Error("fixture economics omitted the Groq model");
+    if (groq.priceComparable !== true) {
+      throw new Error("fixture economics failed to rank a priced Groq model");
+    }
+    if (groq.retirementRisk !== "not_published_by_provider") {
+      throw new Error("fixture economics claimed a lifecycle Groq does not publish");
+    }
+    if (groq.discountCoverage !== "not_published_by_provider") {
+      throw new Error("fixture economics implied Groq publishes discounts");
+    }
+    if (groq.supportsTools !== null) {
+      throw new Error("fixture economics claimed tool support Groq does not publish");
+    }
+
+    // Cerebras publishes nothing, so it must be kept and explained, never dropped
+    // and never allowed to read as free.
+    const cerebras = byId.get("fixture-cerebras/bare");
+    if (cerebras === undefined) {
+      throw new Error("fixture economics dropped the unpriced Cerebras model");
+    }
+    if (cerebras.priceComparable !== false || cerebras.genuinelyFree !== false) {
+      throw new Error("fixture economics treated an unpriced model as rankable or free");
+    }
+    if (cerebras.emitsText !== null) {
+      throw new Error("fixture economics invented a modality Cerebras does not publish");
+    }
+    if (typeof cerebras.unrankableReason !== "string" || cerebras.unrankableReason === "") {
+      throw new Error("fixture economics left an unpriced model unexplained");
+    }
+
+    // Priced rows rank ahead of unrankable ones.
+    const cheapest = asRecord(models[0], "cheapest economics model");
+    if (cheapest.id !== "fixture-groq/priced") {
+      throw new Error("fixture economics did not rank the cheapest priced model first");
+    }
+    if (String(asRecord(models[models.length - 1], "last model").id) !== "fixture-cerebras/bare") {
+      throw new Error("fixture economics did not place the unrankable model last");
+    }
+
+    const comparability = asRecord(output.comparability, "comparability");
+    if (comparability.priceComparable !== 2 || comparability.priceUnknown !== 1) {
+      throw new Error("fixture economics miscounted price comparability");
+    }
+
     if (!Array.isArray(output.missingIds) || !output.missingIds.includes("fixture/no-such-model")) {
       throw new Error("fixture economics did not name the vanished pinned id");
-    }
-    // The unobserved model must read as unknown, never as full price.
-    const unobserved = models.find(
-      (entry) => asRecord(entry, "economics model").id === "fixture/free-text",
-    );
-    if (
-      unobserved !== undefined &&
-      asRecord(unobserved, "fixture free model").discountCoverage !== "unavailable"
-    ) {
-      throw new Error("fixture economics treated an unobserved model as full price");
     }
   }
   if (name === "dashboard_key_inventory") {

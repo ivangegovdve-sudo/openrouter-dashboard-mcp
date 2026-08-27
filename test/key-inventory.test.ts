@@ -11,6 +11,7 @@ import {
 const NOW = () => new Date("2026-08-27T00:00:00.000Z");
 const SECRET_A = "sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const SECRET_B = "sk-or-v1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const SECRET_C = "gsk-cccccccccccccccccccccccccccccccc";
 
 function keyPayload(body: Record<string, unknown>): Response {
   return new Response(JSON.stringify({ data: body }), {
@@ -19,49 +20,58 @@ function keyPayload(body: Record<string, unknown>): Response {
   });
 }
 
-test("parses secret-name to environment-variable pairs and ignores malformed entries", () => {
-  assert.deepEqual(parseKeySources("a=A, b=B"), [
-    { secretName: "a", envVar: "A" },
-    { secretName: "b", envVar: "B" },
-  ]);
-  assert.deepEqual(parseKeySources("  "), []);
+function modelsPayload(): Response {
+  return new Response(JSON.stringify({ object: "list", data: [] }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+test("parses provider-scoped triples and rejects unknown providers", () => {
+  assert.deepEqual(
+    parseKeySources("openrouter:a=A, groq:b=B, cerebras:c=C"),
+    [
+      { provider: "openrouter", secretName: "a", envVar: "A" },
+      { provider: "groq", secretName: "b", envVar: "B" },
+      { provider: "cerebras", secretName: "c", envVar: "C" },
+    ],
+  );
   assert.deepEqual(parseKeySources(undefined), []);
-  assert.deepEqual(parseKeySources("noequals,=B,c="), []);
-  // A repeated secret name is taken once rather than double counted.
-  assert.deepEqual(parseKeySources("a=A,a=OTHER"), [
-    { secretName: "a", envVar: "A" },
+  assert.deepEqual(parseKeySources("  "), []);
+  // No provider, unknown provider, and empty halves are all dropped.
+  assert.deepEqual(parseKeySources("a=A,hume:b=B,openrouter:=C,groq:d="), []);
+  // The same secret under one provider is taken once.
+  assert.deepEqual(parseKeySources("groq:a=A,groq:a=OTHER"), [
+    { provider: "groq", secretName: "a", envVar: "A" },
   ]);
+  // The same secret name under two providers is two distinct keys.
+  assert.equal(parseKeySources("groq:shared=A,cerebras:shared=B").length, 2);
 });
 
-test("stays dormant and explains itself when no keys are configured", async () => {
+test("stays dormant and explains the triple format when nothing is configured", async () => {
   const output = await runKeyInventory({}, { env: {}, now: NOW });
 
   assert.equal(output.status, "unconfigured");
   if (output.status !== "unconfigured") assert.fail("expected unconfigured");
   assert.match(output.summary, /zero-credential default, not a failure/);
   assert.match(output.howToEnable, new RegExp(KEY_SOURCES_ENV));
+  assert.match(output.howToEnable, /openrouter, groq or cerebras/);
   keyInventoryOutputSchema.parse(output);
 });
 
-test("names uncapped keys and separates them from capped gift keys", async () => {
-  const fetchImpl: typeof fetch = async (_input, init) => {
-    const authorization = new Headers(init?.headers).get("authorization");
-    if (authorization === `Bearer ${SECRET_A}`) {
+test("reads OpenRouter spend and reports Groq spend as structurally unreadable", async () => {
+  const fetchImpl: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("openrouter.ai")) {
       return keyPayload({
-        label: "gift",
-        usage: 2.5,
-        limit: 15,
-        limit_remaining: 12.5,
+        label: "council",
+        usage: 41.125,
+        limit: null,
+        limit_remaining: null,
         is_free_tier: false,
       });
     }
-    return keyPayload({
-      label: "workhorse",
-      usage: 41.125,
-      limit: null,
-      limit_remaining: null,
-      is_free_tier: false,
-    });
+    return modelsPayload();
   };
 
   const output = await runKeyInventory(
@@ -69,44 +79,120 @@ test("names uncapped keys and separates them from capped gift keys", async () =>
     {
       env: {
         [KEY_SOURCES_ENV]:
-          "openrouter-anycloudllm-gift=OR_GIFT,openrouter-council=OR_COUNCIL",
-        OR_GIFT: SECRET_A,
-        OR_COUNCIL: SECRET_B,
+          "openrouter:openrouter-council=OR_COUNCIL,groq:groq-open-dashboard=GROQ_OD",
+        OR_COUNCIL: SECRET_A,
+        GROQ_OD: SECRET_C,
+      },
+      fetchImpl,
+      now: NOW,
+    },
+  );
+  if (output.status === "unconfigured") assert.fail("expected a report");
+
+  const or = output.keys.find((key) => key.provider === "openrouter");
+  const groq = output.keys.find((key) => key.provider === "groq");
+
+  assert.equal(or?.spendReadability, "read");
+  assert.equal(or?.usdSpent, 41.125);
+  assert.equal(or?.uncapped, true);
+
+  // Groq authenticated, but its spend is unreadable rather than zero.
+  assert.equal(groq?.state, "active");
+  assert.equal(groq?.alive, true);
+  assert.equal(groq?.spendReadability, "no_billing_api");
+  assert.equal(groq?.usdSpent, null);
+  assert.equal(groq?.uncapped, null);
+  assert.match(String(groq?.note), /no billing API/);
+
+  assert.equal(output.totals.alive, 2);
+  assert.equal(output.totals.spendUnreadable, 1);
+  assert.equal(output.totals.usdSpentWhereReadable, 41.125);
+  assert.match(output.warnings.join(" "), /Unknown, not zero, and not capped/);
+  keyInventoryOutputSchema.parse(output);
+});
+
+test("separates a Cloudflare edge block from a rejected credential", async () => {
+  const fetchImpl: typeof fetch = async (input) => {
+    if (String(input).includes("groq")) {
+      return new Response(
+        "error code: 1010 -- Cloudflare -- access denied",
+        { status: 403 },
+      );
+    }
+    return new Response(
+      JSON.stringify({ error: { code: "invalid_api_key" } }),
+      { status: 401, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  const output = await runKeyInventory(
+    {},
+    {
+      env: {
+        [KEY_SOURCES_ENV]:
+          "groq:groq-pi-agent=GROQ_PI,openrouter:openrouter-dead=OR_DEAD",
+        GROQ_PI: SECRET_C,
+        OR_DEAD: SECRET_B,
+      },
+      fetchImpl,
+      now: NOW,
+    },
+  );
+  if (output.status === "unconfigured") assert.fail("expected a report");
+
+  const groq = output.keys.find((key) => key.provider === "groq");
+  const or = output.keys.find((key) => key.provider === "openrouter");
+
+  assert.equal(groq?.state, "edge_blocked");
+  // An edge block is not evidence the key is dead, so alive stays unknown.
+  assert.equal(groq?.alive, null);
+  assert.match(String(groq?.note), /do not rotate it on this signal/i);
+
+  assert.equal(or?.state, "rejected");
+  assert.equal(or?.alive, false);
+
+  assert.match(output.warnings.join(" "), /Do not rotate on this signal/);
+  assert.match(output.warnings.join(" "), /rejected by their provider/);
+});
+
+test("always sends a User-Agent so an edge does not reject the probe", async () => {
+  const agents: (string | null)[] = [];
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    agents.push(new Headers(init?.headers).get("user-agent"));
+    return modelsPayload();
+  };
+
+  await runKeyInventory(
+    {},
+    {
+      env: {
+        [KEY_SOURCES_ENV]: "cerebras:cerebras-open-dashboard=CB",
+        CB: SECRET_C,
       },
       fetchImpl,
       now: NOW,
     },
   );
 
-  assert.equal(output.status, "partial");
-  if (output.status === "unconfigured") assert.fail("expected a report");
-
-  const gift = output.keys.find(
-    (key) => key.secretName === "openrouter-anycloudllm-gift",
-  );
-  const council = output.keys.find(
-    (key) => key.secretName === "openrouter-council",
-  );
-
-  assert.equal(gift?.uncapped, false);
-  assert.equal(gift?.usdLimit, 15);
-  assert.equal(council?.uncapped, true);
-  assert.equal(council?.usdLimit, null);
-  assert.equal(output.totals.uncapped, 1);
-  assert.equal(output.totals.capped, 1);
-  assert.equal(output.totals.usdSpentAcrossActiveKeys, 43.625);
-  assert.match(output.warnings.join(" "), /no spend ceiling: openrouter-council/);
-  keyInventoryOutputSchema.parse(output);
+  assert.equal(agents.length, 1);
+  assert.match(String(agents[0]), /open-dashboard-mcp/);
 });
 
 test("never returns a key value anywhere in the result", async () => {
-  const fetchImpl: typeof fetch = async () =>
-    keyPayload({ label: "any", usage: 1, limit: 5, limit_remaining: 4 });
+  const fetchImpl: typeof fetch = async (input) =>
+    String(input).includes("openrouter")
+      ? keyPayload({ label: "any", usage: 1, limit: 5, limit_remaining: 4 })
+      : modelsPayload();
 
   const output = await runKeyInventory(
     {},
     {
-      env: { [KEY_SOURCES_ENV]: "openrouter-spare=OR_SPARE", OR_SPARE: SECRET_A },
+      env: {
+        [KEY_SOURCES_ENV]:
+          "openrouter:openrouter-spare=OR_SPARE,cerebras:cerebras-iris=CB",
+        OR_SPARE: SECRET_A,
+        CB: SECRET_C,
+      },
       fetchImpl,
       now: NOW,
     },
@@ -114,28 +200,34 @@ test("never returns a key value anywhere in the result", async () => {
 
   const serialized = JSON.stringify(output);
   assert.doesNotMatch(serialized, /sk-or-v1-/);
+  assert.doesNotMatch(serialized, /gsk-/);
   assert.doesNotMatch(serialized, /Bearer/i);
   assert.match(serialized, /openrouter-spare/);
+  assert.match(serialized, /cerebras-iris/);
 });
 
-test("reports a rejected key as revoked rather than as zero spend", async () => {
-  const fetchImpl: typeof fetch = async () =>
-    new Response("", { status: 401 });
+test("filters to the requested providers", async () => {
+  const fetchImpl: typeof fetch = async () => modelsPayload();
 
   const output = await runKeyInventory(
-    {},
+    { providers: ["cerebras"] },
     {
-      env: { [KEY_SOURCES_ENV]: "openrouter-dead=OR_DEAD", OR_DEAD: SECRET_A },
+      env: {
+        [KEY_SOURCES_ENV]:
+          "groq:groq-pi-agent=GROQ_PI,cerebras:cerebras-banker=CB",
+        GROQ_PI: SECRET_C,
+        CB: SECRET_C,
+      },
       fetchImpl,
       now: NOW,
     },
   );
   if (output.status === "unconfigured") assert.fail("expected a report");
 
-  assert.equal(output.keys[0]?.state, "rejected");
-  assert.equal(output.keys[0]?.usdSpent, null);
-  assert.equal(output.totals.active, 0);
-  assert.match(output.warnings.join(" "), /rejected upstream/);
+  assert.deepEqual(
+    output.keys.map((key) => key.secretName),
+    ["cerebras-banker"],
+  );
 });
 
 test("reports an unreachable key as unknown rather than as zero spend", async () => {
@@ -146,7 +238,10 @@ test("reports an unreachable key as unknown rather than as zero spend", async ()
   const output = await runKeyInventory(
     {},
     {
-      env: { [KEY_SOURCES_ENV]: "openrouter-spare=OR_SPARE", OR_SPARE: SECRET_A },
+      env: {
+        [KEY_SOURCES_ENV]: "openrouter:openrouter-spare=OR_SPARE",
+        OR_SPARE: SECRET_A,
+      },
       fetchImpl,
       now: NOW,
     },
@@ -155,7 +250,7 @@ test("reports an unreachable key as unknown rather than as zero spend", async ()
 
   assert.equal(output.keys[0]?.state, "unreachable");
   assert.equal(output.keys[0]?.usdSpent, null);
-  assert.equal(output.totals.usdSpentAcrossActiveKeys, 0);
+  assert.equal(output.totals.usdSpentWhereReadable, 0);
   assert.match(output.warnings.join(" "), /unknown, not as zero spend/);
 });
 
@@ -167,7 +262,7 @@ test("reports a configured key that is absent from the environment", async () =>
   const output = await runKeyInventory(
     {},
     {
-      env: { [KEY_SOURCES_ENV]: "openrouter-ghost=OR_GHOST" },
+      env: { [KEY_SOURCES_ENV]: "groq:groq-ghost=GROQ_GHOST" },
       fetchImpl,
       now: NOW,
     },
@@ -188,7 +283,10 @@ test("issues only GET requests", async () => {
   await runKeyInventory(
     {},
     {
-      env: { [KEY_SOURCES_ENV]: "openrouter-spare=OR_SPARE", OR_SPARE: SECRET_A },
+      env: {
+        [KEY_SOURCES_ENV]: "openrouter:openrouter-spare=OR_SPARE",
+        OR_SPARE: SECRET_A,
+      },
       fetchImpl,
       now: NOW,
     },

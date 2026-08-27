@@ -2,10 +2,18 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import type { DashboardClient } from "../dashboard/client.js";
+import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
 import {
   providerListResponseSchema,
   publicModelsResponseSchema,
 } from "../dashboard/schemas/openrouter.js";
+import {
+  PROVIDER_IDS,
+  PROVIDER_REGISTRY,
+  providerIdSchema,
+  unpricedReason,
+  type ProviderId,
+} from "../providers/registry.js";
 import {
   READ_ONLY_TOOL_ANNOTATIONS,
   safeDashboardError,
@@ -15,33 +23,36 @@ import {
   toolResult,
 } from "./shared.js";
 
+/**
+ * The cross-provider catalogue. This is the source that makes the tool an Open
+ * Dashboard rather than an OpenRouter dashboard: it carries OpenRouter, Groq and
+ * Cerebras in one normalized shape.
+ */
+const LIVE_MODELS_ENDPOINT = "/api/public/v2/live-models";
+/** OpenRouter-only. Contributes lifecycle, deprecation and rank, which the other two do not publish. */
 const MODELS_ENDPOINT = "/api/public/v2/models";
 const PROVIDERS_ENDPOINT_TEMPLATE = "/api/public/v2/models/{id}/providers";
 
-/**
- * Upstream caps `/models` at 100 rows per page, and orders by weekly rank. Reading
- * one page and calling the result "cheapest" would mean "cheapest among the 100
- * most popular", which is a different and misleading claim — so this pages through
- * the catalogue instead, up to a bound that is reported when it is reached.
- */
-export const MODEL_ECONOMICS_PAGE_SIZE = 100;
-export const MODEL_ECONOMICS_MAX_PAGES = 6;
-export const MODEL_ECONOMICS_LIMIT =
-  MODEL_ECONOMICS_PAGE_SIZE * MODEL_ECONOMICS_MAX_PAGES;
+const LIVE_PAGE_SIZE = 500;
+const LIVE_MAX_PAGES = 4;
+export const MODEL_ECONOMICS_LIMIT = LIVE_PAGE_SIZE * LIVE_MAX_PAGES;
+
+/** Upstream caps the OpenRouter catalogue at 100 rows per page. */
+const OPENROUTER_PAGE_SIZE = 100;
+const OPENROUTER_MAX_PAGES = 6;
 
 /**
  * How many models may be enriched with per-endpoint discount data in one call.
- *
- * Discounts are an endpoint fact, so each enriched model costs one extra upstream
- * request. The bound exists so a routing query cannot turn into 200 round trips;
- * whatever it leaves out is reported rather than implied to carry no discount.
+ * Each costs one extra upstream request, so the bound stops a routing query
+ * becoming hundreds of round trips. What it leaves out is reported, never implied
+ * to carry no discount.
  */
 export const DISCOUNT_ENRICHMENT_LIMIT = 12;
 
 /**
  * Shift an exact decimal string left by `places` digits without going through a
  * float. Prices arrive as strings precisely so that 0.00000000000000000000 does
- * not become 0 and 1.5e-7 does not become 1.4999999999999998e-7; converting to a
+ * not become 0 and 0.000000088606 does not pick up float noise; converting to a
  * number to compute a per-million price would throw that away at the last step.
  */
 export function shiftDecimalString(value: string, places: number): string | null {
@@ -71,37 +82,22 @@ function usdPerMillionTokens(value: string | null): string | null {
   return shiftDecimalString(value, 6);
 }
 
-function stringArray(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
-  const entries = value.filter((entry): entry is string => typeof entry === "string");
-  return entries.length === value.length ? entries : null;
-}
-
-function architectureModalities(architecture: Record<string, unknown>): {
-  inputModalities: string[] | null;
-  outputModalities: string[] | null;
-} {
-  return {
-    inputModalities: stringArray(architecture["input_modalities"]),
-    outputModalities: stringArray(architecture["output_modalities"]),
-  };
-}
-
 export const discountCoverageSchema = z.enum([
   /** Endpoint observations were read and a non-zero published discount was found. */
   "discounted",
   /**
-   * Endpoint observations were read and every endpoint published either no
-   * discount field or a zero one. This is a positive observation of "full price",
-   * and is the only value here that licenses that conclusion.
+   * Endpoint observations were read and every endpoint published nothing or zero.
+   * The only value here that means full price.
    */
   "no_discount",
+  /** The provider publishes no discounts at all, so there is nothing to look up. */
+  "not_published_by_provider",
   /** Not enriched because the per-call enrichment bound was reached. Unknown. */
   "not_checked",
   /**
-   * No endpoint observation exists for this model. Upstream collects provider
-   * endpoints under a daily request budget, so most of the catalogue is simply
-   * unobserved at any moment. Unknown — emphatically not "full price".
+   * No endpoint observation exists for this model. Upstream observes provider
+   * endpoints under a daily request budget, so most of the catalogue is unobserved
+   * at any moment. Unknown — emphatically not "full price".
    */
   "unavailable",
 ]);
@@ -111,17 +107,31 @@ export const retirementRiskSchema = z.enum([
   "none",
   /** An expiry date is published but is not yet within the alert horizon. */
   "dated",
-  /** Deprecated, or expiring within 90 days. Do not pin; route with a fallback. */
+  /** Deprecated, expiring within 90 days, or already gone from the catalogue. */
   "imminent",
+  /**
+   * The provider publishes no lifecycle signal at all, so retirement cannot be
+   * foreseen — only observed after the fact when the model stops being listed.
+   * True of Groq and Cerebras. Unknown, not safe.
+   */
+  "not_published_by_provider",
 ]);
 
 const RETIREMENT_ALERT_DAYS = 90;
 
 export function retirementRisk(
-  lifecycleState: string,
+  provider: ProviderId,
+  lifecycleState: string | null,
   expirationDate: string | null,
+  availability: "available" | "disappeared",
   asOfIso: string,
 ): z.infer<typeof retirementRiskSchema> {
+  // A model that has already vanished is the strongest possible signal, and it is
+  // the only retirement signal Groq and Cerebras ever give.
+  if (availability === "disappeared") return "imminent";
+  if (PROVIDER_REGISTRY[provider].publishes.lifecycle === "never") {
+    return "not_published_by_provider";
+  }
   if (lifecycleState === "deprecated" || lifecycleState === "retired") {
     return "imminent";
   }
@@ -143,8 +153,9 @@ const modelDiscountSchema = z
     providerName: z.string(),
     observedAt: z.string(),
     /**
-     * OpenRouter publishes a discount ratio and no end date. This is null because
-     * nothing upstream says when the cut stops — never because it is permanent.
+     * No provider in this registry publishes an end date for a discount. Null
+     * because nothing upstream says when the cut stops — never because it is
+     * permanent.
      */
     expiresAt: z.null(),
     expiryPublished: z.literal(false),
@@ -153,24 +164,20 @@ const modelDiscountSchema = z
 
 const economicsModelSchema = z
   .object({
+    provider: providerIdSchema,
     id: z.string(),
-    canonicalSlug: z.string(),
-    name: z.string(),
-    /**
-     * Upstream marks every model description `untrusted-source`. It is vendor
-     * marketing copy that reaches a router's context, so it is carried with its
-     * trust label attached and must never be read as an instruction.
-     */
-    contentTrust: z.literal("untrusted-source"),
+    displayName: z.string().nullable(),
+    ownedBy: z.string().nullable(),
     contextLength: z.string().nullable(),
-    inputModalities: z.array(z.string()).nullable(),
     outputModalities: z.array(z.string()).nullable(),
     /**
-     * True only when the model emits text. A zero-priced music or video model is
-     * genuinely free and genuinely useless as a chat model; the cheapest free
-     * model is a music generator unless this is checked first.
+     * True only when the model is known to emit text. Null means the provider
+     * publishes no modality at all, which is not the same as "not text". A
+     * zero-priced music model is genuinely free and genuinely useless as a chat
+     * model, so capability starts by knowing what comes out.
      */
     emitsText: z.boolean().nullable(),
+    reasoningEfforts: z.array(z.string()).nullable(),
     pricing: z
       .object({
         promptUsdPerToken: z.string().nullable(),
@@ -180,54 +187,97 @@ const economicsModelSchema = z
       })
       .strict(),
     /**
-     * `concrete_free` is a real zero-priced model. `free_router` is OpenRouter's
-     * rate-limited free routing tier — usable for a probe, not for a workload.
-     * `paid_or_unknown` includes providers that publish no price at all, which is
-     * unknown and must not be treated as free.
+     * Whether this row can take part in a cost ranking at all. False for every
+     * model whose provider publishes no price — reported rather than dropped, so
+     * "cheapest across everything" never quietly means "cheapest among the rows
+     * that happened to carry a number".
+     */
+    priceComparable: z.boolean(),
+    /** Stated as a fact about the provider, not as a missing value. */
+    unrankableReason: z.string().nullable(),
+    /**
+     * `concrete_free` is a real zero-priced model. `free_router` is a rate-limited
+     * free routing tier — usable for a probe, not for a workload. `paid_or_unknown`
+     * includes every provider that publishes no price, which is unknown and must
+     * never be treated as free.
      */
     freeKind: z.enum(["concrete_free", "free_router", "paid_or_unknown"]),
     /** True only for `concrete_free`. A rate-limited free tier is not this. */
     genuinelyFree: z.boolean(),
-    lifecycleState: z.string(),
+    /** Measured serving speed where upstream holds an observation. */
+    performance: z
+      .object({
+        throughputTps: z.string().nullable(),
+        latencyMsP50: z.string().nullable(),
+        fastestProvider: z.string().nullable(),
+        observedAt: z.string(),
+      })
+      .strict()
+      .nullable(),
+    availability: z.enum(["available", "disappeared"]),
+    lastConfirmedAt: z.string(),
+    absenceStreak: z.string(),
+    lifecycleState: z.string().nullable(),
     expirationDate: z.string().nullable(),
     retirementRisk: retirementRiskSchema,
     weeklyRank: z.number().int().positive().nullable(),
-    supportedParameters: z.array(z.string()),
-    /** Whether the model accepts tool calls at all — a hard gate for agent work. */
-    supportsTools: z.boolean(),
-    supportsReasoning: z.boolean(),
+    /** Null where the provider publishes no parameter list, which is unknown. */
+    supportsTools: z.boolean().nullable(),
     bestDiscount: modelDiscountSchema.nullable(),
     discountCoverage: discountCoverageSchema,
+    /** What this provider withheld for this row, named by upstream. */
+    missingFields: z.array(z.string()),
+  })
+  .strict();
+
+const providerReportSchema = z
+  .object({
+    provider: providerIdSchema,
+    displayName: z.string(),
+    modelsInCatalogue: z.number().int().min(0),
+    modelsMatched: z.number().int().min(0),
+    modelsPriceComparable: z.number().int().min(0),
+    /** Most recent confirmation across this provider's rows. */
+    lastConfirmedAt: z.string().nullable(),
+    spendVisibility: z.enum(["api", "no_billing_api"]),
+    publishes: z.record(z.string(), z.string()),
+    comparabilityNote: z.string(),
   })
   .strict();
 
 export const modelEconomicsInputSchema = z
   .object({
     /**
-     * Restrict the answer to these exact model ids. This is the "audit my pins"
-     * query: hand it the slugs a config hardcodes and it reports what each one
-     * now costs, whether it is discounted, and whether it is about to retire.
-     * Ids that are not in the catalogue are reported in `missingIds` rather than
-     * silently dropped, because a pin that has vanished is the whole point.
+     * Restrict to these providers. Omitted means all of them, which is the point
+     * of the tool — a single-provider answer is what OpenRouter's own MCP already
+     * gives.
+     */
+    providers: z.array(providerIdSchema).min(1).optional(),
+    /**
+     * Restrict to these exact model ids. The "audit my pins" query: hand it the
+     * slugs a config hardcodes and it reports what each now costs, whether it is
+     * discounted, and whether it is about to retire. Ids not in any catalogue come
+     * back in `missingIds` rather than being silently dropped, because a pin that
+     * has vanished is the whole point.
      */
     ids: z.array(z.string().min(1)).min(1).max(50).optional(),
-    /**
-     * Keep only models that emit this modality. Defaults to `text` because a
-     * router asking about cost is asking about a chat model.
-     */
+    /** Keep only models known to emit this modality. */
     outputModality: z.string().min(1).max(32).default("text"),
-    /** Keep only models whose context window is at least this many tokens. */
+    /**
+     * Keep rows whose provider publishes no modality at all. Default true, because
+     * excluding Cerebras entirely by default would quietly make this a two-provider
+     * tool. Set false when the caller needs a hard capability guarantee.
+     */
+    includeUnknownCapability: z.boolean().default(true),
     minContextLength: z.number().int().positive().optional(),
     /** Keep only genuinely free models. Excludes the rate-limited free router. */
     genuinelyFreeOnly: z.boolean().default(false),
-    /** Drop models that are deprecated or expiring inside the alert horizon. */
+    /** Drop models that are deprecated, expiring soon, or already disappeared. */
     excludeRetirementRisk: z.boolean().default(false),
-    /** Keep only models that accept tool calls. */
+    /** Keep only models known to accept tool calls. Excludes unknowns. */
     requireTools: z.boolean().default(false),
-    /**
-     * How many models to enrich with per-endpoint discount data, cheapest first.
-     * Zero skips the enrichment entirely and returns `not_checked`.
-     */
+    /** Drop models upstream last saw as disappeared. */
+    availableOnly: z.boolean().default(true),
     discountEnrichment: z
       .number()
       .int()
@@ -242,28 +292,34 @@ const modelEconomicsSuccessSchema = z
   .object({
     status: z.enum(["ok", "partial"]),
     summary: z.string(),
+    checkedAt: z.string(),
     models: z.array(economicsModelSchema),
     /**
-     * Requested ids that the catalogue does not contain. A pinned slug landing
+     * Requested ids absent from every provider catalogue. A pinned slug landing
      * here is the 404 a config is about to hit, observed before it happens.
      */
     missingIds: z.array(z.string()),
+    /** One entry per provider that took part, with what it does and does not publish. */
+    providers: z.array(providerReportSchema),
+    comparability: z
+      .object({
+        /** Matched models that could be ranked on price. */
+        priceComparable: z.number().int().min(0),
+        /** Matched models excluded from the ranking because no price is published. */
+        priceUnknown: z.number().int().min(0),
+        /**
+         * Says plainly how much of the answer the ranking actually covers, so
+         * "cheapest" is never read as "cheapest of everything" when it is not.
+         */
+        note: z.string(),
+      })
+      .strict(),
     discounts: z
       .object({
-        /** False only when every attempted lookup failed. */
         sourceAvailable: z.boolean(),
         modelsEnriched: z.number().int().min(0),
         modelsDiscounted: z.number().int().min(0),
-        /**
-         * Models whose endpoints upstream has not observed. Counted separately
-         * from `modelsEnriched` so partial coverage never reads as full coverage.
-         */
         modelsUnobserved: z.number().int().min(0),
-        /**
-         * States plainly that unchecked models are unchecked. Discount coverage
-         * is partial by construction upstream, so silence here would read as
-         * "nothing is discounted", which is a different and false claim.
-         */
         note: z.string(),
       })
       .strict(),
@@ -308,104 +364,170 @@ function comparablePrice(value: string | null): number {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }
 
+type OpenRouterExtra = {
+  lifecycleState: string;
+  expirationDate: string | null;
+  supportedParameters: string[];
+  weeklyRank: number | null;
+};
+
 export async function runModelEconomics(
   rawInput: ModelEconomicsInput,
   { client, now = () => new Date() }: ModelEconomicsDependencies,
 ): Promise<ModelEconomicsOutput> {
   const input = modelEconomicsInputSchema.parse(rawInput);
   const asOfIso = now().toISOString();
+  const warnings: string[] = [];
+  const evidence: z.infer<typeof sourceEvidenceSchema>[] = [];
 
-  const pages: Array<z.infer<typeof publicModelsResponseSchema>> = [];
-  let cursor: string | null = null;
+  // 1. The cross-provider catalogue, paged. Sorting is done here rather than
+  //    upstream because upstream cannot page and rank at the same time, and a
+  //    cross-provider ranking needs every row before it can order them.
+  const livePages: Array<z.infer<typeof liveModelsResponseSchema>> = [];
+  let liveCursor: string | null = null;
   try {
-    for (let page = 0; page < MODEL_ECONOMICS_MAX_PAGES; page += 1) {
-      const query = new URLSearchParams({
-        limit: String(MODEL_ECONOMICS_PAGE_SIZE),
-      });
-      if (cursor !== null) query.set("cursor", cursor);
-      const response: z.infer<typeof publicModelsResponseSchema> =
-        await client.get(MODELS_ENDPOINT, query, publicModelsResponseSchema);
-      pages.push(response);
-      cursor = response.cursor;
-      if (cursor === null) break;
+    for (let page = 0; page < LIVE_MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({ limit: String(LIVE_PAGE_SIZE) });
+      if (liveCursor !== null) query.set("cursor", liveCursor);
+      const response: z.infer<typeof liveModelsResponseSchema> = await client.get(
+        LIVE_MODELS_ENDPOINT,
+        query,
+        liveModelsResponseSchema,
+      );
+      livePages.push(response);
+      evidence.push(sourceEvidence(LIVE_MODELS_ENDPOINT, response));
+      liveCursor = response.cursor;
+      if (liveCursor === null) break;
     }
   } catch (error) {
     const safeError = safeDashboardError(error);
     return { status: "error", summary: safeError.message, error: safeError };
   }
 
-  const catalogue = {
-    data: pages.flatMap((page) => page.data),
-    cursor,
-    stale: pages.some((page) => page.stale),
-  };
+  const liveRows = livePages.flatMap((page) => page.data);
 
-  const warnings: string[] = [];
-  const candidates = catalogue.data
-    .map((model) => {
-      const architecture = model.architecture as Record<string, unknown>;
-      const { inputModalities, outputModalities } =
-        architectureModalities(architecture);
-      const promptPrice = model.pricing["prompt"] ?? null;
-      const completionPrice = model.pricing["completion"] ?? null;
-      const supportedParameters = model.supportedParameters;
-      return {
-        id: model.id,
-        canonicalSlug: model.canonicalSlug,
-        name: model.name,
-        contentTrust: model.contentTrust,
-        contextLength: model.contextLength,
-        inputModalities,
-        outputModalities,
-        emitsText:
-          outputModalities === null ? null : outputModalities.includes("text"),
-        pricing: {
-          promptUsdPerToken: promptPrice,
-          completionUsdPerToken: completionPrice,
-          promptUsdPerMillionTokens: usdPerMillionTokens(promptPrice),
-          completionUsdPerMillionTokens: usdPerMillionTokens(completionPrice),
-        },
-        freeKind: model.freeKind,
-        genuinelyFree: model.freeKind === "concrete_free",
-        lifecycleState: model.lifecycleState,
-        expirationDate: model.expirationDate,
-        retirementRisk: retirementRisk(
-          model.lifecycleState,
-          model.expirationDate,
-          asOfIso,
-        ),
-        weeklyRank: model.weeklyRank,
-        supportedParameters,
-        supportsTools: supportedParameters.includes("tools"),
-        supportsReasoning:
-          supportedParameters.includes("reasoning") ||
-          supportedParameters.includes("include_reasoning"),
-        bestDiscount: null as z.infer<typeof modelDiscountSchema> | null,
-        discountCoverage: "not_checked" as z.infer<typeof discountCoverageSchema>,
-      };
-    })
-    .filter((model) => {
-      if (input.ids !== undefined) {
-        return (
-          input.ids.includes(model.id) || input.ids.includes(model.canonicalSlug)
-        );
+  // 2. OpenRouter-only enrichment. Groq and Cerebras publish no lifecycle, rank or
+  //    parameter list, so there is nothing equivalent to fetch for them — that is a
+  //    fact recorded in the provider registry, not an omission here.
+  const openRouterExtras = new Map<string, OpenRouterExtra>();
+  const wantsOpenRouter =
+    input.providers === undefined || input.providers.includes("openrouter");
+  if (wantsOpenRouter) {
+    let cursor: string | null = null;
+    try {
+      for (let page = 0; page < OPENROUTER_MAX_PAGES; page += 1) {
+        const query = new URLSearchParams({
+          limit: String(OPENROUTER_PAGE_SIZE),
+        });
+        if (cursor !== null) query.set("cursor", cursor);
+        const response: z.infer<typeof publicModelsResponseSchema> =
+          await client.get(MODELS_ENDPOINT, query, publicModelsResponseSchema);
+        evidence.push(sourceEvidence(MODELS_ENDPOINT, response));
+        for (const model of response.data) {
+          openRouterExtras.set(model.id, {
+            lifecycleState: model.lifecycleState,
+            expirationDate: model.expirationDate,
+            supportedParameters: model.supportedParameters,
+            weeklyRank: model.weeklyRank,
+          });
+        }
+        cursor = response.cursor;
+        if (cursor === null) break;
       }
-      if (model.outputModalities !== null) {
-        if (!model.outputModalities.includes(input.outputModality)) return false;
-      }
-      if (input.minContextLength !== undefined) {
-        if (model.contextLength === null) return false;
-        if (Number(model.contextLength) < input.minContextLength) return false;
-      }
-      if (input.genuinelyFreeOnly && !model.genuinelyFree) return false;
-      if (input.excludeRetirementRisk && model.retirementRisk === "imminent") {
+    } catch {
+      warnings.push(
+        "The OpenRouter catalogue could not be read, so lifecycle, deprecation and rank are unknown for OpenRouter models in this answer. Cross-provider pricing is unaffected.",
+      );
+    }
+  }
+
+  // 3. Normalize every provider into one comparable row.
+  const candidates = liveRows.map((row) => {
+    const extra = openRouterExtras.get(row.id);
+    const descriptor = PROVIDER_REGISTRY[row.provider];
+    const promptPrice = row.pricing.promptUsdPerToken;
+    const completionPrice = row.pricing.completionUsdPerToken;
+    const priceComparable = promptPrice !== null;
+    const supportsTools =
+      row.provider === "openrouter" && extra !== undefined
+        ? extra.supportedParameters.includes("tools")
+        : null;
+    return {
+      provider: row.provider,
+      id: row.id,
+      displayName: row.displayName,
+      ownedBy: row.ownedBy,
+      contextLength: row.contextLength,
+      outputModalities: row.outputModalities,
+      emitsText:
+        row.outputModalities === null ? null : row.outputModalities.includes("text"),
+      reasoningEfforts: row.reasoningEfforts,
+      pricing: {
+        promptUsdPerToken: promptPrice,
+        completionUsdPerToken: completionPrice,
+        promptUsdPerMillionTokens: usdPerMillionTokens(promptPrice),
+        completionUsdPerMillionTokens: usdPerMillionTokens(completionPrice),
+      },
+      priceComparable,
+      unrankableReason: priceComparable ? null : unpricedReason(row.provider),
+      freeKind: row.freeKind,
+      genuinelyFree: row.freeKind === "concrete_free",
+      performance: row.performance,
+      availability: row.availability,
+      lastConfirmedAt: row.lastConfirmedAt,
+      absenceStreak: row.absenceStreak,
+      lifecycleState: extra?.lifecycleState ?? null,
+      expirationDate: extra?.expirationDate ?? null,
+      retirementRisk: retirementRisk(
+        row.provider,
+        extra?.lifecycleState ?? null,
+        extra?.expirationDate ?? null,
+        row.availability,
+        asOfIso,
+      ),
+      weeklyRank: extra?.weeklyRank ?? null,
+      supportsTools,
+      bestDiscount: null as z.infer<typeof modelDiscountSchema> | null,
+      discountCoverage:
+        descriptor.publishes.discounts === "never"
+          ? ("not_published_by_provider" as z.infer<typeof discountCoverageSchema>)
+          : ("not_checked" as z.infer<typeof discountCoverageSchema>),
+      missingFields: row.missingFields,
+    };
+  });
+
+  const matched = candidates.filter((model) => {
+    if (input.providers !== undefined && !input.providers.includes(model.provider)) {
+      return false;
+    }
+    if (input.ids !== undefined) return input.ids.includes(model.id);
+    if (input.availableOnly && model.availability !== "available") return false;
+    if (model.outputModalities === null) {
+      if (!input.includeUnknownCapability) return false;
+    } else if (!model.outputModalities.includes(input.outputModality)) {
+      return false;
+    }
+    if (input.minContextLength !== undefined) {
+      if (model.contextLength === null) {
+        if (!input.includeUnknownCapability) return false;
+      } else if (Number(model.contextLength) < input.minContextLength) {
         return false;
       }
-      if (input.requireTools && !model.supportsTools) return false;
-      return true;
-    });
+    }
+    if (input.genuinelyFreeOnly && !model.genuinelyFree) return false;
+    if (input.excludeRetirementRisk && model.retirementRisk === "imminent") {
+      return false;
+    }
+    if (input.requireTools && model.supportsTools !== true) return false;
+    return true;
+  });
 
-  candidates.sort((left, right) => {
+  // Priced rows rank first, cheapest first. Unpriced rows keep their place in the
+  // answer rather than vanishing from it, ordered after everything rankable.
+  matched.sort((left, right) => {
+    if (left.priceComparable !== right.priceComparable) {
+      return left.priceComparable ? -1 : 1;
+    }
     const byPrompt =
       comparablePrice(left.pricing.promptUsdPerToken) -
       comparablePrice(right.pricing.promptUsdPerToken);
@@ -414,28 +536,31 @@ export async function runModelEconomics(
       comparablePrice(left.pricing.completionUsdPerToken) -
       comparablePrice(right.pricing.completionUsdPerToken);
     if (byCompletion !== 0) return byCompletion;
+    if (left.provider !== right.provider) {
+      return left.provider.localeCompare(right.provider);
+    }
     return left.id.localeCompare(right.id);
   });
 
-  const matchedBeforeLimit = candidates.length;
-  const models = candidates.slice(0, input.limit);
+  const matchedBeforeLimit = matched.length;
+  const models = matched.slice(0, input.limit);
 
-  const found = new Set(
-    candidates.flatMap((model) => [model.id, model.canonicalSlug]),
-  );
-  const missingIds = (input.ids ?? []).filter((id) => !found.has(id));
+  const knownIds = new Set(candidates.map((model) => model.id));
+  const missingIds = (input.ids ?? []).filter((id) => !knownIds.has(id));
   if (missingIds.length > 0) {
     warnings.push(
-      `${missingIds.length} requested model id${missingIds.length === 1 ? " is" : "s are"} not in the catalogue and will 404 if called: ${missingIds.join(", ")}.`,
+      `${missingIds.length} requested model id${missingIds.length === 1 ? " is" : "s are"} in no provider catalogue and will fail if called: ${missingIds.join(", ")}.`,
     );
   }
 
-  const evidence = pages.map((page) => sourceEvidence(MODELS_ENDPOINT, page));
+  // 4. Discounts, for the providers that publish any.
   let modelsEnriched = 0;
   let modelsDiscounted = 0;
   let modelsUnobserved = 0;
-
-  const enrichmentTargets = models.slice(0, input.discountEnrichment);
+  const enrichable = models.filter(
+    (model) => PROVIDER_REGISTRY[model.provider].publishes.discounts !== "never",
+  );
+  const enrichmentTargets = enrichable.slice(0, input.discountEnrichment);
   for (const model of enrichmentTargets) {
     const endpoint = PROVIDERS_ENDPOINT_TEMPLATE.replace("{id}", model.id);
     try {
@@ -452,10 +577,9 @@ export async function runModelEconomics(
         const ratio = Number(row.discount);
         if (!Number.isFinite(ratio) || ratio <= 0) continue;
         if (best !== null && Number(best.ratio) >= ratio) continue;
-        const percentOff = shiftDecimalString(row.discount, 2);
         best = {
           ratio: row.discount,
-          percentOff: percentOff ?? row.discount,
+          percentOff: shiftDecimalString(row.discount, 2) ?? row.discount,
           providerName: row.provider,
           observedAt: row.fetchedAt,
           expiresAt: null,
@@ -471,21 +595,70 @@ export async function runModelEconomics(
     }
   }
 
-  const sourceAvailable =
-    enrichmentTargets.length === 0 || modelsEnriched > 0;
+  const sourceAvailable = enrichmentTargets.length === 0 || modelsEnriched > 0;
   if (modelsUnobserved > 0) {
     warnings.push(
       `${modelsUnobserved} model${modelsUnobserved === 1 ? " has" : "s have"} no upstream endpoint observation, so their discount state is unknown rather than absent. Upstream observes provider endpoints under a daily request budget, so most of the catalogue is unobserved at any moment.`,
     );
   }
-  const uncheckedCount = models.length - enrichmentTargets.length;
+  const uncheckedCount = enrichable.length - enrichmentTargets.length;
   if (uncheckedCount > 0) {
     warnings.push(
       `${uncheckedCount} returned model${uncheckedCount === 1 ? " was" : "s were"} not checked for discounts; raise discountEnrichment to cover more.`,
     );
   }
-  if (catalogue.stale) {
-    warnings.push("The upstream model catalogue is marked stale.");
+
+  // 5. Per-provider reporting, so a null is read as a provider fact.
+  const activeProviders = (
+    input.providers ?? PROVIDER_IDS
+  ).filter((provider) => PROVIDER_IDS.includes(provider));
+  const providerReports = activeProviders.map((provider) => {
+    const inCatalogue = candidates.filter((model) => model.provider === provider);
+    const matchedForProvider = matched.filter(
+      (model) => model.provider === provider,
+    );
+    const confirmations = inCatalogue
+      .map((model) => model.lastConfirmedAt)
+      .sort();
+    const descriptor = PROVIDER_REGISTRY[provider];
+    return {
+      provider,
+      displayName: descriptor.displayName,
+      modelsInCatalogue: inCatalogue.length,
+      modelsMatched: matchedForProvider.length,
+      modelsPriceComparable: matchedForProvider.filter(
+        (model) => model.priceComparable,
+      ).length,
+      lastConfirmedAt: confirmations.at(-1) ?? null,
+      spendVisibility: descriptor.spendVisibility,
+      publishes: Object.fromEntries(
+        Object.entries(descriptor.publishes).map(([key, value]) => [key, value]),
+      ),
+      comparabilityNote: descriptor.comparabilityNote,
+    };
+  });
+
+  for (const report of providerReports) {
+    if (report.modelsInCatalogue === 0) {
+      warnings.push(
+        `${report.displayName} contributed no models to this answer; its catalogue is empty upstream.`,
+      );
+    }
+  }
+
+  const priceComparable = matched.filter((model) => model.priceComparable).length;
+  const priceUnknown = matchedBeforeLimit - priceComparable;
+  if (priceUnknown > 0) {
+    warnings.push(
+      `${priceUnknown} matching model${priceUnknown === 1 ? "" : "s"} could not be ranked on price because their provider publishes none; they are listed after the ranked rows, not dropped.`,
+    );
+  }
+
+  const catalogueTruncated = liveCursor !== null;
+  if (catalogueTruncated) {
+    warnings.push(
+      `The cross-provider catalogue did not fit in ${MODEL_ECONOMICS_LIMIT} scanned models, so cheaper models may exist beyond that bound.`,
+    );
   }
   if (matchedBeforeLimit > models.length) {
     warnings.push(
@@ -493,25 +666,31 @@ export async function runModelEconomics(
     );
   }
 
-  const catalogueTruncated = catalogue.cursor !== null;
-  if (catalogueTruncated) {
-    warnings.push(
-      `The catalogue did not fit in ${MODEL_ECONOMICS_LIMIT} scanned models, so cheaper models may exist beyond that bound.`,
-    );
-  }
-
   const discountNote = !sourceAvailable
     ? "No endpoint observation could be read for any attempted model, so no discount conclusion is available. Absence of a discount here is not evidence there is none."
-    : `${modelsEnriched} of ${models.length} returned models had observed endpoints and were checked; ${modelsUnobserved} were unobserved upstream and ${uncheckedCount} were not attempted. Only models marked no_discount are known to be at full price.`;
+    : `${modelsEnriched} of ${enrichable.length} discount-capable returned models were checked; ${modelsUnobserved} were unobserved upstream and ${uncheckedCount} were not attempted. Only models marked no_discount are known to be at full price. No provider publishes a discount expiry.`;
 
-  const status =
-    !sourceAvailable || warnings.length > 0 ? ("partial" as const) : ("ok" as const);
+  const comparabilityNote =
+    priceUnknown === 0
+      ? "Every matching model published a price, so the ranking covers the whole answer."
+      : `${priceComparable} of ${matchedBeforeLimit} matching models published a price and could be ranked. The other ${priceUnknown} are cost-unknown, not free, and appear after the ranked rows.`;
+
+  const providerNames = providerReports
+    .map((report) => `${report.displayName} ${report.modelsMatched}`)
+    .join(", ");
 
   return {
-    status,
-    summary: `${models.length} of ${matchedBeforeLimit} matching models returned, cheapest first; ${modelsDiscounted} carry a published discount.`,
+    status: warnings.length > 0 ? "partial" : "ok",
+    summary: `${models.length} of ${matchedBeforeLimit} matching models across ${providerReports.length} providers (${providerNames}), cheapest priced first; ${modelsDiscounted} carry a published discount.`,
+    checkedAt: asOfIso,
     models,
     missingIds,
+    providers: providerReports,
+    comparability: {
+      priceComparable,
+      priceUnknown,
+      note: comparabilityNote,
+    },
     discounts: {
       sourceAvailable,
       modelsEnriched,
@@ -537,9 +716,9 @@ export function registerModelEconomics(
   server.registerTool(
     "dashboard_model_economics",
     {
-      title: "Dashboard model economics",
+      title: "Open Dashboard model economics",
       description:
-        "Compare live models on the facts a router decides with: input and output price per token and per million tokens, published provider discounts, context length, output modality, tool and reasoning support, retirement risk, and whether a model is genuinely free or only rate-limited free. Returns cheapest first. Unchecked and unavailable discount data are reported as such and never as an absent discount.",
+        "Compare live models across OpenRouter, Groq and Cerebras on the facts a router decides with: input and output price per token and per million tokens, published discounts, context length, output modality, tool and reasoning support, measured throughput and latency, availability, and retirement risk. Cheapest priced first. Models whose provider publishes no price are reported as cost-unknown and listed after the ranked rows rather than dropped, and every null is explained as a fact about the provider that withheld it.",
       inputSchema: modelEconomicsInputSchema,
       outputSchema: modelEconomicsOutputSchema,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,

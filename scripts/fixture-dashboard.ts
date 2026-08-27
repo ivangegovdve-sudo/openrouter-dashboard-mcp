@@ -92,6 +92,77 @@ const disappearedModel = {
   absenceStreak: "3",
 };
 
+/**
+ * A discounted OpenRouter model, so the fixture proves the economics tool reports
+ * a published discount with its provider named and no invented expiry.
+ */
+const discountedLiveModel = {
+  ...liveModelFixture,
+  provider: "openrouter" as const,
+  id: "fixture/discounted",
+  displayName: "Fixture Discounted",
+  contextLength: "128000",
+  pricing: {
+    promptUsdPerToken: "0.0000001250",
+    completionUsdPerToken: "0.0000005000",
+  },
+  isFree: false,
+  freeKind: "paid_or_unknown" as const,
+  outputModalities: ["text"],
+  availability: "available" as const,
+};
+
+/** Groq publishes a price here but no lifecycle signal anywhere. */
+const groqLiveModel = {
+  ...liveModelFixture,
+  provider: "groq" as const,
+  id: "fixture-groq/priced",
+  displayName: "Fixture Groq Priced",
+  contextLength: "131072",
+  pricing: {
+    promptUsdPerToken: "0.0000000300",
+    completionUsdPerToken: "0.0000000600",
+  },
+  isFree: false,
+  freeKind: "paid_or_unknown" as const,
+  reasoningEfforts: null,
+  performance: null,
+  outputModalities: ["text"],
+  availability: "available" as const,
+};
+
+/**
+ * Cerebras publishes only an id and owner. Every capability is null and the gaps
+ * are named, so the tool must report it as unrankable rather than drop it or let
+ * a null price read as free.
+ */
+const cerebrasLiveModel = {
+  ...liveModelFixture,
+  provider: "cerebras" as const,
+  id: "fixture-cerebras/bare",
+  displayName: null,
+  ownedBy: "Cerebras",
+  contextLength: null,
+  pricing: {
+    promptUsdPerToken: null,
+    completionUsdPerToken: null,
+  },
+  isFree: null,
+  freeKind: "paid_or_unknown" as const,
+  providerActive: null,
+  reasoningEfforts: null,
+  outputModalities: null,
+  performance: null,
+  availability: "available" as const,
+  missingFields: [
+    "pricing",
+    "context_length",
+    "active",
+    "reasoning",
+    "output_modalities",
+  ],
+};
+
 const freeCatalogueModel = {
   ...modelFixture,
   id: "fixture/free-text",
@@ -584,7 +655,14 @@ function fixtureBody(path: string, query: URLSearchParams): unknown {
     ]);
     if (query.get("cursor") !== null) throw new Error("unexpected live cursor");
     if (query.get("limit") === null) throw new Error("missing live limit");
-    return collection([knownFreeModel, unknownModel, disappearedModel]);
+    return collection([
+      knownFreeModel,
+      unknownModel,
+      disappearedModel,
+      discountedLiveModel,
+      groqLiveModel,
+      cerebrasLiveModel,
+    ]);
   }
   if (path === "/api/public/v2/models") {
     assertOnlyKeys(query, ["limit", "cursor"]);
