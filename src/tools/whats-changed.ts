@@ -751,6 +751,35 @@ export async function runWhatsChanged(
       };
     }
 
+    // `since` is caller-supplied and `through` is derived from the newest
+    // complete bucket, so the two can cross. An inverted range describes no
+    // interval at all -- every window-scoped section would report nothing, and
+    // nothing is exactly what a satisfied query looks like. A warning beside a
+    // normal summary does not fix that: the summary is the line that gets
+    // relayed, and it would read "Nothing changed since <a future date>". So an
+    // invalid interval is an outcome, not an annotation.
+    if (through < effectiveSince) {
+      const reason = `The requested window is inverted: since ${effectiveSince} is later than ${through}, the latest evidence available, so it describes no interval and nothing window-scoped can be reported. This is not evidence that nothing changed.`;
+      const section = unavailable(reason);
+      const annotated = annotatePriceCoverage(priceChanges, null, null);
+      const money = priceSummarySentence(annotated);
+      return {
+        status: "partial",
+        summary: money === null ? reason : `${money} ${reason}`,
+        since: null,
+        through: null,
+        sinceSource: "unavailable",
+        modelAppearances: section,
+        modelDisappearances: section,
+        newDeprecations: section,
+        priceChanges: annotated,
+        rankMovements: section,
+        evidence,
+        warnings,
+        caps: { liveModels: null, deprecations: null },
+      };
+    }
+
     const sinceSource =
       input.since === undefined
         ? ("previous_complete_history_bucket" as const)
@@ -929,14 +958,6 @@ export async function runWhatsChanged(
         annotatedPrices.coverage.status === "incomplete"
           ? `Price movement did not cover the whole reported window: ${annotatedPrices.coverage.reason}`
           : `Price movement coverage could not be determined: ${annotatedPrices.coverage.reason}`,
-      );
-    }
-    // `since` is caller-supplied and `through` is derived, so the two can cross.
-    // Every window-scoped section then reports nothing, and nothing is exactly
-    // what a satisfied query looks like.
-    if (through < effectiveSince) {
-      warnings.push(
-        `The requested window is inverted: since ${effectiveSince} is later than ${through}, the latest evidence available, so it describes no interval and the window-scoped sections below cannot report anything. This is not evidence that nothing changed.`,
       );
     }
     // Price movement counts as a change. Excluding it is how a report ends up

@@ -180,7 +180,7 @@ So the section reports only what the payload supports:
 
 `indeterminate` is not a softer way of saying fine. It means an empty result is not evidence about your window.
 
-**An inverted window is stated, not silently satisfied.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section then reports nothing — which is exactly what a satisfied query looks like — so the report says the window describes no interval.
+**An inverted window is an outcome, not a warning.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section would then report nothing — which is exactly what a satisfied query looks like. A warning beside a normal summary does not fix that, because the summary is the line a caller relays and it would read *Nothing changed since 2027-01-01*. So an inverted range returns `status: "partial"` with the window-scoped sections `unavailable` and a summary that names the inversion. Price movement is independent of your window, so it still reports.
 
 **The summary can no longer read as an all-clear while prices moved.** It leads with the money — `1 model stopped being free in the comparison ending 2026-08-26` — and price movement with no free-to-paid row still gets its own sentence rather than passing unmentioned. Where the summary used to say *no changes* and *nothing changed*, it says *no other changes* and *nothing else changed* whenever the price section reports movement.
 

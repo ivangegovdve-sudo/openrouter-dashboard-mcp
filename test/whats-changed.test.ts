@@ -1130,10 +1130,20 @@ test("an inverted requested window is reported, not silently satisfied", async (
   };
   const result = await runWhatsChanged({ since: "2027-01-01", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
-  assert.ok(
-    result.warnings.some((w) => /inverted|no interval|empty window/i.test(w)),
-    "an inverted window must be stated",
-  );
+  // A warning beside a normal summary is not a fix: the summary is the line
+  // that gets relayed, and "Nothing changed since 2027-01-01" is an all-clear
+  // for a question that was never askable.
+  assert.doesNotMatch(result.summary, /Nothing changed/);
+  assert.doesNotMatch(result.summary, /No changes were found/);
+  assert.match(result.summary, /inverted/i);
+  assert.equal(result.status, "partial");
+  assert.equal(result.since, null);
+  assert.equal(result.through, null);
+  assert.equal(result.sinceSource, "unavailable");
+  assert.equal(result.modelAppearances.status, "unavailable");
+  assert.equal(result.rankMovements.status, "unavailable");
+  assert.equal(result.newDeprecations.status, "unavailable");
+  // Price movement is independent of the requested window, so it survives.
   if (result.priceChanges.status !== "available") assert.fail("expected prices");
-  assert.notEqual(result.priceChanges.coverage.status, "complete");
+  assert.equal(result.priceChanges.coverage.status, "indeterminate");
 });
