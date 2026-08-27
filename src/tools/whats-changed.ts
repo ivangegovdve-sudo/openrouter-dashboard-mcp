@@ -397,18 +397,25 @@ async function readPriceChanges(
 }
 
 /**
- * Decide, and say in words, whether the compared price window reaches back far
- * enough to answer the question the caller asked.
+ * Decide, and say in words, whether the compared price window spans the window
+ * the caller asked about -- at both ends.
  *
- * The upstream route takes no window parameter -- it always compares the two
- * most recent archived runs. So a caller asking "what changed since the 1st"
- * gets a price section that looked at one day of it. Saying so is the whole
- * job: an empty list over a narrower window is not an all-clear over a wider
- * one, and nothing else in the response distinguishes the two.
+ * The upstream route takes no window parameter; it always compares the two most
+ * recent archived runs. So a caller asking "what changed since the 1st" gets a
+ * price section that looked at one day of it. Saying so is the whole job: an
+ * empty list over a narrower window is not an all-clear over a wider one, and
+ * nothing else in the response distinguishes the two.
+ *
+ * Both ends matter, and for different reasons. A late `start` leaves the early
+ * part of the window unchecked. An `end` short of the report's `through` is the
+ * collector lagging, which leaves the most recent days unchecked -- the days a
+ * reader most expects to be covered. An undated end is neither: it is unknown,
+ * and unknown coverage is not adequate coverage.
  */
 function annotatePriceCoverage(
   priceChanges: z.infer<typeof priceChangesSchema>,
   since: string | null,
+  through: string | null,
 ): z.infer<typeof priceChangesSchema> {
   if (priceChanges.status !== "available") return priceChanges;
   const { start, end } = priceChanges.observedWindow;
@@ -418,24 +425,30 @@ function annotatePriceCoverage(
       : start === end
         ? start
         : `${start} to ${end}`;
-  if (start === null || since === null) {
+  if (start === null || end === null || since === null || through === null) {
     return {
       ...priceChanges,
       coversRequestedWindow: null,
       windowNote: `Price movement was compared over ${label}. Coverage of the requested window is unknown, so an empty result is not evidence that nothing started charging.`,
     };
   }
-  if (start <= since) {
+  if (start <= since && end >= through) {
     return {
       ...priceChanges,
       coversRequestedWindow: true,
-      windowNote: `Price movement was compared over ${label}, which reaches back at least as far as ${since}.`,
+      windowNote: `Price movement was compared over ${label}, which spans the reported window ${since} to ${through}.`,
     };
   }
+  const shortfall =
+    start > since && end < through
+      ? `it starts after ${since} and stops before ${through}`
+      : start > since
+        ? `it starts after ${since}`
+        : `it stops before ${through}`;
   return {
     ...priceChanges,
     coversRequestedWindow: false,
-    windowNote: `Price movement was compared only over ${label}, which is narrower than the requested window starting ${since}. An empty result here is not evidence that nothing started charging earlier in that window.`,
+    windowNote: `Price movement was compared only over ${label}, which does not span the reported window ${since} to ${through}: ${shortfall}. An empty result here is not evidence that nothing started charging in the days it did not cover.`,
   };
 }
 
@@ -695,7 +708,7 @@ export async function runWhatsChanged(
           ? `${historyUnavailableReason} The prior complete ingestion bucket cannot be determined.`
           : "Fewer than two complete model-usage buckets are available, so the prior complete ingestion bucket cannot be determined.";
       const section = unavailable(reason);
-      const annotated = annotatePriceCoverage(priceChanges, null);
+      const annotated = annotatePriceCoverage(priceChanges, null, null);
       const money = priceSummarySentence(annotated);
       return {
         status: "partial",
@@ -881,7 +894,11 @@ export async function runWhatsChanged(
     const incompleteCount = sections.filter(
       (section) => section.status === "partial",
     ).length;
-    const annotatedPrices = annotatePriceCoverage(priceChanges, effectiveSince);
+    const annotatedPrices = annotatePriceCoverage(
+      priceChanges,
+      effectiveSince,
+      through,
+    );
     if (
       annotatedPrices.status === "available" &&
       annotatedPrices.coversRequestedWindow !== true

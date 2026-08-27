@@ -153,10 +153,10 @@ A free model does not announce itself when it starts charging. Its id does not c
   "otherChanges": [],
   "observedWindow": { "start": "2026-08-26", "end": "2026-08-26", "basis": "derived" },
   "coversRequestedWindow": false,
-  "windowNote": "Price movement was compared only over 2026-08-26, which is
-                 narrower than the requested window starting 2026-08-18. An
-                 empty result here is not evidence that nothing started
-                 charging earlier in that window.",
+  "windowNote": "Price movement was compared only over 2026-08-26, which does
+                 not span the reported window 2026-08-18 to 2026-08-25: it
+                 starts after 2026-08-18. An empty result here is not evidence
+                 that nothing started charging in the days it did not cover.",
   "comparison": { "baseRunId": "…", "headRunId": "…" }
 }
 ```
@@ -167,7 +167,7 @@ The comparison is the archive's own run chain, not a date you choose, so the ans
 
 Every other section of `dashboard_whats_changed` honours the `since` you pass. Price movement cannot: the public route takes no window parameter and always compares the two most recent archived runs. So a caller asking *what changed since the 1st* gets a price section that looked at one day of it, and an empty `becamePaid` inside a month-wide response reads as a month-wide all-clear it never was.
 
-Since 0.4.0 the section states its own window instead. `observedWindow` carries the dates actually compared, `coversRequestedWindow` says whether they reach back as far as your `since` — `null` when either side is undated, because unknown coverage is not adequate coverage — and `windowNote` says the same thing in a sentence. When coverage falls short it is also pushed into the response `warnings`, because a field nobody reads is not a disclosure. Measured against production on 2026-08-27: a request `since: 2026-08-18` returned a price comparison spanning `2026-08-26` alone.
+Since 0.4.0 the section states its own window instead. `observedWindow` carries the dates actually compared, and `coversRequestedWindow` says whether they span the reported window **at both ends** — `null` when either observed date is missing, because unknown coverage is not adequate coverage. Both ends matter for different reasons: a late `start` leaves the early part of the window unchecked, while an `end` short of the report's `through` is the collector lagging, which leaves the most recent days unchecked — the days a reader most expects to be covered. `windowNote` says which end fell short, in a sentence. When coverage falls short it is also pushed into the response `warnings`, because a field nobody reads is not a disclosure. Measured against production on 2026-08-27: a request `since: 2026-08-18` returned a price comparison spanning `2026-08-26` alone.
 
 **Price movement counts as a change, and a price section that failed to read degrades the report.** The summary can no longer say *nothing changed* while a model sits in `becamePaid` — it leads with the money — and a `whats_changed` whose price section is `unavailable` or `unsupported_by_public_api` returns `status: "partial"`, never `"ok"`. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
 

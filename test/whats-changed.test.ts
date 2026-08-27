@@ -867,10 +867,12 @@ test("states the window price movement was actually compared over", async () => 
   );
 });
 
-test("confirms coverage when the compared window reaches back past the request", async () => {
+test("confirms coverage when the compared window spans the whole reported window", async () => {
   const client = priceOnlyClient(
     priceChangesResponse([], { start: "2026-08-17", end: "2026-08-26" }),
   );
+  // With history unavailable the report's `through` falls back to the manifest
+  // window end, which the fixture sets inside the compared span.
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
   if (result.priceChanges.status !== "available") assert.fail("expected prices");
@@ -887,6 +889,52 @@ test("reports unknown coverage rather than assuming it, when the window has no d
   if (result.priceChanges.status !== "available") assert.fail("expected prices");
   assert.equal(result.priceChanges.coversRequestedWindow, null);
   assert.match(result.priceChanges.windowNote, /unknown/i);
+});
+
+test("an undated end is unknown coverage, not adequate coverage", async () => {
+  // publicWindowSchema permits an open end. A start that reaches back far
+  // enough says nothing about how far forward the comparison ran.
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: "2026-08-17", end: null }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.coversRequestedWindow, null);
+  assert.match(result.priceChanges.windowNote, /unknown/i);
+});
+
+test("a price comparison that stops short of the report end is not coverage", async () => {
+  // The catalogue collector lags. When it does, the report runs through a date
+  // the price comparison never reached, and the days in between went unchecked.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [historyRow("a", 1, "10")] },
+    { date: "2026-08-27", complete: true, rows: [historyRow("a", 1, "10")] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(
+          priceChangesResponse([], { start: "2026-08-17", end: "2026-08-20" }),
+        );
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.through, "2026-08-27");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.coversRequestedWindow, false);
+  assert.match(result.priceChanges.windowNote, /2026-08-27/);
+  assert.ok(result.warnings.some((warning) => /narrower/.test(warning)));
 });
 
 test("an unreadable price source degrades the whole report, never leaves it ok", async () => {
