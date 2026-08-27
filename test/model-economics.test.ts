@@ -640,3 +640,58 @@ test("returns a structured error when the cross-provider catalogue fails", async
 test("bounds discount enrichment", () => {
   assert.equal(DISCOUNT_ENRICHMENT_LIMIT, 12);
 });
+
+test("announces a provider whose data is days older than the rest", async () => {
+  const stale = (id: string, provider: "groq" | "openrouter", confirmed: string) => ({
+    ...liveModel({ provider, id }),
+    lastConfirmedAt: confirmed,
+    lastSeenAt: confirmed,
+  });
+  const client = stubClient({
+    live: [
+      stale("or/fresh", "openrouter", "2026-08-26T06:00:00.000Z"),
+      stale("groq/old", "groq", "2026-08-24T00:00:00.000Z"),
+    ],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  const joined = output.warnings.join(" ");
+  // Absolute staleness must be stated, not left in a field for the caller to
+  // notice: an answer that mixes 1-day-old and 3-day-old data looks uniformly
+  // current unless it says otherwise.
+  assert.match(joined, /Groq data was last confirmed 3 days ago/);
+  assert.match(joined, /Treat as last known, not current/);
+  // The fresh provider is not warned about.
+  assert.doesNotMatch(joined, /OpenRouter data was last confirmed/);
+});
+
+test("flags a provider that is merely a day behind the freshest one", async () => {
+  const at = (id: string, provider: "groq" | "openrouter", confirmed: string) => ({
+    ...liveModel({ provider, id }),
+    lastConfirmedAt: confirmed,
+    lastSeenAt: confirmed,
+  });
+  const client = stubClient({
+    live: [
+      at("or/fresh", "openrouter", "2026-08-27T00:00:00.000Z"),
+      at("groq/behind", "groq", "2026-08-25T20:00:00.000Z"),
+    ],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  // Under two days absolute, but a day behind the freshest -- the comparison is
+  // still not like-for-like in time, and says so.
+  assert.match(output.warnings.join(" "), /hours older than the freshest provider/);
+});

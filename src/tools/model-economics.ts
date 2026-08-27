@@ -773,6 +773,37 @@ export async function runModelEconomics(
     }
   }
 
+  // A provider whose catalogue was last confirmed days ago sitting silently
+  // beside one confirmed hours ago is the failure this tool exists to prevent:
+  // the answer looks uniformly current when part of it is not. Upstream does not
+  // publish collector health for every provider, so age is derived here from the
+  // freshest row each provider contributed, and stated rather than left in a
+  // field for the caller to notice.
+  const asOfMs = Date.parse(asOfIso);
+  const ages = providerReports
+    .filter((report) => report.lastConfirmedAt !== null)
+    .map((report) => ({
+      report,
+      ageHours:
+        (asOfMs - Date.parse(report.lastConfirmedAt as string)) / 3_600_000,
+    }))
+    .filter((entry) => Number.isFinite(entry.ageHours));
+  const freshest = Math.min(...ages.map((entry) => entry.ageHours));
+  for (const { report, ageHours } of ages) {
+    const days = Math.floor(ageHours / 24);
+    // Absolute staleness, and staleness relative to the freshest provider in the
+    // same answer. The second matters even when neither is old in absolute terms.
+    if (days >= 2) {
+      warnings.push(
+        `${report.displayName} data was last confirmed ${days} day${days === 1 ? "" : "s"} ago (${report.lastConfirmedAt}); its models and prices may have changed since. Treat as last known, not current.`,
+      );
+    } else if (Number.isFinite(freshest) && ageHours - freshest >= 24) {
+      warnings.push(
+        `${report.displayName} data is ${Math.floor(ageHours - freshest)} hours older than the freshest provider in this answer (${report.lastConfirmedAt}), so the comparison is not like-for-like in time.`,
+      );
+    }
+  }
+
   const priceComparable = matched.filter((model) => model.priceComparable).length;
   const priceUnknown = matchedBeforeLimit - priceComparable;
   if (priceUnknown > 0) {
