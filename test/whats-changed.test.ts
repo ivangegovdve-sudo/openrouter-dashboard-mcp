@@ -1278,3 +1278,32 @@ test("the tool description warns a caller off the ok branch", () => {
   assert.match(whatsChangedToolDescription, /always partial rather than ok/i);
   assert.match(whatsChangedToolDescription, /cannot be established/i);
 });
+
+test("both counts are floors on a capped mixed page, not just the paid one", async () => {
+  // "At least 1 model stopped being free, alongside 1 other price move" binds
+  // the floor to the first number only; the second reads as exact. Unread rows
+  // can be either kind.
+  const client = priceOnlyClient(
+    priceChangesResponse(
+      [
+        becamePaidRow,
+        {
+          modelId: "vendor/cheaper",
+          transition: "price_decreased",
+          basePromptPrice: "0.000003",
+          baseCompletionPrice: "0.000004",
+          headPromptPrice: "0.000001",
+          headCompletionPrice: "0.000002",
+          wasFree: false,
+          isFree: false,
+        },
+      ],
+      undefined,
+      "price-next+/=opaque",
+    ),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.match(result.summary, /At least 1 model stopped being free/);
+  assert.match(result.summary, /at least 1 other price move/);
+});

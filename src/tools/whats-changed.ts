@@ -518,10 +518,15 @@ function priceSummarySentence(
       ? `${moves}. None of the rows read was a model leaving free, but the price comparison was capped at ${priceChanges.cap.requestedLimit} rows and an unread row still could be.`
       : `${moves}, none of them a model leaving free.`;
   }
+  // The floor has to bind to both numbers. "At least 2 models stopped being
+  // free, alongside 3 other price moves" reads the 3 as exact, and an unread
+  // row can be either kind.
   const alongside =
     other === 0
       ? ""
-      : `, alongside ${other} other price move${other === 1 ? "" : "s"}`;
+      : `, alongside ${capped ? "at least " : ""}${other} other price move${
+          other === 1 ? "" : "s"
+        }`;
   return `${floor}${paid} model${paid === 1 ? "" : "s"} stopped being free in ${label}${alongside}${tail}`;
 }
 
