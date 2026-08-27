@@ -848,96 +848,6 @@ test("never says nothing changed while a model started charging", async () => {
   assert.match(result.summary, /stopped being free/);
 });
 
-test("states the window price movement was actually compared over", async () => {
-  const client = priceOnlyClient(
-    priceChangesResponse([], { start: "2026-08-26", end: "2026-08-26" }),
-  );
-  const result = await runWhatsChanged({ since: "2026-08-01", limit: 5 }, { client });
-  if (result.status === "error") assert.fail("expected a report");
-  assert.equal(result.priceChanges.status, "available");
-  if (result.priceChanges.status !== "available") return;
-
-  assert.equal(result.priceChanges.observedWindow.start, "2026-08-26");
-  assert.equal(result.priceChanges.observedWindow.end, "2026-08-26");
-  // The caller asked about August. The producer compared one day of it.
-  assert.equal(result.priceChanges.coversRequestedWindow, false);
-  assert.match(result.priceChanges.windowNote, /not evidence/);
-  assert.ok(
-    result.warnings.some((warning) => /narrower/.test(warning)),
-    "a narrower price window must be warned about, not left in a field",
-  );
-});
-
-test("confirms coverage when the compared window spans the whole reported window", async () => {
-  const client = priceOnlyClient(
-    priceChangesResponse([], { start: "2026-08-17", end: "2026-08-26" }),
-  );
-  // With history unavailable the report's `through` falls back to the manifest
-  // window end, which the fixture sets inside the compared span.
-  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
-  if (result.status === "error") assert.fail("expected a report");
-  if (result.priceChanges.status !== "available") assert.fail("expected prices");
-  assert.equal(result.priceChanges.coversRequestedWindow, true);
-  assert.ok(!result.warnings.some((warning) => /narrower/.test(warning)));
-});
-
-test("reports unknown coverage rather than assuming it, when the window has no dates", async () => {
-  const client = priceOnlyClient(
-    priceChangesResponse([], { start: null, end: null }),
-  );
-  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
-  if (result.status === "error") assert.fail("expected a report");
-  if (result.priceChanges.status !== "available") assert.fail("expected prices");
-  assert.equal(result.priceChanges.coversRequestedWindow, null);
-  assert.match(result.priceChanges.windowNote, /unknown/i);
-});
-
-test("an undated end is unknown coverage, not adequate coverage", async () => {
-  // publicWindowSchema permits an open end. A start that reaches back far
-  // enough says nothing about how far forward the comparison ran.
-  const client = priceOnlyClient(
-    priceChangesResponse([], { start: "2026-08-17", end: null }),
-  );
-  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
-  if (result.status === "error") assert.fail("expected a report");
-  if (result.priceChanges.status !== "available") assert.fail("expected prices");
-  assert.equal(result.priceChanges.coversRequestedWindow, null);
-  assert.match(result.priceChanges.windowNote, /unknown/i);
-});
-
-test("a price comparison that stops short of the report end is not coverage", async () => {
-  // The catalogue collector lags. When it does, the report runs through a date
-  // the price comparison never reached, and the days in between went unchecked.
-  const history = historyResponse([
-    { date: "2026-08-18", complete: true, rows: [historyRow("a", 1, "10")] },
-    { date: "2026-08-27", complete: true, rows: [historyRow("a", 1, "10")] },
-  ]);
-  const client: DashboardClient = {
-    async get(path, _query, schema) {
-      if (path === "/api/public/v2/price-changes") {
-        return schema.parse(
-          priceChangesResponse([], { start: "2026-08-17", end: "2026-08-20" }),
-        );
-      }
-      if (path === manifestEndpoint) {
-        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
-      }
-      if (path === historyEndpoint) return schema.parse(history);
-      throw new DashboardRequestError("http_error", "unavailable", {
-        retryable: true,
-        status: 503,
-      });
-    },
-  };
-  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
-  if (result.status === "error") assert.fail("expected a report");
-  assert.equal(result.through, "2026-08-27");
-  if (result.priceChanges.status !== "available") assert.fail("expected prices");
-  assert.equal(result.priceChanges.coversRequestedWindow, false);
-  assert.match(result.priceChanges.windowNote, /2026-08-27/);
-  assert.ok(result.warnings.some((warning) => /narrower/.test(warning)));
-});
-
 test("an unreadable price source degrades the whole report, never leaves it ok", async () => {
   const client: DashboardClient = {
     async get(path, _query, schema) {
@@ -994,7 +904,10 @@ test("counts each comparison window separately instead of summing across them", 
   };
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
-  assert.match(result.summary, /1 model stopped being free in 2026-08-26/);
+  assert.match(
+    result.summary,
+    /1 model stopped being free in the comparison ending 2026-08-26/,
+  );
   assert.match(result.summary, /1 other change found since 2026-08-18/);
   // No merged total: the two windows are never added together.
   assert.doesNotMatch(result.summary, /2 changes/);
@@ -1054,7 +967,7 @@ test("an incomplete scan cannot report no changes while a price moved", async ()
   // The price move is stated, and the window sentence says "no other changes"
   // rather than "no changes" -- which alongside a real price move would read as
   // an all-clear the evidence does not support.
-  assert.match(result.summary, /1 price move in 2026-08-26/);
+  assert.match(result.summary, /1 price move in the comparison ending 2026-08-26/);
   assert.match(result.summary, /No other changes were found/);
   assert.doesNotMatch(result.summary, /(^|\. )No changes were found/);
 });
@@ -1123,4 +1036,104 @@ test("an uncapped page may state the categorical zero, because it read everythin
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
   assert.match(result.summary, /none of them a model leaving free/);
+});
+
+test("never claims complete coverage, because the base run's date is not published", async () => {
+  // The envelope window is the HEAD publication date, not the compared span:
+  // measured against production, start === end === the head run's date while
+  // baseRunId !== headRunId on a daily cadence. So the early edge of the
+  // comparison is unknowable from this response, and complete coverage is a
+  // claim the payload cannot support.
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: "2026-08-26", end: "2026-08-26" }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.headPublishedOn, "2026-08-26");
+  assert.equal(result.priceChanges.coverage.status, "indeterminate");
+  assert.match(result.priceChanges.coverage.reason, /run id|not published/i);
+});
+
+test("a head run older than the report end is definitively incomplete", async () => {
+  // One edge IS knowable. Nothing after the head run was examined, so a head
+  // publication before `through` proves the tail of the window went unchecked.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [] },
+    { date: "2026-08-27", complete: true, rows: [] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(
+          priceChangesResponse([], { start: "2026-08-20", end: "2026-08-20" }),
+        );
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [manifestEndpoint, historyEndpoint],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.through, "2026-08-27");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.coverage.status, "incomplete");
+  assert.match(result.priceChanges.coverage.reason, /2026-08-27/);
+  assert.ok(result.warnings.some((w) => /price/i.test(w) && /2026-08-20/.test(w)));
+});
+
+test("an undated head publication is indeterminate, never complete", async () => {
+  const client = priceOnlyClient(
+    priceChangesResponse([], { start: null, end: null }),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.headPublishedOn, null);
+  assert.equal(result.priceChanges.coverage.status, "indeterminate");
+});
+
+test("an inverted requested window is reported, not silently satisfied", async () => {
+  // `since` is caller-supplied and `through` is derived, so a since after
+  // through describes no interval at all. Every window-scoped section then
+  // reports nothing, which must not read as nothing having happened.
+  const history = historyResponse([
+    { date: "2026-08-18", complete: true, rows: [] },
+    { date: "2026-08-19", complete: true, rows: [] },
+  ]);
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") {
+        return schema.parse(priceChangesResponse([]));
+      }
+      if (path === manifestEndpoint) {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [manifestEndpoint, historyEndpoint],
+        });
+      }
+      if (path === historyEndpoint) return schema.parse(history);
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2027-01-01", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.ok(
+    result.warnings.some((w) => /inverted|no interval|empty window/i.test(w)),
+    "an inverted window must be stated",
+  );
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.notEqual(result.priceChanges.coverage.status, "complete");
 });

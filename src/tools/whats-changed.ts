@@ -171,11 +171,21 @@ const priceChangeItemSchema = publicPriceChangeSchema.extend({
  * one of them would be a false all-clear -- the exact failure this section
  * exists to prevent.
  */
-const priceObservedWindowSchema = z
+/**
+ * What can honestly be said about how much of the caller's window the price
+ * comparison examined.
+ *
+ * There is no `complete`. The producer identifies its comparison by run id and
+ * publishes no date for either run, so the early edge is unknowable and full
+ * coverage can never be established from this response. `incomplete` is the one
+ * verdict the payload does support: nothing after the head run was examined, so
+ * a head publication earlier than the report's `through` proves the tail of the
+ * window went unchecked.
+ */
+const priceCoverageSchema = z
   .object({
-    start: z.string().date().nullable(),
-    end: z.string().date().nullable(),
-    basis: z.enum(["source_meta", "query", "derived", "observed", "unknown"]),
+    status: z.enum(["incomplete", "indeterminate"]),
+    reason: z.string(),
   })
   .strict();
 
@@ -188,20 +198,21 @@ const priceChangesSchema = z.discriminatedUnion("status", [
       /** Every other movement, including models that became free. */
       otherChanges: z.array(priceChangeItemSchema),
       /**
-       * The window the producer actually compared, which is the two most recent
-       * archived runs and not the window the caller asked about. Carried because
-       * an empty `becamePaid` read against an unstated window is a false
-       * all-clear -- the one answer this section exists to prevent.
+       * The date the head run of this comparison was published -- the newest
+       * catalogue state examined, and the only date the response carries.
+       *
+       * Named for what it is. It comes from the response envelope's `window`,
+       * which is NOT the compared span: measured against production, that window
+       * has `start === end === ` the head run's publication date while
+       * `baseRunId !== headRunId` on a daily collection cadence. Treating it as
+       * the span reported a multi-day comparison as a single day.
        */
-      observedWindow: priceObservedWindowSchema,
+      headPublishedOn: z.string().date().nullable(),
       /**
-       * Whether the compared window reaches back at least as far as the caller's
-       * `since`. Null when either side has no date, because unknown coverage is
-       * not the same as adequate coverage.
+       * How much of the caller's window this comparison can be shown to cover.
+       * Never `complete` -- see priceCoverageSchema.
        */
-      coversRequestedWindow: z.boolean().nullable(),
-      /** The same fact in words, for a reader who skips the booleans. */
-      windowNote: z.string(),
+      coverage: priceCoverageSchema,
       comparison: z
         .object({ baseRunId: z.string(), headRunId: z.string() })
         .strict(),
@@ -368,15 +379,10 @@ async function readPriceChanges(
       status: "available",
       becamePaid: rows.filter((row) => row.transition === "became_paid"),
       otherChanges: rows.filter((row) => row.transition !== "became_paid"),
-      observedWindow: {
-        start: response.window.start,
-        end: response.window.end,
-        basis: response.window.basis,
-      },
-      // Coverage is decided against the caller's window, which is not known
-      // here. Filled in by annotatePriceCoverage once the window is resolved.
-      coversRequestedWindow: null,
-      windowNote: "",
+      headPublishedOn: response.window.end,
+      // Decided against the caller's window, which is not known here. Filled in
+      // by annotatePriceCoverage once the report's window is resolved.
+      coverage: { status: "indeterminate", reason: "" },
       comparison: response.comparison,
       cap: {
         requestedLimit: PRICE_CHANGES_LIMIT,
@@ -397,20 +403,19 @@ async function readPriceChanges(
 }
 
 /**
- * Decide, and say in words, whether the compared price window spans the window
- * the caller asked about -- at both ends.
+ * Say what can be shown about how much of the caller's window the price
+ * comparison examined -- and refuse to say more.
  *
- * The upstream route takes no window parameter; it always compares the two most
- * recent archived runs. So a caller asking "what changed since the 1st" gets a
- * price section that looked at one day of it. Saying so is the whole job: an
- * empty list over a narrower window is not an all-clear over a wider one, and
- * nothing else in the response distinguishes the two.
+ * The upstream route takes no window parameter; it compares the two most recent
+ * archived runs and identifies them by run id alone. Neither run carries a
+ * date, so the early edge of the comparison is unknowable and complete coverage
+ * cannot be established. One edge is knowable: nothing after the head run was
+ * examined, so a head publication earlier than the report's `through` proves
+ * the tail of the window went unchecked -- the days a reader most assumes are
+ * covered, and the case a lagging collector produces.
  *
- * Both ends matter, and for different reasons. A late `start` leaves the early
- * part of the window unchecked. An `end` short of the report's `through` is the
- * collector lagging, which leaves the most recent days unchecked -- the days a
- * reader most expects to be covered. An undated end is neither: it is unknown,
- * and unknown coverage is not adequate coverage.
+ * Everything else is `indeterminate`, which is not a softer way of saying fine.
+ * It means an empty result here is not evidence about the caller's window.
  */
 function annotatePriceCoverage(
   priceChanges: z.infer<typeof priceChangesSchema>,
@@ -418,47 +423,40 @@ function annotatePriceCoverage(
   through: string | null,
 ): z.infer<typeof priceChangesSchema> {
   if (priceChanges.status !== "available") return priceChanges;
-  const { start, end } = priceChanges.observedWindow;
-  const label =
-    start === null || end === null
-      ? "a window the producer did not date"
-      : start === end
-        ? start
-        : `${start} to ${end}`;
-  if (start === null || end === null || since === null || through === null) {
+  const head = priceChanges.headPublishedOn;
+  const unknownSpan =
+    "The producer identifies this comparison by run id and publishes no date for either run, so how far back it reaches is not published.";
+  if (head !== null && through !== null && head < through) {
     return {
       ...priceChanges,
-      coversRequestedWindow: null,
-      windowNote: `Price movement was compared over ${label}. Coverage of the requested window is unknown, so an empty result is not evidence that nothing started charging.`,
+      coverage: {
+        status: "incomplete",
+        reason: `The newest catalogue state compared was published ${head}, but this report runs through ${through}, so nothing between those dates was examined for price movement. ${unknownSpan} An empty result is not evidence that nothing started charging.`,
+      },
     };
   }
-  if (start <= since && end >= through) {
-    return {
-      ...priceChanges,
-      coversRequestedWindow: true,
-      windowNote: `Price movement was compared over ${label}, which spans the reported window ${since} to ${through}.`,
-    };
-  }
-  const shortfall =
-    start > since && end < through
-      ? `it starts after ${since} and stops before ${through}`
-      : start > since
-        ? `it starts after ${since}`
-        : `it stops before ${through}`;
+  const requested =
+    since === null || through === null
+      ? "the requested window"
+      : `${since} to ${through}`;
   return {
     ...priceChanges,
-    coversRequestedWindow: false,
-    windowNote: `Price movement was compared only over ${label}, which does not span the reported window ${since} to ${through}: ${shortfall}. An empty result here is not evidence that nothing started charging in the days it did not cover.`,
+    coverage: {
+      status: "indeterminate",
+      reason: `${unknownSpan} Whether it covers ${requested} cannot be determined from this response, so an empty result is not evidence that nothing started charging.`,
+    },
   };
 }
 
-/** The compared window in words, for a sentence rather than a field. */
-function priceWindowLabel(
-  observed: z.infer<typeof priceObservedWindowSchema>,
-): string {
-  const { start, end } = observed;
-  if (start === null || end === null) return "the latest catalogue comparison";
-  return start === end ? start : `${start} to ${end}`;
+/**
+ * The comparison in words. Only the head date is known, so the phrase claims
+ * only the end of it -- "ending 2026-08-26", never "over 2026-08-26", which
+ * would assert a single-day span the response does not support.
+ */
+function priceComparisonLabel(headPublishedOn: string | null): string {
+  return headPublishedOn === null
+    ? "the producer's latest two-run comparison"
+    : `the comparison ending ${headPublishedOn}`;
 }
 
 /** The one sentence a degraded or narrow price section owes the summary. */
@@ -474,7 +472,7 @@ function priceSummarySentence(
   const paid = priceChanges.becamePaid.length;
   const other = priceChanges.otherChanges.length;
   if (paid === 0 && other === 0) return null;
-  const label = priceWindowLabel(priceChanges.observedWindow);
+  const label = priceComparisonLabel(priceChanges.headPublishedOn);
   // A capped page holds the first N rows of a mixed collection. Its length is a
   // floor, not a total, and this sentence gets relayed word for word.
   const capped = priceChanges.cap.capped;
@@ -923,16 +921,22 @@ export async function runWhatsChanged(
       effectiveSince,
       through,
     );
-    if (
-      annotatedPrices.status === "available" &&
-      annotatedPrices.coversRequestedWindow !== true
-    ) {
-      // A field nobody reads is not a disclosure. The narrower window belongs
-      // in the warnings a client surfaces alongside the answer.
+    // A field nobody reads is not a disclosure. Coverage is never established
+    // here, so this warning is never suppressed -- it is surfaced alongside the
+    // answer every time, in the words the section itself used.
+    if (annotatedPrices.status === "available") {
       warnings.push(
-        annotatedPrices.coversRequestedWindow === false
-          ? `Price movement covers a narrower window than requested: ${annotatedPrices.windowNote}`
-          : `Price movement coverage is unknown: ${annotatedPrices.windowNote}`,
+        annotatedPrices.coverage.status === "incomplete"
+          ? `Price movement did not cover the whole reported window: ${annotatedPrices.coverage.reason}`
+          : `Price movement coverage could not be determined: ${annotatedPrices.coverage.reason}`,
+      );
+    }
+    // `since` is caller-supplied and `through` is derived, so the two can cross.
+    // Every window-scoped section then reports nothing, and nothing is exactly
+    // what a satisfied query looks like.
+    if (through < effectiveSince) {
+      warnings.push(
+        `The requested window is inverted: since ${effectiveSince} is later than ${through}, the latest evidence available, so it describes no interval and the window-scoped sections below cannot report anything. This is not evidence that nothing changed.`,
       );
     }
     // Price movement counts as a change. Excluding it is how a report ends up

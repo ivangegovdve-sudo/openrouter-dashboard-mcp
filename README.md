@@ -151,33 +151,46 @@ A free model does not announce itself when it starts charging. Its id does not c
     }
   ],
   "otherChanges": [],
-  "observedWindow": { "start": "2026-08-26", "end": "2026-08-26", "basis": "derived" },
-  "coversRequestedWindow": false,
-  "windowNote": "Price movement was compared only over 2026-08-26, which does
-                 not span the reported window 2026-08-18 to 2026-08-25: it
-                 starts after 2026-08-18. An empty result here is not evidence
-                 that nothing started charging in the days it did not cover.",
+  "headPublishedOn": "2026-08-26",
+  "coverage": {
+    "status": "indeterminate",
+    "reason": "The producer identifies this comparison by run id and publishes no
+               date for either run, so how far back it reaches is not published.
+               Whether it covers 2026-08-18 to 2026-08-25 cannot be determined
+               from this response, so an empty result is not evidence that
+               nothing started charging."
+  },
   "comparison": { "baseRunId": "…", "headRunId": "…" }
 }
 ```
 
-The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh.
+The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
 
 ### The window you asked for is not the window prices were compared over
 
-Every other section of `dashboard_whats_changed` honours the `since` you pass. Price movement cannot: the public route takes no window parameter and always compares the two most recent archived runs. So a caller asking *what changed since the 1st* gets a price section that looked at one day of it, and an empty `becamePaid` inside a month-wide response reads as a month-wide all-clear it never was.
+Every other section of `dashboard_whats_changed` honours the `since` you pass. Price movement cannot: the public route takes no window parameter and always compares the two most recent archived runs. An empty `becamePaid` inside a month-wide response would otherwise read as a month-wide all-clear it never was.
 
-Since 0.4.0 the section states its own window instead. `observedWindow` carries the dates actually compared, and `coversRequestedWindow` says whether they span the reported window **at both ends** — `null` when either observed date is missing, because unknown coverage is not adequate coverage. Both ends matter for different reasons: a late `start` leaves the early part of the window unchecked, while an `end` short of the report's `through` is the collector lagging, which leaves the most recent days unchecked — the days a reader most expects to be covered. `windowNote` says which end fell short, in a sentence. When coverage falls short it is also pushed into the response `warnings`, because a field nobody reads is not a disclosure. Measured against production on 2026-08-27: a request `since: 2026-08-18` returned a price comparison spanning `2026-08-26` alone.
+**And the comparison's span is not published.** The route identifies its two runs by id and carries no date for either. The response envelope does have a `window`, but that is the *head publication date*, not the span — measured against production on 2026-08-27, `window.start === window.end === 2026-08-26` while `baseRunId !== headRunId` on a daily collection cadence, so the real comparison covers at least two days and the envelope calls it one. Reading it as the span understates the comparison and invents a coverage answer.
 
-**The summary can no longer read as an all-clear while prices moved.** It leads with the money — `1 model stopped being free in 2026-08-26` — and price movement with no free-to-paid row still gets its own sentence rather than passing unmentioned. Where the summary used to say *no changes* and *nothing changed*, it says *no other changes* and *nothing else changed* whenever the price section reports movement.
+So the section reports only what the payload supports:
 
-**The two counts are never added together.** Price rows come from the producer's comparison, not from your window, so a single total would state a number for a window some of the counted items sit outside. Each sentence carries its own count and its own window instead.
+- **`headPublishedOn`** — the newest catalogue state examined, named for what it is.
+- **`coverage.status`** is `incomplete` or `indeterminate`, and **never `complete`.** Complete coverage would require the base run's date, which is not published. `incomplete` is the one verdict the response does support: nothing after the head run was examined, so a `headPublishedOn` earlier than the report's `through` proves the tail of your window went unchecked — the lagging-collector case, and the days a reader most assumes are covered.
+- **`coverage.reason`** says which of the two it is and why, and the same sentence is pushed into the response `warnings` every time, because a field nobody reads is not a disclosure.
+
+`indeterminate` is not a softer way of saying fine. It means an empty result is not evidence about your window.
+
+**An inverted window is stated, not silently satisfied.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section then reports nothing — which is exactly what a satisfied query looks like — so the report says the window describes no interval.
+
+**The summary can no longer read as an all-clear while prices moved.** It leads with the money — `1 model stopped being free in the comparison ending 2026-08-26` — and price movement with no free-to-paid row still gets its own sentence rather than passing unmentioned. Where the summary used to say *no changes* and *nothing changed*, it says *no other changes* and *nothing else changed* whenever the price section reports movement.
+
+**The two counts are never added together.** Price rows come from the producer's comparison, not from your window, so a single total would state a number for a window some of the counted items sit outside. Each sentence carries its own count and its own comparison instead.
 
 **A capped price page is a floor, not a total.** `/price-changes` paginates and the section reads one page of 100 mixed rows, so when `cap.capped` is true the counts are qualified — `At least 2 models stopped being free …, and the price comparison was capped at 100 rows with more unread`. A capped page also may not rule the transition *out*: where an uncapped page says `none of them a model leaving free`, a capped one says `None of the rows read was a model leaving free, but … an unread row still could be`. The categorical zero is the expensive claim here, and only a complete read earns it.
 
-**A price section that failed to read degrades the report.** A `whats_changed` whose price section is `unavailable` or `unsupported_by_public_api` returns `status: "partial"`, never `"ok"`, and the summary says the failure is not evidence that nothing started charging. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
+**A price section that failed to read degrades the report.** A `whats_changed` whose price section is `unavailable` or `unsupported_by_public_api` returns `status: "partial"`, never `"ok"`, and the summary says the failure is not evidence that nothing started charging.
 
-**Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
+**Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free in what was compared. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
 
 Only models present in **both** runs are compared. A model that appeared or vanished is a different question, answered by the appearance and disappearance sections — folding it in here would report a brand-new model as having started charging.
 
