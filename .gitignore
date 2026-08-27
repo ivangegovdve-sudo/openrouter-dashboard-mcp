@@ -5,3 +5,4 @@ coverage/
 verification/raw/
 *.log
 open-dashboard-mcp-*.tgz
+graphify-out/

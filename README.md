@@ -120,7 +120,7 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | `dashboard_key_inventory` | Report configured OpenRouter, Groq and Cerebras keys by Secret Manager name: liveness for all three, spend and ceiling for OpenRouter. Opt-in; read-only. |
 | `dashboard_resolve_model` | Resolve bounded, evidence-backed model fallbacks from intent and capability constraints. |
 | `dashboard_model_status` | Check an exact model id, lifecycle evidence, and bounded suggestions. |
-| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. |
+| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. Price movement states the window it was actually compared over. |
 | `dashboard_free_models` | List usable free models and public frontier evidence without treating unknown prices as free. |
 | `dashboard_usage_leaders` | Compare bounded public model/app usage and latest complete app-model evidence. |
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
@@ -151,13 +151,56 @@ A free model does not announce itself when it starts charging. Its id does not c
     }
   ],
   "otherChanges": [],
+  "headPublishedOn": "2026-08-26",
+  "coverage": {
+    "status": "indeterminate",
+    "reason": "The producer identifies this comparison by run id and publishes no
+               date for either run, so how far back it reaches is not published.
+               Whether it covers 2026-08-18 to 2026-08-25 cannot be determined
+               from this response, so an empty result is not evidence that
+               nothing started charging."
+  },
   "comparison": { "baseRunId": "…", "headRunId": "…" }
 }
 ```
 
 The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
 
-**Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
+### The window you asked for is not the window prices were compared over
+
+Every other section of `dashboard_whats_changed` honours the `since` you pass. Price movement cannot: the public route takes no window parameter and always compares the two most recent archived runs. An empty `becamePaid` inside a month-wide response would otherwise read as a month-wide all-clear it never was.
+
+**And the comparison's span is not published.** The route identifies its two runs by id and carries no date for either. The response envelope does have a `window`, but that is the *head publication date*, not the span — measured against production on 2026-08-27, `window.start === window.end === 2026-08-26` while `baseRunId !== headRunId` on a daily collection cadence, so the real comparison covers at least two days and the envelope calls it one. Reading it as the span understates the comparison and invents a coverage answer.
+
+So the section reports only what the payload supports:
+
+- **`headPublishedOn`** — the newest catalogue state examined, named for what it is.
+- **`coverage.status`** is `incomplete` or `indeterminate`, and **never `complete`.** Complete coverage would require the base run's date, which is not published. `incomplete` is the one verdict the response does support: nothing after the head run was examined, so a `headPublishedOn` earlier than the report's `through` proves the tail of your window went unchecked — the lagging-collector case, and the days a reader most assumes are covered.
+- **`coverage.reason`** says which of the two it is and why, and the same sentence is pushed into the response `warnings` every time, because a field nobody reads is not a disclosure.
+
+`indeterminate` is not a softer way of saying fine. It means an empty result is not evidence about your window.
+
+**So `dashboard_whats_changed` does not return `"ok"`.** While the route stays undated, an available price section can never establish that it covered what you asked about, and a status of `ok` beside `Nothing changed` would claim it did. The tool returns `partial`, and the summary carries the caveat rather than leaving it to a warning — because the summary is the line a caller relays:
+
+> 5 changes found in scanned evidence since 2026-08-18; the comparison is incomplete. **Price movement could not be shown to cover 2026-08-18 to 2026-08-25, so this is not an all-clear on models that started charging.**
+
+Measured against production, 2026-08-27.
+
+To be exact about what that costs: **`ok` is unreachable in this version.** A readable price section can never establish coverage, and an unreadable one is degraded — either way a *successful* report is `partial`. Do not write a branch waiting for `ok`. Making it reachable would need the producer to publish dates for the runs it compares *and* this client to read them; neither exists today, and this README will not guess at the shape of either.
+
+This is about successful reports only. A read that fails outright — bad input, or a manifest that cannot be fetched — still returns `status: "error"` with the safe error attached. Handle three: `partial`, `error`, and `ok` for completeness even though nothing produces it.
+
+**An inverted window is an outcome, not a warning.** `since` is yours and `through` is derived from the newest complete bucket, so the two can cross. Every window-scoped section would then report nothing — which is exactly what a satisfied query looks like. A warning beside a normal summary does not fix that, because the summary is the line a caller relays and it would read *Nothing changed since 2027-01-01*. So an inverted range returns `status: "partial"` with the window-scoped sections `unavailable` and a summary that names the inversion. Price movement is independent of your window, so it still reports.
+
+**The summary can no longer read as an all-clear while prices moved.** It leads with the money — `1 model stopped being free in the comparison ending 2026-08-26` — and price movement with no free-to-paid row still gets its own sentence rather than passing unmentioned. Where the summary used to say *no changes* and *nothing changed*, it says *no other changes* and *nothing else changed* whenever the price section reports movement.
+
+**The two counts are never added together.** Price rows come from the producer's comparison, not from your window, so a single total would state a number for a window some of the counted items sit outside. Each sentence carries its own count and its own comparison instead.
+
+**A capped price page is a floor, not a total.** `/price-changes` paginates and the section reads one page of 100 mixed rows, so when `cap.capped` is true **both** counts are qualified, because an unread row can be either kind — `At least 2 models stopped being free …, alongside at least 3 other price moves; the price comparison was capped at 100 rows with more unread`. A capped page also may not rule the transition *out*: where an uncapped page says `none of them a model leaving free`, a capped one says `None of the rows read was a model leaving free, but … an unread row still could be`. The categorical zero is the expensive claim here, and only a complete read earns it.
+
+**A price section that failed to read degrades the report.** A `whats_changed` whose price section is `unavailable` or `unsupported_by_public_api` returns `status: "partial"`, never `"ok"`, and the summary says the failure is not evidence that nothing started charging.
+
+**Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free in what was compared. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
 
 Only models present in **both** runs are compared. A model that appeared or vanished is a different question, answered by the appearance and disappearance sections — folding it in here would report a brand-new model as having started charging.
 
