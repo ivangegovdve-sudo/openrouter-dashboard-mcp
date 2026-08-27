@@ -100,14 +100,27 @@ const KEY_SHAPED = [
  * all-`a`-`f` token is still a token.
  */
 function looksLikeOpaqueToken(value: string): boolean {
-  // Runs of credential-alphabet characters, ignoring surrounding punctuation.
-  for (const run of value.match(/[A-Za-z0-9+/=_-]{20,}/g) ?? []) {
+  // The dot is IN the run alphabet. Leaving it out was a real hole: a run scanner
+  // that breaks on dots never sees `deadbeef.deadbeef.deadbeef.deadbeef` as one
+  // token, and a dotted credential walks straight through.
+  for (const run of value.match(/[A-Za-z0-9+/=_.-]{20,}/g) ?? []) {
     const alphanumeric = run.replace(/[^A-Za-z0-9]/g, "");
     if (alphanumeric.length < 20) continue;
-    // Long hex is a secret whether or not it happens to contain a digit.
-    if (/^[0-9a-f]{20,}$/i.test(alphanumeric)) return true;
-    // Otherwise require the character-class mixing that random tokens have and
-    // hyphenated English labels do not: both cases, or letters plus digits.
+
+    // Long hex is a secret whether or not it happens to contain a digit, and
+    // whatever separators it is broken up by. This is what catches both a raw
+    // 32-character hex token and a UUID.
+    if (/^[0-9a-f]+$/i.test(alphanumeric)) return true;
+
+    // A name is made of words. Two or more separator-delimited segments that are
+    // plain lowercase letters reads as `openrouter-primary-key-2026`, not as a
+    // credential -- and destroying those was the over-redaction complaint.
+    const wordSegments = run
+      .split(/[-_.]+/)
+      .filter((segment) => /^[a-z]{4,}$/.test(segment));
+    if (wordSegments.length >= 2) continue;
+
+    // Otherwise require the character-class mixing that random tokens have.
     const hasDigit = /[0-9]/.test(alphanumeric);
     const mixedCase = /[a-z]/.test(alphanumeric) && /[A-Z]/.test(alphanumeric);
     if (!hasDigit && !mixedCase) continue;
@@ -142,7 +155,9 @@ export function redactKeyShaped(value: string | null): string | null {
  * refused, so an accident fails closed instead of being echoed back.
  */
 export function isPlausibleSecretName(value: string): boolean {
-  if (value.length === 0 || value.length > 64) return false;
+  // 255 is the ceiling both AWS and Google Secret Manager allow; a shorter cap
+  // here would reject names people legitimately use.
+  if (value.length === 0 || value.length > 255) return false;
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(value)) return false;
   // No unbroken alphanumeric run longer than a real word.
   if (/[A-Za-z0-9]{20,}/.test(value)) return false;

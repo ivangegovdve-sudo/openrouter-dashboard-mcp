@@ -710,7 +710,10 @@ export async function runModelEconomics(
             ? "unavailable"
             : "no_discount";
       if (best !== null) modelsDiscounted += 1;
-      if (best === null && endpointsTruncated) modelsTruncated += 1;
+      // Count truncation whenever it happened. A truncated listing that already
+      // yielded a discount still hides pages that might hold a better one, so the
+      // caller needs the same signal.
+      if (endpointsTruncated) modelsTruncated += 1;
     } catch {
       modelsUnobserved += 1;
       model.discountCoverage = "unavailable";

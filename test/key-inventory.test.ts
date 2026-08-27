@@ -426,3 +426,22 @@ test("redacts the opaque shapes that slipped past the first heuristic", () => {
     assert.equal(redactKeyShaped(ok), ok, ok);
   }
 });
+
+test("redacts a dotted credential and keeps a realistic versioned name", () => {
+  // A run scanner that breaks on dots never sees these as one token.
+  assert.match(String(redactKeyShaped("deadbeef.deadbeef.deadbeef.deadbeef")), /redacted/);
+  assert.match(String(redactKeyShaped("Ab3Cd5Ef7Gh9Jk2.Lm4Np6Qr8St0Uv2")), /redacted/);
+  assert.equal(isPlausibleSecretName("deadbeef.deadbeef.deadbeef.deadbeef"), false);
+  assert.equal(isPlausibleSecretName("Ab3Cd5Ef7Gh9Jk2.Lm4Np6Qr8St0Uv2"), false);
+
+  // Names made of words survive, including versioned and long ones.
+  for (const name of [
+    "openrouter-primary-key-2026",
+    "my-groq-key-for-batch-jobs",
+    "openRouterPrimary",
+    "project.openrouter.primary",
+  ]) {
+    assert.equal(redactKeyShaped(name), name, name);
+    assert.equal(isPlausibleSecretName(name), true, name);
+  }
+});
