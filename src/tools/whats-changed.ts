@@ -471,15 +471,25 @@ function priceSummarySentence(
   if (priceChanges.status === "unsupported_by_public_api") {
     return "This deployment does not publish price changes, so nothing here is evidence that no model started charging.";
   }
-  const count = priceChanges.becamePaid.length;
-  if (count === 0) return null;
+  const paid = priceChanges.becamePaid.length;
+  const other = priceChanges.otherChanges.length;
+  if (paid === 0 && other === 0) return null;
   const label = priceWindowLabel(priceChanges.observedWindow);
-  const noun = `model${count === 1 ? "" : "s"}`;
   // A capped page holds the first N rows of a mixed collection. Its length is a
   // floor, not a total, and this sentence gets relayed word for word.
-  return priceChanges.cap.capped
-    ? `At least ${count} ${noun} stopped being free in ${label}, and the price comparison was capped at ${priceChanges.cap.requestedLimit} rows with more unread.`
-    : `${count} ${noun} stopped being free in ${label}.`;
+  const capped = priceChanges.cap.capped;
+  const floor = capped ? "At least " : "";
+  const tail = capped
+    ? `; the price comparison was capped at ${priceChanges.cap.requestedLimit} rows with more unread.`
+    : ".";
+  if (paid === 0) {
+    return `${floor}${other} price move${other === 1 ? "" : "s"} in ${label}, none of them a model leaving free${tail}`;
+  }
+  const alongside =
+    other === 0
+      ? ""
+      : `, alongside ${other} other price move${other === 1 ? "" : "s"}`;
+  return `${floor}${paid} model${paid === 1 ? "" : "s"} stopped being free in ${label}${alongside}${tail}`;
 }
 
 function staleWarning(endpoint: string, stale: boolean): string[] {
@@ -928,41 +938,29 @@ export async function runWhatsChanged(
     const priceDegraded = annotatedPrices.status !== "available";
     const moneySentence = priceSummarySentence(annotatedPrices);
 
-    // Price rows are changes, and they belong in the total every branch prints.
-    // Counting them only well enough to suppress the zero wording still leaves a
-    // reader trusting a number that is short by however many prices moved.
-    const totalCount = changeCount + priceChangeCount;
-    const countedNoun = `change${totalCount === 1 ? "" : "s"}`;
-    // Same floor, one level up: a capped price page makes the whole total a
-    // lower bound, so no branch may print it as exact.
-    const priceCapped =
-      annotatedPrices.status === "available" && annotatedPrices.cap.capped;
-    const countPhrase = priceCapped
-      ? `at least ${totalCount} ${countedNoun}`
-      : `${totalCount} ${countedNoun}`;
-    // Price movement comes from the producer's own comparison, which is usually
-    // a narrower window than the caller asked for. Attributing it to `since`
-    // without saying so would launder the difference the section just declared.
-    const scope =
-      priceChangeCount === 0
-        ? `since ${effectiveSince}`
-        : `since ${effectiveSince}, including ${priceChangeCount} price ${
-            priceChangeCount === 1 ? "move" : "moves"
-          } over ${
-            annotatedPrices.status === "available"
-              ? priceWindowLabel(annotatedPrices.observedWindow)
-              : "the latest catalogue comparison"
-          }`;
+    // Price rows are changes, but they are not changes "since ${effectiveSince}"
+    // -- they come from the producer's own comparison, which is usually a
+    // different window. Adding them into one total states a number for a window
+    // that some of the counted items sit outside, and an `including` clause
+    // naming the other date does not make the total true. So the two counts stay
+    // separate: the price sentence carries its own count and its own window, and
+    // this sentence counts only what was actually scoped to the request.
+    //
+    // What must never happen is this sentence reading as an all-clear while the
+    // price sentence reports movement. `other` and `else` carry that.
+    const hasPriceMovement = priceChangeCount > 0;
+    const other = hasPriceMovement ? "other " : "";
+    const noun = `${other}change${changeCount === 1 ? "" : "s"}`;
 
     let windowSentence: string;
-    if (incompleteCount > 0 && totalCount === 0) {
-      windowSentence = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
+    if (incompleteCount > 0 && changeCount === 0) {
+      windowSentence = `No ${other}changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
     } else if (incompleteCount > 0) {
-      windowSentence = `${countPhrase} found in scanned evidence ${scope}; the comparison is incomplete.`;
-    } else if (totalCount === 0) {
-      windowSentence = `Nothing changed in the available comparisons since ${effectiveSince}.`;
+      windowSentence = `${changeCount} ${noun} found in scanned evidence since ${effectiveSince}; the comparison is incomplete.`;
+    } else if (changeCount === 0) {
+      windowSentence = `Nothing ${hasPriceMovement ? "else " : ""}changed in the available comparisons since ${effectiveSince}.`;
     } else {
-      windowSentence = `${countPhrase.charAt(0).toUpperCase()}${countPhrase.slice(1)} found ${scope}.`;
+      windowSentence = `${changeCount} ${noun} found since ${effectiveSince}.`;
     }
     const summary =
       moneySentence === null

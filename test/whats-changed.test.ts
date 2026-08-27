@@ -967,9 +967,12 @@ test("the tool description does not deny the capability it ships", () => {
   assert.match(description, /free/i);
 });
 
-test("counts price movement in the change total, not just around it", async () => {
-  // One free-to-paid row and one rank movement is two changes. A total that
-  // counts one of them makes the reader trust the smaller number.
+test("counts each comparison window separately instead of summing across them", async () => {
+  // A price row and a rank movement are both changes, but they are not changes
+  // over the same window. One total covering both states a number for a window
+  // some of the counted items sit outside, so each count keeps its own window
+  // -- and neither sentence may read as an all-clear while the other reports
+  // movement.
   const history = historyResponse([
     { date: "2026-08-18", complete: true, rows: [historyRow("m/one", 2, "10")] },
     { date: "2026-08-19", complete: true, rows: [historyRow("m/one", 1, "20")] },
@@ -991,8 +994,10 @@ test("counts price movement in the change total, not just around it", async () =
   };
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
-  assert.match(result.summary, /stopped being free/);
-  assert.match(result.summary, /2 changes found/);
+  assert.match(result.summary, /1 model stopped being free in 2026-08-26/);
+  assert.match(result.summary, /1 other change found since 2026-08-18/);
+  // No merged total: the two windows are never added together.
+  assert.doesNotMatch(result.summary, /2 changes/);
 });
 
 test("an incomplete scan cannot report no changes while a price moved", async () => {
@@ -1046,8 +1051,12 @@ test("an incomplete scan cannot report no changes while a price moved", async ()
   };
   const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
   if (result.status === "error") assert.fail("expected a report");
-  assert.doesNotMatch(result.summary, /No changes were found/);
-  assert.match(result.summary, /1 change found/);
+  // The price move is stated, and the window sentence says "no other changes"
+  // rather than "no changes" -- which alongside a real price move would read as
+  // an all-clear the evidence does not support.
+  assert.match(result.summary, /1 price move in 2026-08-26/);
+  assert.match(result.summary, /No other changes were found/);
+  assert.doesNotMatch(result.summary, /(^|\. )No changes were found/);
 });
 
 test("a capped price page cannot state an exact free-to-paid count", async () => {
