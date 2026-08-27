@@ -474,7 +474,12 @@ function priceSummarySentence(
   const count = priceChanges.becamePaid.length;
   if (count === 0) return null;
   const label = priceWindowLabel(priceChanges.observedWindow);
-  return `${count} model${count === 1 ? "" : "s"} stopped being free in ${label}.`;
+  const noun = `model${count === 1 ? "" : "s"}`;
+  // A capped page holds the first N rows of a mixed collection. Its length is a
+  // floor, not a total, and this sentence gets relayed word for word.
+  return priceChanges.cap.capped
+    ? `At least ${count} ${noun} stopped being free in ${label}, and the price comparison was capped at ${priceChanges.cap.requestedLimit} rows with more unread.`
+    : `${count} ${noun} stopped being free in ${label}.`;
 }
 
 function staleWarning(endpoint: string, stale: boolean): string[] {
@@ -928,6 +933,13 @@ export async function runWhatsChanged(
     // reader trusting a number that is short by however many prices moved.
     const totalCount = changeCount + priceChangeCount;
     const countedNoun = `change${totalCount === 1 ? "" : "s"}`;
+    // Same floor, one level up: a capped price page makes the whole total a
+    // lower bound, so no branch may print it as exact.
+    const priceCapped =
+      annotatedPrices.status === "available" && annotatedPrices.cap.capped;
+    const countPhrase = priceCapped
+      ? `at least ${totalCount} ${countedNoun}`
+      : `${totalCount} ${countedNoun}`;
     // Price movement comes from the producer's own comparison, which is usually
     // a narrower window than the caller asked for. Attributing it to `since`
     // without saying so would launder the difference the section just declared.
@@ -946,11 +958,11 @@ export async function runWhatsChanged(
     if (incompleteCount > 0 && totalCount === 0) {
       windowSentence = `No changes were found in the scanned evidence since ${effectiveSince}, but the comparison is incomplete.`;
     } else if (incompleteCount > 0) {
-      windowSentence = `${totalCount} ${countedNoun} found in scanned evidence ${scope}; the comparison is incomplete.`;
+      windowSentence = `${countPhrase} found in scanned evidence ${scope}; the comparison is incomplete.`;
     } else if (totalCount === 0) {
       windowSentence = `Nothing changed in the available comparisons since ${effectiveSince}.`;
     } else {
-      windowSentence = `${totalCount} ${countedNoun} found ${scope}.`;
+      windowSentence = `${countPhrase.charAt(0).toUpperCase()}${countPhrase.slice(1)} found ${scope}.`;
     }
     const summary =
       moneySentence === null

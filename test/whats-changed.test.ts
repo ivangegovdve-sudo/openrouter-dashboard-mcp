@@ -796,11 +796,12 @@ function priceChangesResponse(
     start: "2026-08-26",
     end: "2026-08-26",
   },
+  cursor: string | null = null,
 ) {
   return {
     schemaVersion: "2.0",
     data,
-    cursor: null,
+    cursor,
     comparison: { baseRunId: runId, headRunId: runId },
     window: { ...publicWindow, ...window, basis: "derived" },
     completeness: publicCompleteness,
@@ -1047,4 +1048,19 @@ test("an incomplete scan cannot report no changes while a price moved", async ()
   if (result.status === "error") assert.fail("expected a report");
   assert.doesNotMatch(result.summary, /No changes were found/);
   assert.match(result.summary, /1 change found/);
+});
+
+test("a capped price page cannot state an exact free-to-paid count", async () => {
+  // The rows are a first page of a mixed collection. Its length is a floor, not
+  // a total, and the summary is the line that gets relayed verbatim.
+  const client = priceOnlyClient(
+    priceChangesResponse([becamePaidRow], undefined, "price-next+/=opaque"),
+  );
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  if (result.priceChanges.status !== "available") assert.fail("expected prices");
+  assert.equal(result.priceChanges.cap.capped, true);
+  assert.match(result.summary, /at least 1 model/i);
+  assert.match(result.summary, /at least/i);
+  assert.doesNotMatch(result.summary, /^1 model stopped being free/);
 });
