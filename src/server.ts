@@ -25,7 +25,7 @@ export function createServer(
   const options =
     "era" in optionsOrContext ? {} : optionsOrContext;
   const server = new McpServer({
-    name: "openrouter-dashboard-mcp",
+    name: "open-dashboard-mcp",
     version: "0.1.0",
   });
   const client = createDashboardClient(options);

@@ -40,6 +40,8 @@ export const MODEL_ECONOMICS_LIMIT = LIVE_PAGE_SIZE * LIVE_MAX_PAGES;
 /** Upstream caps the OpenRouter catalogue at 100 rows per page. */
 const OPENROUTER_PAGE_SIZE = 100;
 const OPENROUTER_MAX_PAGES = 6;
+/** Provider-endpoint listings are short, but they do paginate. */
+const PROVIDER_MAX_PAGES = 5;
 
 /**
  * How many models may be enriched with per-endpoint discount data in one call.
@@ -103,11 +105,18 @@ export const discountCoverageSchema = z.enum([
 ]);
 
 export const retirementRiskSchema = z.enum([
-  /** Listed, no deprecation or expiry published. Safe to pin today. */
+  /**
+   * The provider positively states there is no announced expiration. This is the
+   * only value that means "safe to pin", and it is only ever reached from an
+   * explicit `no_announced_expiration`, never from an unrecognised or absent one.
+   */
   "none",
-  /** An expiry date is published but is not yet within the alert horizon. */
+  /** An expiry date is published and is beyond the alert horizon. */
   "dated",
-  /** Deprecated, expiring within 90 days, or already gone from the catalogue. */
+  /**
+   * Deprecated, expiring within 90 days, past its expiry, or already gone from
+   * the catalogue. Do not pin; route with a fallback.
+   */
   "imminent",
   /**
    * The provider publishes no lifecycle signal at all, so retirement cannot be
@@ -115,6 +124,13 @@ export const retirementRiskSchema = z.enum([
    * True of Groq and Cerebras. Unknown, not safe.
    */
   "not_published_by_provider",
+  /**
+   * The provider publishes lifecycle for its catalogue but says nothing usable
+   * for this model — an explicit `expiration_unknown`, or a state this build does
+   * not recognise. Unknown, and deliberately not "none": an unreadable lifecycle
+   * is the case where a falsely reassuring answer does the most damage.
+   */
+  "unknown",
 ]);
 
 const RETIREMENT_ALERT_DAYS = 90;
@@ -132,15 +148,43 @@ export function retirementRisk(
   if (PROVIDER_REGISTRY[provider].publishes.lifecycle === "never") {
     return "not_published_by_provider";
   }
-  if (lifecycleState === "deprecated" || lifecycleState === "retired") {
-    return "imminent";
+  // Switch exhaustively over the upstream lifecycle enum. An unrecognised value
+  // falls to "unknown", never to "none" -- this function previously tested for
+  // "deprecated" and "retired", which the upstream schema never emits, so every
+  // genuinely retiring model reported "none".
+  switch (lifecycleState) {
+    case "removed_or_unavailable":
+    case "absent_from_catalog":
+    case "past_expiration_still_listed":
+      // Already gone, or already past the date it was meant to go.
+      return "imminent";
+    case "scheduled_deprecation": {
+      // An announced deprecation is never "none". Undated counts as imminent:
+      // a retirement you cannot date is one you cannot plan around.
+      if (expirationDate === null) return "imminent";
+      const expiresAtMs = Date.parse(`${expirationDate}T00:00:00Z`);
+      const asOfMs = Date.parse(asOfIso);
+      if (!Number.isFinite(expiresAtMs) || !Number.isFinite(asOfMs)) {
+        return "imminent";
+      }
+      const days = (expiresAtMs - asOfMs) / 86_400_000;
+      return days <= RETIREMENT_ALERT_DAYS ? "imminent" : "dated";
+    }
+    case "no_announced_expiration": {
+      // The only route to "none" -- and only when no date contradicts it.
+      if (expirationDate === null) return "none";
+      const expiresAtMs = Date.parse(`${expirationDate}T00:00:00Z`);
+      const asOfMs = Date.parse(asOfIso);
+      if (!Number.isFinite(expiresAtMs) || !Number.isFinite(asOfMs)) {
+        return "unknown";
+      }
+      const days = (expiresAtMs - asOfMs) / 86_400_000;
+      return days <= RETIREMENT_ALERT_DAYS ? "imminent" : "dated";
+    }
+    case "expiration_unknown":
+    default:
+      return "unknown";
   }
-  if (expirationDate === null) return "none";
-  const expiresAtMs = Date.parse(`${expirationDate}T00:00:00Z`);
-  const asOfMs = Date.parse(asOfIso);
-  if (!Number.isFinite(expiresAtMs) || !Number.isFinite(asOfMs)) return "dated";
-  const days = (expiresAtMs - asOfMs) / 86_400_000;
-  return days <= RETIREMENT_ALERT_DAYS ? "imminent" : "dated";
 }
 
 const modelDiscountSchema = z
@@ -272,7 +316,12 @@ export const modelEconomicsInputSchema = z
     minContextLength: z.number().int().positive().optional(),
     /** Keep only genuinely free models. Excludes the rate-limited free router. */
     genuinelyFreeOnly: z.boolean().default(false),
-    /** Drop models that are deprecated, expiring soon, or already disappeared. */
+    /**
+     * Drop models that are deprecated, expiring soon, already disappeared, or
+     * whose lifecycle is unreadable. Does NOT drop `not_published_by_provider`:
+     * that is a whole-provider property the caller can already see, and dropping
+     * it would silently exclude Groq and Cerebras entirely.
+     */
     excludeRetirementRisk: z.boolean().default(false),
     /** Keep only models known to accept tool calls. Excludes unknowns. */
     requireTools: z.boolean().default(false),
@@ -447,7 +496,9 @@ export async function runModelEconomics(
     const descriptor = PROVIDER_REGISTRY[row.provider];
     const promptPrice = row.pricing.promptUsdPerToken;
     const completionPrice = row.pricing.completionUsdPerToken;
-    const priceComparable = promptPrice !== null;
+    // Both halves are required. A prompt-priced, completion-unpriced model has an
+    // unknown total cost and must not be able to rank as cheapest on half a price.
+    const priceComparable = promptPrice !== null && completionPrice !== null;
     const supportsTools =
       row.provider === "openrouter" && extra !== undefined
         ? extra.supportedParameters.includes("tools")
@@ -515,7 +566,10 @@ export async function runModelEconomics(
       }
     }
     if (input.genuinelyFreeOnly && !model.genuinelyFree) return false;
-    if (input.excludeRetirementRisk && model.retirementRisk === "imminent") {
+    if (
+      input.excludeRetirementRisk &&
+      (model.retirementRisk === "imminent" || model.retirementRisk === "unknown")
+    ) {
       return false;
     }
     if (input.requireTools && model.supportsTools !== true) return false;
@@ -545,6 +599,25 @@ export async function runModelEconomics(
   const matchedBeforeLimit = matched.length;
   const models = matched.slice(0, input.limit);
 
+  // `ids` deliberately reports each pin exactly as it is -- a pin that is
+  // retiring or unpriced is the answer, not something to filter away. But
+  // silently ignoring filters the caller explicitly set would be a lie about
+  // what the result means, so say it.
+  if (input.ids !== undefined) {
+    const ignored = [
+      input.excludeRetirementRisk ? "excludeRetirementRisk" : null,
+      input.requireTools ? "requireTools" : null,
+      input.genuinelyFreeOnly ? "genuinelyFreeOnly" : null,
+      input.minContextLength !== undefined ? "minContextLength" : null,
+      input.includeUnknownCapability === false ? "includeUnknownCapability" : null,
+    ].filter((name): name is string => name !== null);
+    if (ignored.length > 0) {
+      warnings.push(
+        `An explicit id list reports each model as it is, so ${ignored.join(", ")} ${ignored.length === 1 ? "was" : "were"} not applied. Drop \`ids\` to filter instead of audit.`,
+      );
+    }
+  }
+
   const knownIds = new Set(candidates.map((model) => model.id));
   const missingIds = (input.ids ?? []).filter((id) => !knownIds.has(id));
   if (missingIds.length > 0) {
@@ -564,15 +637,33 @@ export async function runModelEconomics(
   for (const model of enrichmentTargets) {
     const endpoint = PROVIDERS_ENDPOINT_TEMPLATE.replace("{id}", model.id);
     try {
-      const providers = await client.get(
-        `/api/public/v2/models/${encodeURIComponent(model.id)}/providers`,
-        new URLSearchParams(),
-        providerListResponseSchema,
-      );
+      // Page the endpoint list. Reading only the first page and concluding
+      // "no_discount" would be wrong whenever the discounted provider happens to
+      // sort onto page two.
+      const rows: Array<z.infer<typeof providerListResponseSchema>["data"][number]> = [];
+      let providerCursor: string | null = null;
+      let firstPage: z.infer<typeof providerListResponseSchema> | null = null;
+      const seenCursors = new Set<string>();
+      for (let page = 0; page < PROVIDER_MAX_PAGES; page += 1) {
+        const query = new URLSearchParams();
+        if (providerCursor !== null) query.set("cursor", providerCursor);
+        const response: z.infer<typeof providerListResponseSchema> =
+          await client.get(
+            `/api/public/v2/models/${encodeURIComponent(model.id)}/providers`,
+            query,
+            providerListResponseSchema,
+          );
+        firstPage ??= response;
+        rows.push(...response.data);
+        providerCursor = response.cursor;
+        // A cursor that repeats would loop; stop rather than duplicate rows.
+        if (providerCursor === null || seenCursors.has(providerCursor)) break;
+        seenCursors.add(providerCursor);
+      }
       modelsEnriched += 1;
-      evidence.push(sourceEvidence(endpoint, providers));
+      if (firstPage !== null) evidence.push(sourceEvidence(endpoint, firstPage));
       let best: z.infer<typeof modelDiscountSchema> | null = null;
-      for (const row of providers.data) {
+      for (const row of rows) {
         if (row.discount === null) continue;
         const ratio = Number(row.discount);
         if (!Number.isFinite(ratio) || ratio <= 0) continue;

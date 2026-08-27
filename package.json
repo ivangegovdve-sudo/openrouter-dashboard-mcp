@@ -1,18 +1,40 @@
 {
-  "name": "openrouter-dashboard-mcp",
+  "name": "open-dashboard-mcp",
   "version": "0.1.0",
-  "private": true,
+  "description": "Read-only MCP server that compares AI models across OpenRouter, Groq and Cerebras on price, discounts, context, modality and retirement risk — so a router can pick the cheapest capable model instead of a hardcoded slug.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "openrouter",
+    "groq",
+    "cerebras",
+    "llm",
+    "model-routing",
+    "pricing",
+    "llm-pricing",
+    "claude"
+  ],
+  "license": "MIT",
+  "author": "Ivan Gegov",
   "type": "module",
   "bin": {
-    "openrouter-dashboard-mcp": "./build/index.js"
+    "open-dashboard-mcp": "./build/index.js"
   },
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run typecheck:harness",
     "test": "tsx --test",
     "test:watch": "tsx --test --watch",
     "typecheck:harness": "tsc -p tsconfig.harness.json",
     "verify:stdio": "tsx scripts/verify-stdio.ts",
-    "verify:stdout": "tsx scripts/verify-stdout.ts"
+    "verify:stdout": "tsx scripts/verify-stdout.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "engines": {
     "node": ">=20"

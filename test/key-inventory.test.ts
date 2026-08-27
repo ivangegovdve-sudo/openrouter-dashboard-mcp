@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   KEY_SOURCES_ENV,
+  redactKeyShaped,
   keyInventoryOutputSchema,
   parseKeySources,
   runKeyInventory,
@@ -79,7 +80,7 @@ test("reads OpenRouter spend and reports Groq spend as structurally unreadable",
     {
       env: {
         [KEY_SOURCES_ENV]:
-          "openrouter:openrouter-council=OR_COUNCIL,groq:groq-open-dashboard=GROQ_OD",
+          "openrouter:openrouter-primary=OR_COUNCIL,groq:groq-primary=GROQ_OD",
         OR_COUNCIL: SECRET_A,
         GROQ_OD: SECRET_C,
       },
@@ -130,7 +131,7 @@ test("separates a Cloudflare edge block from a rejected credential", async () =>
     {
       env: {
         [KEY_SOURCES_ENV]:
-          "groq:groq-pi-agent=GROQ_PI,openrouter:openrouter-dead=OR_DEAD",
+          "groq:groq-secondary=GROQ_PI,openrouter:openrouter-dead=OR_DEAD",
         GROQ_PI: SECRET_C,
         OR_DEAD: SECRET_B,
       },
@@ -166,7 +167,7 @@ test("always sends a User-Agent so an edge does not reject the probe", async () 
     {},
     {
       env: {
-        [KEY_SOURCES_ENV]: "cerebras:cerebras-open-dashboard=CB",
+        [KEY_SOURCES_ENV]: "cerebras:cerebras-primary=CB",
         CB: SECRET_C,
       },
       fetchImpl,
@@ -189,7 +190,7 @@ test("never returns a key value anywhere in the result", async () => {
     {
       env: {
         [KEY_SOURCES_ENV]:
-          "openrouter:openrouter-spare=OR_SPARE,cerebras:cerebras-iris=CB",
+          "openrouter:openrouter-spare=OR_SPARE,cerebras:cerebras-secondary=CB",
         OR_SPARE: SECRET_A,
         CB: SECRET_C,
       },
@@ -203,7 +204,7 @@ test("never returns a key value anywhere in the result", async () => {
   assert.doesNotMatch(serialized, /gsk-/);
   assert.doesNotMatch(serialized, /Bearer/i);
   assert.match(serialized, /openrouter-spare/);
-  assert.match(serialized, /cerebras-iris/);
+  assert.match(serialized, /cerebras-secondary/);
 });
 
 test("filters to the requested providers", async () => {
@@ -214,7 +215,7 @@ test("filters to the requested providers", async () => {
     {
       env: {
         [KEY_SOURCES_ENV]:
-          "groq:groq-pi-agent=GROQ_PI,cerebras:cerebras-banker=CB",
+          "groq:groq-secondary=GROQ_PI,cerebras:cerebras-tertiary=CB",
         GROQ_PI: SECRET_C,
         CB: SECRET_C,
       },
@@ -226,7 +227,7 @@ test("filters to the requested providers", async () => {
 
   assert.deepEqual(
     output.keys.map((key) => key.secretName),
-    ["cerebras-banker"],
+    ["cerebras-tertiary"],
   );
 });
 
@@ -293,4 +294,60 @@ test("issues only GET requests", async () => {
   );
 
   assert.deepEqual(methods, ["GET"]);
+});
+
+test("redacts anything key-shaped rather than trimming it", () => {
+  // A masked fingerprint is still key material. A prefix, a suffix, or "just the
+  // last four to confirm it loaded" is not a safe thing to return.
+  assert.match(String(redactKeyShaped("sk-or-v1-au7...890")), /redacted/);
+  assert.match(String(redactKeyShaped(SECRET_A)), /redacted/);
+  assert.match(String(redactKeyShaped("Bearer abc123")), /redacted/);
+  assert.match(String(redactKeyShaped("gsk_abcdefghijklmnop")), /redacted/);
+  // Ordinary labels survive untouched.
+  assert.equal(redactKeyShaped("production router"), "production router");
+  assert.equal(redactKeyShaped(null), null);
+});
+
+test("does not echo a provider label that is a masked key fingerprint", async () => {
+  const fetchImpl: typeof fetch = async () =>
+    keyPayload({
+      // OpenRouter documents `label` as a masked key fingerprint.
+      label: "sk-or-v1-au7...890",
+      usage: 1,
+      limit: null,
+    });
+
+  const output = await runKeyInventory(
+    {},
+    {
+      env: { [KEY_SOURCES_ENV]: "openrouter:my-key=OR", OR: SECRET_A },
+      fetchImpl,
+      now: NOW,
+    },
+  );
+  if (output.status === "unconfigured") assert.fail("expected a report");
+
+  assert.match(String(output.keys[0]?.label), /redacted/);
+  assert.doesNotMatch(JSON.stringify(output), /au7/);
+});
+
+test("does not echo a real key pasted into the secret-name position", async () => {
+  const fetchImpl: typeof fetch = async () => modelsPayload();
+
+  const output = await runKeyInventory(
+    {},
+    {
+      env: {
+        [KEY_SOURCES_ENV]: `groq:${SECRET_C}=GK`,
+        GK: SECRET_C,
+      },
+      fetchImpl,
+      now: NOW,
+    },
+  );
+  if (output.status === "unconfigured") assert.fail("expected a report");
+
+  // The operator writes this half; a mistake there must not become a leak.
+  assert.doesNotMatch(JSON.stringify(output), /cccccccc/);
+  assert.match(String(output.keys[0]?.secretName), /redacted/);
 });

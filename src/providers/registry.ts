@@ -200,7 +200,17 @@ export function classifyProviderBlock(
   body: string,
 ): ProviderBlockKind | null {
   if (status !== 401 && status !== 403) return null;
-  if (/\b1010\b/.test(body) && /cloudflare/i.test(body)) return "edge_blocked";
-  if (/error code:\s*1010/i.test(body)) return "edge_blocked";
+  // Cloudflare's whole 1xxx access-denied family, not just 1010. Error 1020 is a
+  // plain firewall-rule denial and is at least as common; classifying it as a
+  // credential rejection is exactly what makes someone rotate a working key.
+  if (/error code:\s*1\d{3}/i.test(body)) return "edge_blocked";
+  if (/\b1\d{3}\b/.test(body) && /cloudflare/i.test(body)) return "edge_blocked";
+  // The interstitial does not always carry a numeric code.
+  if (
+    /cloudflare/i.test(body) &&
+    /(attention required|access denied|blocked)/i.test(body)
+  ) {
+    return "edge_blocked";
+  }
   return "provider_rejected";
 }

@@ -4,6 +4,53 @@ Read-only MCP access to the public Open Dashboard intelligence API, covering **O
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
+## Install
+
+```bash
+npx -y open-dashboard-mcp
+```
+
+That runs the server directly with no install step. To add it to Claude Code:
+
+```bash
+claude mcp add open-dashboard -- npx -y open-dashboard-mcp
+```
+
+For Claude Desktop, add this to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "open-dashboard": {
+      "command": "npx",
+      "args": ["-y", "open-dashboard-mcp"]
+    }
+  }
+}
+```
+
+Requires Node.js 20 or newer. No API key is needed for any tool except the optional key inventory.
+
+### Where the data comes from
+
+Every tool reads a **public, zero-credential HTTP API** that ingests OpenRouter, Groq, Cerebras and GitHub daily and republishes the result. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+
+Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
+
+```json
+{
+  "mcpServers": {
+    "open-dashboard": {
+      "command": "npx",
+      "args": ["-y", "open-dashboard-mcp"],
+      "env": { "DASHBOARD_BASE_URL": "https://your-deployment.example.com" }
+    }
+  }
+}
+```
+
+When a source is unavailable the tools say so as structured data — `unavailable`, `partial`, `stale` — rather than failing or inventing a value. That is the intended behaviour, not an error.
+
 ## Providers
 
 | | catalogue | pricing | context | modality | lifecycle | discounts | spend API |
@@ -85,10 +132,10 @@ Pass `ids` to `dashboard_model_economics` with the slugs a config hardcodes, acr
 Set `OPEN_DASHBOARD_KEY_SOURCES` to comma-separated `provider:secretManagerName=ENV_VAR` triples and provide each named environment variable:
 
 ```
-OPEN_DASHBOARD_KEY_SOURCES=openrouter:openrouter-council=OR_COUNCIL,groq:groq-open-dashboard=GROQ_OD,cerebras:cerebras-open-dashboard=CB_OD
+OPEN_DASHBOARD_KEY_SOURCES=openrouter:my-openrouter-key=OPENROUTER_API_KEY,groq:my-groq-key=GROQ_API_KEY,cerebras:my-cerebras-key=CEREBRAS_API_KEY
 ```
 
-Only the Secret Manager names are ever reported. Key values are never returned, logged, or written to evidence — a test asserts the serialized result contains no key material. The tool issues GET requests only and contains no code path that can mint, modify, or revoke a key — provisioning stays with `openrouter-management-key` and a separate tool.
+Only the Secret Manager names are ever reported. Key values are never returned, logged, or written to evidence — a test asserts the serialized result contains no key material. The tool issues GET requests only and contains no code path that can mint, modify, or revoke a key. Keep provisioning with a separate, privileged key that this server never sees.
 
 **Spend is not uniformly readable, and the tool says so rather than leaving a blank.** OpenRouter exposes per-key usage and ceiling. Groq and Cerebras expose **no billing API at all**, so their keys report `spendReadability: "no_billing_api"` with `usdSpent: null` and a stated reason. A blank money field reads as zero, and zero is a different claim.
 

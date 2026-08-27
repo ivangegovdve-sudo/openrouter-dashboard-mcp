@@ -20,8 +20,8 @@ import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
  * outcome, not an error.
  *
  * Read-only by construction: this module issues GET requests and contains no code
- * path that can mint, modify, or revoke a key. Provisioning stays with
- * `openrouter-management-key` and a separate tool.
+ * path that can mint, modify, or revoke a key. Provisioning belongs to whatever
+ * privileged key an operator uses for it, and deliberately not to this server.
  *
  * Spend is NOT uniformly readable. OpenRouter exposes per-key usage and ceiling.
  * Groq and Cerebras expose no billing API at all, so their spend is unreadable
@@ -44,6 +44,39 @@ const USER_AGENT = "open-dashboard-mcp/0.1 (+read-only key inventory)";
  * is what gets reported; the environment variable is only ever read, never echoed.
  */
 export const KEY_SOURCES_ENV = "OPEN_DASHBOARD_KEY_SOURCES";
+
+/**
+ * Anything that looks like key material, in any field this tool echoes back.
+ *
+ * Two paths reach the caller and neither is under this server's control:
+ * the operator writes the `secretName` half of each triple, and the provider
+ * writes the `label`. OpenRouter's documented `label` is a MASKED KEY
+ * FINGERPRINT — the key prefix, an ellipsis, then its last few characters —
+ * construction. A prefix, a suffix, or "just the last four to confirm it
+ * loaded" is still key material, so it is replaced rather than trimmed.
+ *
+ * Fails closed: on any match the whole value is dropped, because a value that
+ * contains a key is not made safe by returning the rest of it.
+ */
+const KEY_SHAPED = [
+  /sk-[A-Za-z0-9_-]{8,}/i,
+  /gsk[_-][A-Za-z0-9]{8,}/i,
+  /csk-[A-Za-z0-9]{8,}/i,
+  /Bearer\s+\S+/i,
+  /AIza[A-Za-z0-9_-]{10,}/,
+  /gh[pousr]_[A-Za-z0-9]{10,}/,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  // A masked fingerprint: any key-ish prefix with an ellipsis in the middle.
+  /[A-Za-z0-9_-]{6,}\.{3}[A-Za-z0-9_-]{3,}/,
+];
+
+export function redactKeyShaped(value: string | null): string | null {
+  if (value === null) return null;
+  for (const pattern of KEY_SHAPED) {
+    if (pattern.test(value)) return "[redacted: looked like key material]";
+  }
+  return value;
+}
 
 /** Where each provider answers "is this key alive, and what has it spent". */
 const KEY_PROBE: Record<ProviderId, { url: string; readsSpend: boolean }> = {
@@ -82,7 +115,13 @@ export function parseKeySources(raw: string | undefined): KeySource[] {
     const dedupeKey = `${provider}:${secretName}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    sources.push({ provider: parsed.data, secretName, envVar });
+    // The operator writes this half. If they paste a real key here by mistake,
+    // it must not come back out in the report.
+    sources.push({
+      provider: parsed.data,
+      secretName: redactKeyShaped(secretName) ?? secretName,
+      envVar,
+    });
   }
   return sources;
 }
@@ -355,7 +394,7 @@ async function readKey(
       secretName: source.secretName,
       state: "active",
       alive: true,
-      label: data.label ?? null,
+      label: redactKeyShaped(data.label ?? null),
       spendReadability: "read",
       usdSpent: data.usage ?? null,
       usdLimit,

@@ -130,7 +130,7 @@ Normalising these into one vocabulary is real work and is not done here.
 
 **Whether a model actually answers.** This API reports what providers *list*. Whether
 a slug returns 200 to a real request is a different question, already owned by the
-fleet's own model registry (`hermes_agents`, surfaced read-only on the dashboard).
+operator's own model registry, if they run one.
 That registry probes; this API catalogues. They are complementary and should not be
 merged: a model can be listed and rate-limited, or listed and broken.
 

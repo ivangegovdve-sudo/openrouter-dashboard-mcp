@@ -4,3 +4,4 @@ coverage/
 .superpowers/
 verification/raw/
 *.log
+open-dashboard-mcp-*.tgz

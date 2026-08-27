@@ -170,18 +170,115 @@ test("shifts exact decimal strings to per-million prices without float loss", ()
   assert.equal(shiftDecimalString("not-a-number", 6), null);
 });
 
-test("treats a provider with no lifecycle signal as unforeseeable, not safe", () => {
+test("maps every upstream lifecycle value, and only one of them to none", () => {
   const asOf = "2026-08-27T00:00:00.000Z";
-  // OpenRouter publishes lifecycle, so its verdicts are real.
-  assert.equal(retirementRisk("openrouter", "deprecated", null, "available", asOf), "imminent");
-  assert.equal(retirementRisk("openrouter", "no_announced_expiration", null, "available", asOf), "none");
-  assert.equal(retirementRisk("openrouter", "scheduled_deprecation", "2026-09-15", "available", asOf), "imminent");
-  assert.equal(retirementRisk("openrouter", "scheduled_deprecation", "2098-12-31", "available", asOf), "dated");
-  // Groq and Cerebras publish none, so "none" would be a false reassurance.
+  const or = (state: string, expiry: string | null = null) =>
+    retirementRisk("openrouter", state, expiry, "available", asOf);
+
+  // The ONLY route to "none". Anything else reporting none is a false all-clear.
+  assert.equal(or("no_announced_expiration"), "none");
+
+  // These are the values the upstream schema actually emits. The previous
+  // implementation tested for "deprecated"/"retired" -- which the schema never
+  // emits -- so every one of these fell through to "none".
+  assert.equal(or("past_expiration_still_listed"), "imminent");
+  assert.equal(or("absent_from_catalog"), "imminent");
+  assert.equal(or("removed_or_unavailable"), "imminent");
+  assert.equal(or("scheduled_deprecation"), "imminent");
+  assert.equal(or("scheduled_deprecation", "2026-09-15"), "imminent");
+  assert.equal(or("scheduled_deprecation", "2098-12-31"), "dated");
+
+  // Unreadable lifecycle is unknown, never safe.
+  assert.equal(or("expiration_unknown"), "unknown");
+  assert.equal(or("a_value_this_build_has_never_seen"), "unknown");
+  assert.equal(or(null as unknown as string), "unknown");
+
+  // Providers that publish no lifecycle at all say so.
   assert.equal(retirementRisk("groq", null, null, "available", asOf), "not_published_by_provider");
   assert.equal(retirementRisk("cerebras", null, null, "available", asOf), "not_published_by_provider");
-  // Disappearance is the only retirement signal those two ever give, and it wins.
+  // Disappearance is the only signal those two give, and it outranks everything.
   assert.equal(retirementRisk("groq", null, null, "disappeared", asOf), "imminent");
+  assert.equal(retirementRisk("openrouter", "no_announced_expiration", null, "disappeared", asOf), "imminent");
+});
+
+test("never returns none for any value the upstream schema can emit except the all-clear", () => {
+  const asOf = "2026-08-27T00:00:00.000Z";
+  const emitted = [
+    "expiration_unknown",
+    "no_announced_expiration",
+    "scheduled_deprecation",
+    "past_expiration_still_listed",
+    "absent_from_catalog",
+    "removed_or_unavailable",
+  ];
+  for (const state of emitted) {
+    const risk = retirementRisk("openrouter", state, null, "available", asOf);
+    if (state === "no_announced_expiration") {
+      assert.equal(risk, "none", `${state} is the all-clear`);
+    } else {
+      assert.notEqual(risk, "none", `${state} must never read as safe to pin`);
+    }
+  }
+});
+
+test("requires both halves of a price before a model can be ranked", async () => {
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "openrouter", id: "or/half", prompt: "0", completion: null }),
+      liveModel({ provider: "openrouter", id: "or/whole", prompt: "0.0000001000" }),
+    ],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  const half = output.models.find((entry) => entry.id === "or/half");
+  // A zero prompt price with an unknown completion price must not win on half a
+  // price -- total cost is unknown.
+  assert.equal(half?.priceComparable, false);
+  assert.equal(output.models[0]?.id, "or/whole");
+});
+
+test("says so when an id list disables filters the caller asked for", async () => {
+  const client = stubClient({
+    live: [liveModel({ provider: "openrouter", id: "or/a" })],
+    catalogue: [],
+  });
+
+  const output = await runModelEconomics(
+    { ids: ["or/a"], excludeRetirementRisk: true, requireTools: true, discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  assert.match(output.warnings.join(" "), /excludeRetirementRisk/);
+  assert.match(output.warnings.join(" "), /requireTools/);
+  assert.match(output.warnings.join(" "), /not applied/);
+});
+
+test("drops unreadable-lifecycle models when retirement risk is excluded", async () => {
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "openrouter", id: "or/unknown" }),
+      liveModel({ provider: "openrouter", id: "or/clear", prompt: "0.0000002000" }),
+    ],
+    catalogue: [
+      catalogueModel({ id: "or/unknown", lifecycleState: "expiration_unknown" }),
+      catalogueModel({ id: "or/clear", lifecycleState: "no_announced_expiration" }),
+    ],
+  });
+
+  const output = await runModelEconomics(
+    { excludeRetirementRisk: true, discountEnrichment: 0 },
+    { client, now: NOW },
+  );
+  if (output.status === "error") assert.fail("expected a catalogue result");
+
+  assert.deepEqual(output.models.map((entry) => entry.id), ["or/clear"]);
 });
 
 test("ranks across all three providers cheapest first", async () => {

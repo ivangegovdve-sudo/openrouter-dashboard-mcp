@@ -9,7 +9,7 @@ import {
   unpricedReason,
 } from "../src/providers/registry.js";
 
-test("covers the three providers Ivan holds keys with", () => {
+test("covers the three providers this build normalises", () => {
   assert.deepEqual(PROVIDER_IDS.sort(), ["cerebras", "groq", "openrouter"]);
 });
 
@@ -68,6 +68,14 @@ test("phrases an unpriced model as a provider fact and never as free", () => {
 });
 
 test("tells a Cloudflare edge block apart from a credential rejection", () => {
+  // 1020 is a plain firewall-rule denial and is at least as common as 1010.
+  // Classifying it as a credential rejection is what makes someone rotate a
+  // working key.
+  assert.equal(classifyProviderBlock(403, "error code: 1020"), "edge_blocked");
+  assert.equal(
+    classifyProviderBlock(403, "Attention Required! | Cloudflare"),
+    "edge_blocked",
+  );
   // The 1010 case: rejected before reaching the provider. Not a dead key.
   assert.equal(
     classifyProviderBlock(403, "error code: 1010"),
