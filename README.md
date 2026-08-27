@@ -89,7 +89,7 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | `dashboard_key_inventory` | Report configured OpenRouter, Groq and Cerebras keys by Secret Manager name: liveness for all three, spend and ceiling for OpenRouter. Opt-in; read-only. |
 | `dashboard_resolve_model` | Resolve bounded, evidence-backed model fallbacks from intent and capability constraints. |
 | `dashboard_model_status` | Check an exact model id, lifecycle evidence, and bounded suggestions. |
-| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, and rank movements since an archived date. |
+| `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. |
 | `dashboard_free_models` | List usable free models and public frontier evidence without treating unknown prices as free. |
 | `dashboard_usage_leaders` | Compare bounded public model/app usage and latest complete app-model evidence. |
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
@@ -98,6 +98,37 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
 
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
+
+## Models that stopped being free
+
+A free model does not announce itself when it starts charging. Its id does not change, it stays listed, and nothing else in a catalogue moves. The bill is the notification.
+
+`dashboard_whats_changed` compares the two most recent archived catalogue runs and reports price movement, with models that **left free** in their own bucket:
+
+```json
+"priceChanges": {
+  "status": "available",
+  "becamePaid": [
+    {
+      "modelId": "vendor/was-free",
+      "transition": "became_paid",
+      "basePromptPrice": "0", "headPromptPrice": "0.0000004",
+      "wasFree": true, "isFree": false,
+      "note": "vendor/was-free was free and now charges 0.0000004 per prompt
+               token. Nothing about its id changed, so a pinned config keeps
+               calling it and starts paying."
+    }
+  ],
+  "otherChanges": [],
+  "comparison": { "baseRunId": "…", "headRunId": "…" }
+}
+```
+
+The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
+
+**Three failure states, none of which is an empty list.** An empty `becamePaid` means nothing left free. If the deployment does not serve the endpoint, you get `unsupported_by_public_api`; if it could not be read, `unavailable` with the reason. Returning an empty list on failure would read as *nothing started charging you*, which is the most expensive wrong answer this server could give.
+
+Only models present in **both** runs are compared. A model that appeared or vanished is a different question, answered by the appearance and disappearance sections — folding it in here would report a brand-new model as having started charging.
 
 ## Discounts
 

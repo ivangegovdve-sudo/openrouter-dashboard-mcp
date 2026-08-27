@@ -37,7 +37,7 @@ const KEY_MAX_RESPONSE_BYTES = 64 * 1024;
  * with code 1010 before it ever reaches the provider, which looks exactly like a
  * dead key and has been misdiagnosed as one.
  */
-const USER_AGENT = "open-dashboard-mcp/0.1 (+read-only key inventory)";
+const USER_AGENT = "open-dashboard-mcp/0.2 (+read-only key inventory)";
 
 /**
  * `provider:secretName=ENV_VAR` triples, comma separated. The Secret Manager name
