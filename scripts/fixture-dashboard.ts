@@ -10,6 +10,7 @@ import {
   publicCompleteness,
   publicProvenance,
   publicWindow,
+  runId,
   sourceStatusFixture,
 } from "../test/fixtures.js";
 
@@ -40,6 +41,7 @@ const ROUTES = [
   "/api/public/v2/free-frontiers",
   "/api/public/v2/history",
   "/api/public/v2/deprecations",
+  "/api/public/v2/price-changes",
   "/api/public/v2/source-status",
   "/api/public/v2/apps",
   "/api/public/v2/app-model-matrix",
@@ -679,6 +681,34 @@ function fixtureBody(path: string, query: URLSearchParams): unknown {
     // unknown rather than as full price. The fixture answers 500, matching how
     // the deployed dashboard behaves for a model it holds no observation for.
     throw new Error("fixture provider observation unavailable");
+  }
+  if (path === "/api/public/v2/price-changes") {
+    assertOnlyKeys(query, ["limit", "cursor", "transition"]);
+    return {
+      ...collection([
+        {
+          modelId: "fixture/was-free",
+          transition: "became_paid",
+          basePromptPrice: "0",
+          baseCompletionPrice: "0",
+          headPromptPrice: "0.0000004",
+          headCompletionPrice: "0.0000012",
+          wasFree: true,
+          isFree: false,
+        },
+        {
+          modelId: "fixture/got-cheaper",
+          transition: "price_decreased",
+          basePromptPrice: "0.000003",
+          baseCompletionPrice: "0.000004",
+          headPromptPrice: "0.000001",
+          headCompletionPrice: "0.000002",
+          wasFree: false,
+          isFree: false,
+        },
+      ]),
+      comparison: { baseRunId: runId, headRunId: runId },
+    };
   }
   if (path === "/api/public/v2/free-models") {
     assertExactQuery(query, { modality: "text", limit: "5" });

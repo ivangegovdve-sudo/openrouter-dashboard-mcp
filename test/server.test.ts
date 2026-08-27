@@ -274,11 +274,13 @@ test("serializes and validates the registered whats-changed handler output", asy
     });
     assert.equal(result.isError, undefined);
     assert.equal(result.structuredContent?.status, "partial");
-    assert.deepEqual(result.structuredContent?.priceChanges, {
-      status: "unsupported_by_public_api",
-      reason:
-        "The public API does not publish historical prices, so price changes cannot be determined and are not inferred.",
-    });
+    // The stub serves no /price-changes route and errors rather than 404ing, so
+    // the section says it could not be read. It must never return an empty list,
+    // which a caller would read as "nothing started charging me".
+    assert.equal(
+      (result.structuredContent?.priceChanges as { status: string }).status,
+      "unavailable",
+    );
     const text = result.content.find((item) => item.type === "text");
     assert.ok(text && text.type === "text");
     assert.deepEqual(JSON.parse(text.text), result.structuredContent);

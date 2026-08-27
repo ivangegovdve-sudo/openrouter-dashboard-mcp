@@ -657,3 +657,39 @@ export const benchmarksResponseSchema = publicBenchmarksResponseSchema;
 export const appModelMatrixResponseSchema =
   publicAppModelMatrixResponseSchema;
 export const appModelsResponseSchema = publicAppModelsResponseSchema;
+
+export const priceTransitionSchema = z.enum([
+  /** Was free, is still listed under the same id, and now costs money. */
+  "became_paid",
+  "became_free",
+  "price_increased",
+  "price_decreased",
+  /** One half of the price rose while the other fell. Real, but not a direction. */
+  "price_changed",
+  /** The provider stopped publishing a price. Unknown, not free. */
+  "price_withdrawn",
+  "price_published",
+]);
+
+export const publicPriceChangeSchema = z
+  .object({
+    modelId: z.string(),
+    transition: priceTransitionSchema,
+    basePromptPrice: exactDecimalStringSchema.nullable(),
+    baseCompletionPrice: exactDecimalStringSchema.nullable(),
+    headPromptPrice: exactDecimalStringSchema.nullable(),
+    headCompletionPrice: exactDecimalStringSchema.nullable(),
+    wasFree: z.boolean(),
+    isFree: z.boolean(),
+  })
+  .strict();
+
+export const priceChangeResponseSchema = publicCollectionSchema(
+  publicPriceChangeSchema,
+)
+  .extend({
+    comparison: z
+      .object({ baseRunId: z.string().uuid(), headRunId: z.string().uuid() })
+      .strict(),
+  })
+  .strict();

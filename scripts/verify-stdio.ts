@@ -557,6 +557,26 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics did not name the vanished pinned id");
     }
   }
+  if (name === "dashboard_whats_changed") {
+    const price = asRecord(output.priceChanges, "price changes");
+    if (price.status !== "available") {
+      throw new Error(`fixture price changes were not available (${String(price.status)})`);
+    }
+    const becamePaid = Array.isArray(price.becamePaid) ? price.becamePaid : [];
+    const ids = becamePaid.map((entry) => asRecord(entry, "became paid").modelId);
+    if (!isDeepStrictEqual(ids, ["fixture/was-free"])) {
+      throw new Error("fixture did not surface the model that left free");
+    }
+    const row = asRecord(becamePaid[0], "became paid row");
+    if (row.wasFree !== true || row.isFree !== false) {
+      throw new Error("fixture misreported the free-to-paid transition");
+    }
+    // A price decrease must not be filed under the money-losing bucket.
+    const other = Array.isArray(price.otherChanges) ? price.otherChanges : [];
+    if (!isDeepStrictEqual(other.map((entry) => asRecord(entry, "other").modelId), ["fixture/got-cheaper"])) {
+      throw new Error("fixture mixed other price movement into becamePaid");
+    }
+  }
   if (name === "dashboard_key_inventory") {
     if (output.status !== "unconfigured") {
       throw new Error("fixture key inventory must stay dormant without configured keys");

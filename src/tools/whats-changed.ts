@@ -12,6 +12,8 @@ import {
 } from "../dashboard/schemas/live-models.js";
 import {
   deprecationsResponseSchema,
+  priceChangeResponseSchema,
+  publicPriceChangeSchema,
   manifestSchema,
   publicDeprecationSchema,
 } from "../dashboard/schemas/openrouter.js";
@@ -152,12 +154,56 @@ const newDeprecationsSchema = z.discriminatedUnion("status", [
   unavailableSectionSchema,
 ]);
 
-const priceChangesSchema = z
-  .object({
-    status: z.literal("unsupported_by_public_api"),
-    reason: z.string(),
-  })
-  .strict();
+const priceChangeItemSchema = publicPriceChangeSchema.extend({
+  /**
+   * Stated in words because the transition alone is easy to skim past, and this
+   * is the section a reader is scanning for one thing: did something I depend on
+   * start charging me.
+   */
+  note: z.string(),
+});
+
+/**
+ * Price movement between the two most recent archived catalogue runs.
+ *
+ * `unsupported_by_public_api` is retained deliberately. Older deployments of the
+ * dashboard do not serve /price-changes, and reporting "nothing changed" against
+ * one of them would be a false all-clear -- the exact failure this section
+ * exists to prevent.
+ */
+const priceChangesSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("available"),
+      /** Models that left free. The ones with money attached. */
+      becamePaid: z.array(priceChangeItemSchema),
+      /** Every other movement, including models that became free. */
+      otherChanges: z.array(priceChangeItemSchema),
+      comparison: z
+        .object({ baseRunId: z.string(), headRunId: z.string() })
+        .strict(),
+      cap: z
+        .object({
+          requestedLimit: z.number().int().positive(),
+          returnedCount: z.number().int().nonnegative(),
+          capped: z.boolean(),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("unsupported_by_public_api"),
+      reason: z.string(),
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal("unavailable"),
+      reason: z.string(),
+    })
+    .strict(),
+]);
 
 const whatsChangedSuccessSchema = z
   .object({
@@ -245,11 +291,78 @@ type LiveScan = {
   cap: z.infer<typeof liveCapSchema>;
 };
 
-const PRICE_CHANGES = {
+const PRICE_CHANGES_ENDPOINT = "/api/public/v2/price-changes";
+export const PRICE_CHANGES_LIMIT = 100;
+
+/**
+ * Returned only when the deployment does not serve /price-changes at all.
+ * Kept so an older dashboard cannot be mistaken for a quiet one.
+ */
+const PRICE_CHANGES_UNSUPPORTED = {
   status: "unsupported_by_public_api",
   reason:
-    "The public API does not publish historical prices, so price changes cannot be determined and are not inferred.",
+    "This deployment does not publish /api/public/v2/price-changes, so price changes cannot be determined and are not inferred.",
 } as const;
+
+function priceChangeNote(row: z.infer<typeof publicPriceChangeSchema>): string {
+  switch (row.transition) {
+    case "became_paid":
+      return `${row.modelId} was free and now charges ${row.headPromptPrice ?? "an unpublished amount"} per prompt token. Nothing about its id changed, so a pinned config keeps calling it and starts paying.`;
+    case "became_free":
+      return `${row.modelId} is now free where it previously charged.`;
+    case "price_withdrawn":
+      return `${row.modelId} no longer publishes a price. Unknown, not free.`;
+    case "price_published":
+      return `${row.modelId} now publishes a price where it previously published none.`;
+    case "price_increased":
+      return `${row.modelId} got more expensive.`;
+    case "price_decreased":
+      return `${row.modelId} got cheaper.`;
+    default:
+      return `${row.modelId} changed price in both directions across its two halves.`;
+  }
+}
+
+/**
+ * Read price movement, degrading to a stated reason rather than to silence.
+ *
+ * A price-change section that returns an empty list on failure would read as
+ * "nothing started charging you", which is the most expensive wrong answer this
+ * tool could give.
+ */
+async function readPriceChanges(
+  client: DashboardClient,
+): Promise<z.infer<typeof priceChangesSchema>> {
+  try {
+    const query = new URLSearchParams({ limit: String(PRICE_CHANGES_LIMIT) });
+    const response = await client.get(
+      PRICE_CHANGES_ENDPOINT,
+      query,
+      priceChangeResponseSchema,
+    );
+    const rows = response.data.map((row) => ({ ...row, note: priceChangeNote(row) }));
+    return {
+      status: "available",
+      becamePaid: rows.filter((row) => row.transition === "became_paid"),
+      otherChanges: rows.filter((row) => row.transition !== "became_paid"),
+      comparison: response.comparison,
+      cap: {
+        requestedLimit: PRICE_CHANGES_LIMIT,
+        returnedCount: rows.length,
+        capped: response.cursor !== null,
+      },
+    };
+  } catch (error) {
+    const safeError = safeDashboardError(error);
+    if (safeError.kind === "http_error" && safeError.status === 404) {
+      return PRICE_CHANGES_UNSUPPORTED;
+    }
+    return {
+      status: "unavailable",
+      reason: `Price changes could not be read (${safeError.message}). This is not evidence that nothing changed.`,
+    };
+  }
+}
 
 function staleWarning(endpoint: string, stale: boolean): string[] {
   return stale ? [`Data from ${endpoint} is stale.`] : [];
@@ -430,6 +543,10 @@ export async function runWhatsChanged(
 ): Promise<WhatsChangedOutput> {
   try {
     const input = whatsChangedInputSchema.parse(rawInput);
+    // Read price movement up front so both the partial and the complete return
+    // paths below carry it. It never throws -- it degrades to a stated reason --
+    // so it cannot take the rest of the report down with it.
+    const priceChanges = await readPriceChanges(client);
     const [manifestResult, historyResult] = await Promise.allSettled([
       client.get(MANIFEST_ENDPOINT, new URLSearchParams(), manifestSchema),
       client.get(
@@ -490,7 +607,7 @@ export async function runWhatsChanged(
         modelAppearances: section,
         modelDisappearances: section,
         newDeprecations: section,
-        priceChanges: PRICE_CHANGES,
+        priceChanges,
         rankMovements: section,
         evidence,
         warnings,
@@ -684,7 +801,7 @@ export async function runWhatsChanged(
       modelAppearances,
       modelDisappearances,
       newDeprecations,
-      priceChanges: PRICE_CHANGES,
+      priceChanges,
       rankMovements,
       evidence,
       warnings,

@@ -139,7 +139,12 @@ test("defaults to the prior complete bucket and says when available comparisons 
   assert.equal(result.rankMovements.items.length, 0);
   assert.equal(result.newDeprecations.status, "available");
   assert.equal(result.newDeprecations.items.length, 0);
-  assert.equal(result.priceChanges.status, "unsupported_by_public_api");
+  // The stub serves no /price-changes route, so the section reports that it
+  // could not be read -- never an empty list, which would read as an all-clear.
+  assert.equal(result.priceChanges.status, "unavailable");
+  if (result.priceChanges.status === "unavailable") {
+    assert.match(result.priceChanges.reason, /not evidence that nothing changed/);
+  }
   assert.ok(requests.some((request) => request.path === historyEndpoint));
   assert.ok(requests.some((request) => request.path === deprecationsEndpoint));
 });
@@ -205,7 +210,12 @@ test("keeps rank and deprecation changes functional without live-models", async 
   assert.deepEqual(result.newDeprecations.items, [notice]);
   assert.equal(result.modelAppearances.status, "unavailable");
   assert.equal(result.modelDisappearances.status, "unavailable");
-  assert.equal(result.priceChanges.status, "unsupported_by_public_api");
+  // The stub serves no /price-changes route, so the section reports that it
+  // could not be read -- never an empty list, which would read as an all-clear.
+  assert.equal(result.priceChanges.status, "unavailable");
+  if (result.priceChanges.status === "unavailable") {
+    assert.match(result.priceChanges.reason, /not evidence that nothing changed/);
+  }
 });
 
 test("reports model appearances and disappearances when live-models exists", async () => {
@@ -271,7 +281,12 @@ test("reports model appearances and disappearances when live-models exists", asy
     result.modelDisappearances.items.map((model) => model.id),
     ["groq/retired-model"],
   );
-  assert.equal(result.priceChanges.status, "unsupported_by_public_api");
+  // The stub serves no /price-changes route, so the section reports that it
+  // could not be read -- never an empty list, which would read as an all-clear.
+  assert.equal(result.priceChanges.status, "unavailable");
+  if (result.priceChanges.status === "unavailable") {
+    assert.match(result.priceChanges.reason, /not evidence that nothing changed/);
+  }
 });
 
 test("paginates deprecations only to the declared bound and preserves cursors", async () => {
@@ -667,4 +682,102 @@ test("uses one open-closed date window for event sections", async () => {
     result.newDeprecations.items.map((entry) => entry.modelId),
     ["example/window-notice"],
   );
+});
+
+test("surfaces a model that left free, apart from every other price move", async () => {
+  const priceChanges = {
+    schemaVersion: "2.0",
+    data: [
+      {
+        modelId: "vendor/was-free",
+        transition: "became_paid",
+        basePromptPrice: "0",
+        baseCompletionPrice: "0",
+        headPromptPrice: "0.0000004",
+        headCompletionPrice: "0.0000012",
+        wasFree: true,
+        isFree: false,
+      },
+      {
+        modelId: "vendor/got-cheaper",
+        transition: "price_decreased",
+        basePromptPrice: "0.000003",
+        baseCompletionPrice: "0.000004",
+        headPromptPrice: "0.000001",
+        headCompletionPrice: "0.000002",
+        wasFree: false,
+        isFree: false,
+      },
+    ],
+    cursor: null,
+    comparison: { baseRunId: runId, headRunId: runId },
+    window: publicWindow,
+    completeness: publicCompleteness,
+    stale: false,
+    rank: null,
+    provenance: publicProvenance,
+  };
+
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === "/api/public/v2/price-changes") return schema.parse(priceChanges);
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      throw new DashboardRequestError("http_error", "unavailable", {
+        retryable: true,
+        status: 503,
+      });
+    },
+  };
+
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.priceChanges.status, "available");
+  if (result.priceChanges.status !== "available") return;
+
+  // The money question gets its own bucket rather than being one row among many.
+  assert.deepEqual(
+    result.priceChanges.becamePaid.map((row) => row.modelId),
+    ["vendor/was-free"],
+  );
+  assert.deepEqual(
+    result.priceChanges.otherChanges.map((row) => row.modelId),
+    ["vendor/got-cheaper"],
+  );
+  // The note has to say why it goes unnoticed: the id never changed.
+  assert.match(result.priceChanges.becamePaid[0]!.note, /was free and now charges/);
+  assert.match(result.priceChanges.becamePaid[0]!.note, /pinned config keeps calling it/);
+});
+
+test("reports an unreadable price source as unknown, never as no change", async () => {
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      throw new DashboardRequestError("timeout", "timed out", { retryable: true });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.priceChanges.status, "unavailable");
+});
+
+test("distinguishes a deployment without the route from a quiet one", async () => {
+  const client: DashboardClient = {
+    async get(path, _query, schema) {
+      if (path === manifestEndpoint) {
+        return schema.parse({ ...manifestFixture, routes: [manifestEndpoint] });
+      }
+      // 404 specifically means this deployment does not serve the route.
+      throw new DashboardRequestError("http_error", "not found", {
+        retryable: false,
+        status: 404,
+      });
+    },
+  };
+  const result = await runWhatsChanged({ since: "2026-08-18", limit: 5 }, { client });
+  if (result.status === "error") assert.fail("expected a report");
+  assert.equal(result.priceChanges.status, "unsupported_by_public_api");
 });
