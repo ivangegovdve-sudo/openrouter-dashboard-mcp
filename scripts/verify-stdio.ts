@@ -13,6 +13,8 @@ import {
   type FreeModelsOutput,
 } from "../src/tools/free-models.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
+import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
 import {
   modelStatusInputSchema,
   modelStatusOutputSchema,
@@ -68,6 +70,8 @@ type VerificationEvidence = {
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_free_models",
   "dashboard_github_movers",
+  "dashboard_key_inventory",
+  "dashboard_model_economics",
   "dashboard_model_status",
   "dashboard_resolve_model",
   "dashboard_source_health",
@@ -106,6 +110,11 @@ export const STANDARD_CALLS = [
     name: "dashboard_github_movers",
     arguments: { category: "mcp", windowDays: 7, limit: 5 },
   },
+  {
+    name: "dashboard_model_economics",
+    arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
+  },
+  { name: "dashboard_key_inventory", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 export const DIAGNOSTIC_CALLS = [
@@ -143,6 +152,14 @@ export const DIAGNOSTIC_CALLS = [
     name: "dashboard_github_movers",
     arguments: { category: "mcp", windowDays: 7, limit: 3 },
   },
+  {
+    name: "dashboard_model_economics",
+    arguments: {
+      ids: ["fixture/discounted", "fixture/free-text", "fixture/no-such-model"],
+      discountEnrichment: 2,
+    },
+  },
+  { name: "dashboard_key_inventory", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -166,7 +183,7 @@ const MAX_DEFINITIONS_BYTES = 512 * 1024;
 const MAX_EVIDENCE_BYTES = 5 * 1024 * 1024;
 const MAX_STDERR_BYTES = 64 * 1024;
 const CAPABILITY_MESSAGE =
-  "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
+  "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.";
 
 const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_resolve_model", resolveModelOutputSchema],
@@ -176,16 +193,24 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_usage_leaders", usageLeadersOutputSchema],
   ["dashboard_source_health", sourceHealthOutputSchema],
   ["dashboard_github_movers", githubMoversOutputSchema],
+  ["dashboard_model_economics", modelEconomicsOutputSchema],
+  ["dashboard_key_inventory", keyInventoryOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   "categorytokenshare",
+  "completionusdpermilliontokens",
   "completionusdpertoken",
   "ecosystemtokenvolume",
   "ecosystemtokenvolumemovement",
   "previousecosystemtokenvolume",
+  "promptusdpermilliontokens",
   "promptusdpertoken",
   "rolling30dayecosystemtokenvolume",
+  // A Secret Manager resource NAME, never a value. The value-level scanner below
+  // still applies to it, so a real key appearing here is still caught.
+  "secretname",
+  "tokenizer",
   "totaltokens",
 ]);
 
@@ -439,6 +464,46 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture resolver omitted unknown/disappeared exclusions");
     }
   }
+  if (name === "dashboard_model_economics") {
+    const models = Array.isArray(output.models) ? output.models : [];
+    const discounted = models.find(
+      (entry) => asRecord(entry, "economics model").id === "fixture/discounted",
+    );
+    if (discounted === undefined) {
+      throw new Error("fixture economics omitted the discounted model");
+    }
+    const record = asRecord(discounted, "fixture discounted model");
+    if (record.discountCoverage !== "discounted") {
+      throw new Error("fixture economics did not report the published discount");
+    }
+    const discount = asRecord(record.bestDiscount, "fixture discount");
+    if (
+      discount.percentOff !== "43.2" ||
+      discount.providerName !== "FixtureProvider" ||
+      discount.expiresAt !== null ||
+      discount.expiryPublished !== false
+    ) {
+      throw new Error("fixture economics misreported the discount or invented an expiry");
+    }
+    if (!Array.isArray(output.missingIds) || !output.missingIds.includes("fixture/no-such-model")) {
+      throw new Error("fixture economics did not name the vanished pinned id");
+    }
+    // The unobserved model must read as unknown, never as full price.
+    const unobserved = models.find(
+      (entry) => asRecord(entry, "economics model").id === "fixture/free-text",
+    );
+    if (
+      unobserved !== undefined &&
+      asRecord(unobserved, "fixture free model").discountCoverage !== "unavailable"
+    ) {
+      throw new Error("fixture economics treated an unobserved model as full price");
+    }
+  }
+  if (name === "dashboard_key_inventory") {
+    if (output.status !== "unconfigured") {
+      throw new Error("fixture key inventory must stay dormant without configured keys");
+    }
+  }
   if (name === "dashboard_model_status") {
     if (output.status !== "not_found") throw new Error("fixture model unexpectedly found");
     if (!Array.isArray(output.suggestions) || output.suggestions.length === 0) {
@@ -660,7 +725,15 @@ export function assertModeResult(
   }
   const schemaValidatedContent = parsed.data;
 
+  // The key inventory is the one tool that does not read DASHBOARD_BASE_URL, so
+  // pointing the dashboard at a dead or HTML-serving host says nothing about it.
+  // It must still parse its own schema — asserted above — but demanding dashboard
+  // failure evidence from a tool that never called the dashboard would be testing
+  // a claim the tool does not make. It is exercised by its own unit tests instead.
+  const readsDashboard = name !== "dashboard_key_inventory";
+
   if (mode === "offline") {
+    if (!readsDashboard) return;
     if (!containsFieldValue(schemaValidatedContent, "kind", "unreachable")) {
       throw new Error(`${name} did not return structured unreachable evidence`);
     }
@@ -670,6 +743,7 @@ export function assertModeResult(
     return;
   }
   if (mode === "html") {
+    if (!readsDashboard) return;
     if (!containsFieldValue(schemaValidatedContent, "kind", "non_json")) {
       throw new Error(`${name} did not return structured non_json evidence`);
     }
@@ -703,7 +777,7 @@ export function assertModeResult(
       output.summary !== CAPABILITY_MESSAGE ||
       output.message !== CAPABILITY_MESSAGE)
   ) {
-    throw new Error(`${name} returned the wrong PR #24 capability decline`);
+    throw new Error(`${name} returned the wrong live-models capability decline`);
   }
   if (name === "dashboard_resolve_model") {
     assertResolveModelLiveInvariants(

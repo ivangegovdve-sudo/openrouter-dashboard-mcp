@@ -9,6 +9,8 @@ import {
 } from "./dashboard/client.js";
 import { registerFreeModels } from "./tools/free-models.js";
 import { registerGithubMovers } from "./tools/github-movers.js";
+import { registerKeyInventory } from "./tools/key-inventory.js";
+import { registerModelEconomics } from "./tools/model-economics.js";
 import { registerModelStatus } from "./tools/model-status.js";
 import { registerResolveModel } from "./tools/resolve-model.js";
 import { registerSourceHealth } from "./tools/source-health.js";
@@ -31,8 +33,10 @@ export function createServer(
   registerFreeModels(server, { client });
   registerResolveModel(server, { client });
   registerModelStatus(server, { client });
+  registerModelEconomics(server, { client });
   registerWhatsChanged(server, { client });
   registerUsageLeaders(server, { client });
   registerGithubMovers(server, { client });
+  registerKeyInventory(server);
   return server;
 }

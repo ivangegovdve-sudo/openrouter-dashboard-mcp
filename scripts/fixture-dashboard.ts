@@ -34,6 +34,8 @@ const REFUSAL_TIMEOUT_MS = 1_000;
 const ROUTES = [
   "/api/public/v2/manifest",
   "/api/public/v2/live-models",
+  "/api/public/v2/models",
+  "/api/public/v2/models/{id}/providers",
   "/api/public/v2/free-models",
   "/api/public/v2/free-frontiers",
   "/api/public/v2/history",
@@ -97,6 +99,38 @@ const freeCatalogueModel = {
   name: "Fixture Free Text",
   pricing: { prompt: "0", completion: "0" },
   freeKind: "concrete_free" as const,
+};
+
+/**
+ * A discounted paid model, so the fixture can prove the economics tool reports a
+ * published discount with its provider named and no invented expiry.
+ */
+const discountedCatalogueModel = {
+  ...modelFixture,
+  id: "fixture/discounted",
+  canonicalSlug: "fixture/discounted",
+  name: "Fixture Discounted",
+  contextLength: "128000",
+  pricing: { prompt: "0.0000001250", completion: "0.0000005000" },
+  freeKind: "paid_or_unknown" as const,
+  supportedParameters: ["temperature", "tools"],
+};
+
+const fixtureProviderRow = {
+  modelId: discountedCatalogueModel.id,
+  provider: "FixtureProvider",
+  endpoint: "FixtureProvider | fixture/discounted",
+  quantization: "unknown",
+  contextLength: "128000",
+  promptPrice: "0.0000001250",
+  completionPrice: "0.0000005000",
+  discount: "0.432000000",
+  uptime: "99.000000000",
+  latency: "400.000000",
+  throughput: "100.000000",
+  status: "0",
+  sourceUrl: "https://openrouter.ai/fixture/discounted/providers",
+  fetchedAt: "2026-08-27T06:00:00.000Z",
 };
 
 function collection<T>(data: readonly T[]) {
@@ -551,6 +585,22 @@ function fixtureBody(path: string, query: URLSearchParams): unknown {
     if (query.get("cursor") !== null) throw new Error("unexpected live cursor");
     if (query.get("limit") === null) throw new Error("missing live limit");
     return collection([knownFreeModel, unknownModel, disappearedModel]);
+  }
+  if (path === "/api/public/v2/models") {
+    assertOnlyKeys(query, ["limit", "cursor"]);
+    if (query.get("limit") === null) throw new Error("missing catalogue limit");
+    if (query.get("cursor") !== null) throw new Error("unexpected catalogue cursor");
+    return collection([discountedCatalogueModel, freeCatalogueModel]);
+  }
+  if (path === `/api/public/v2/models/${encodeURIComponent(discountedCatalogueModel.id)}/providers`) {
+    assertExactQuery(query, {});
+    return collection([fixtureProviderRow]);
+  }
+  if (/^\/api\/public\/v2\/models\/.+\/providers$/.test(path)) {
+    // Every other model is unobserved upstream, which the tool must report as
+    // unknown rather than as full price. The fixture answers 500, matching how
+    // the deployed dashboard behaves for a model it holds no observation for.
+    throw new Error("fixture provider observation unavailable");
   }
   if (path === "/api/public/v2/free-models") {
     assertExactQuery(query, { modality: "text", limit: "5" });

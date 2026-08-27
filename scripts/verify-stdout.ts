@@ -26,6 +26,13 @@ const ENTRY_PATH = fileURLToPath(new URL("../build/index.js", import.meta.url));
 const EVIDENCE_DIRECTORY = fileURLToPath(
   new URL("../verification/raw/", import.meta.url),
 );
+/**
+ * Request ids are 1 (initialize), 2 (tools/list), 3..N+2 (one per diagnostic
+ * call), then the final tools/list. Derived rather than hardcoded so adding a
+ * tool cannot silently desynchronise the purity frame accounting.
+ */
+const FINAL_LIST_ID = DIAGNOSTIC_CALLS.length + 3;
+
 const STDOUT_MAX_BYTES = 10 * 1024 * 1024;
 const STDERR_MAX_BYTES = 64 * 1024;
 const EVIDENCE_MAX_BYTES = 5 * 1024 * 1024;
@@ -359,7 +366,7 @@ export async function runStdoutVerification(): Promise<string> {
     responseLineTarget += 1;
     await sendAndAwait(
       "final tools/list",
-      { jsonrpc: "2.0", id: 10, method: "tools/list", params: {} },
+      { jsonrpc: "2.0", id: FINAL_LIST_ID, method: "tools/list", params: {} },
       responseLineTarget,
       LIST_TIMEOUT_MS,
     );
@@ -374,7 +381,7 @@ export async function runStdoutVerification(): Promise<string> {
     const stdout = Buffer.concat(stdoutChunks);
     const stderr = Buffer.concat(stderrChunks);
     const expectedIds = new Set(
-      Array.from({ length: 10 }, (_, index) => index + 1),
+      Array.from({ length: FINAL_LIST_ID }, (_, index) => index + 1),
     );
     const frames = parsePurityFrames(stdout, expectedIds);
     const initialList = resultFromResponse(responseById(frames, 2), 2);
@@ -400,7 +407,10 @@ export async function runStdoutVerification(): Promise<string> {
         structuredContent: result.structuredContent,
       };
     });
-    const finalList = resultFromResponse(responseById(frames, 10), 10);
+    const finalList = resultFromResponse(
+      responseById(frames, FINAL_LIST_ID),
+      FINAL_LIST_ID,
+    );
     if (!Array.isArray(finalList.tools)) throw new Error("raw final tools/list has no tools");
     assertToolDefinitions(finalList.tools);
 

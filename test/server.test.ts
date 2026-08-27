@@ -36,7 +36,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers exactly the seven Task 6 tools without fetching during construction or tools/list", async () => {
+test("registers exactly the nine tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -52,6 +52,8 @@ test("registers exactly the seven Task 6 tools without fetching during construct
       [
         "dashboard_free_models",
         "dashboard_github_movers",
+        "dashboard_key_inventory",
+        "dashboard_model_economics",
         "dashboard_model_status",
         "dashboard_resolve_model",
         "dashboard_source_health",
@@ -115,7 +117,7 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
     }
 
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 7);
+    assert.equal(listed.tools.length, 9);
   } finally {
     await client.close();
   }
@@ -165,7 +167,7 @@ test("returns matching structured content and JSON text from the registered hand
 
 test("serializes and validates the registered model-status handler output", async () => {
   const capabilityMessage =
-    "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.";
+    "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.";
   const fetchImpl: typeof fetch = async (input) => {
     const url = new URL(String(input));
     assert.equal(url.pathname, "/api/public/v2/manifest");

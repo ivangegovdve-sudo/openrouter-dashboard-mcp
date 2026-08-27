@@ -639,7 +639,7 @@ test("declines with the exact capability literal when live-models is absent", as
   assert.equal(result.summary, RESOLVE_MODEL_CAPABILITY_MESSAGE);
   assert.equal(
     result.summary,
-    "This tool needs /api/public/v2/live-models, which is not yet deployed. It ships with PR #24. Until then, ask about deprecations or history instead.",
+    "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.",
   );
   assert.deepEqual(requests.map((request) => request.path), [manifestEndpoint]);
 });

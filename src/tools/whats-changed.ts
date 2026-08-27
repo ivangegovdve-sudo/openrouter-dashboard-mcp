@@ -591,7 +591,7 @@ export async function runWhatsChanged(
       modelDisappearances = unavailable(error.message);
       warnings.push(`Model appearance and disappearance are unavailable: ${error.message}`);
     } else if (liveResult.value === null) {
-      const reason = `${LIVE_MODELS_ENDPOINT} is not yet deployed; model appearance and disappearance are unavailable.`;
+      const reason = `${LIVE_MODELS_ENDPOINT} is not currently published; model appearance and disappearance are unavailable.`;
       modelAppearances = unavailable(reason);
       modelDisappearances = unavailable(reason);
     } else {
