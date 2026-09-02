@@ -759,6 +759,12 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
       1, "the catalogue row must be replaced, not duplicated");
     assert.equal(sailModel.pricing.completionUsdPerToken, "0.0000044000");
     assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
+    // The window the price belongs to must travel WITH the price. Selection can
+    // fall back to a faster window than requested, so two rows that look
+    // identical may require different Sail settings to obtain -- a caller
+    // omitting the setting would be charged the ASAP rate.
+    assert.equal(sailModel.pricingWindow, "asap",
+      "the price must name the completion window it came from");
   } finally {
     globalThis.fetch = originalFetch;
   }

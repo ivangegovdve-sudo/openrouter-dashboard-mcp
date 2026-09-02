@@ -223,6 +223,18 @@ const economicsModelSchema = z
      */
     emitsText: z.boolean().nullable(),
     reasoningEfforts: z.array(z.string()).nullable(),
+    /**
+     * The provider completion window this price belongs to, or null where the
+     * provider does not price per window.
+     *
+     * Sail publishes asap / balanced / flex at different rates, so the window is
+     * part of the price, not a detail about it: two rows can carry identical
+     * numbers and require different settings to obtain. A caller that omits the
+     * setting pays the ASAP rate. The value was selected upstream and dropped at
+     * the projection -- a price whose qualifier is missing is a number whose
+     * meaning has to be inferred.
+     */
+    pricingWindow: z.string().nullable(),
     pricing: z
       .object({
         promptUsdPerToken: z.string().nullable(),
@@ -562,6 +574,11 @@ export async function runModelEconomics(
                 promptUsdPerToken,
                 completionUsdPerToken
               },
+              // The window this price was read from. Selection may fall back to a
+              // faster window than requested, so without this a caller cannot
+              // know which Sail setting the number requires -- and a price whose
+              // qualifier is missing is a number whose meaning is inferred.
+              pricingWindow: bestRow.window,
               isFree: false,
               freeKind: "paid_or_unknown",
               providerActive: null,
@@ -639,6 +656,11 @@ export async function runModelEconomics(
       emitsText:
         row.outputModalities === null ? null : row.outputModalities.includes("text"),
       reasoningEfforts: row.reasoningEfforts,
+      // Carried through the projection deliberately. The window was already
+      // selected upstream and then dropped HERE -- an explicit field-by-field
+      // map silently discards anything nobody remembered to list, which is the
+      // same defect as computing a value and never comparing it.
+      pricingWindow: row.pricingWindow ?? null,
       pricing: {
         promptUsdPerToken: promptPrice,
         completionUsdPerToken: completionPrice,
