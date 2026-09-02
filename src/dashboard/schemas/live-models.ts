@@ -6,7 +6,7 @@ import {
   publicCollectionSchema,
 } from "./common.js";
 
-export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras"]);
+export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras", "sail"]);
 export const availabilitySchema = z.enum(["available", "disappeared"]);
 export const freeKindSchema = z.enum([
   "concrete_free",

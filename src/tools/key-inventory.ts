@@ -171,6 +171,7 @@ const KEY_PROBE: Record<ProviderId, { url: string; readsSpend: boolean }> = {
   openrouter: { url: "https://openrouter.ai/api/v1/key", readsSpend: true },
   groq: { url: "https://api.groq.com/openai/v1/models", readsSpend: false },
   cerebras: { url: "https://api.cerebras.ai/v1/models", readsSpend: false },
+  sail: { url: "https://api.sailresearch.com/v1/models", readsSpend: false },
 };
 
 export const keySourceSchema = z

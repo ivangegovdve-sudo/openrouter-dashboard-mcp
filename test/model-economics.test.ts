@@ -1,7 +1,21 @@
+import fs from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { DashboardClient } from "../src/dashboard/client.js";
+
+const _originalFetch = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  if (url === "https://docs.sailresearch.com/pricing.md") {
+    // Return empty document by default so no models are injected for other tests
+    return {
+      ok: true,
+      arrayBuffer: async () => Buffer.from("")
+    };
+  }
+  return _originalFetch(url);
+};
+
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import {
   DISCOUNT_ENRICHMENT_LIMIT,
@@ -694,4 +708,83 @@ test("flags a provider that is merely a day behind the freshest one", async () =
   // Under two days absolute, but a day behind the freshest -- the comparison is
   // still not like-for-like in time, and says so.
   assert.match(output.warnings.join(" "), /hours older than the freshest provider/);
+});
+
+
+
+test("Sail integration: parses three windows, matches fingerprint", async () => {
+  const fixture = fs.readFileSync('sail-pricing.md');
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === "https://docs.sailresearch.com/pricing.md") {
+      return {
+        ok: true,
+        arrayBuffer: async () => fixture
+      };
+    }
+    return originalFetch(url);
+  };
+
+  const client = stubClient({
+    live: [
+      liveModel({
+        provider: "openrouter",
+        id: "openrouter/model",
+      }),
+    ],
+  });
+
+  try {
+    const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });
+    assert.equal(output.status, "ok");
+    
+    // The fixture has ASAP input $1.40 and output $4.40
+    // promptUsdPerToken = 0.0000014000
+    // completionUsdPerToken = 0.0000044000
+    
+    const sailModel = (output as any).models.find((m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3");
+    assert.ok(sailModel, "Sail model should be injected");
+    assert.equal(sailModel.pricing.promptUsdPerToken, "0.0000014000");
+    assert.equal(sailModel.pricing.completionUsdPerToken, "0.0000044000");
+    assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Sail integration: fingerprint MISMATCH refuses and reports staleness", async () => {
+  const fixture = Buffer.from("wrong content");
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === "https://docs.sailresearch.com/pricing.md") {
+      return {
+        ok: true,
+        arrayBuffer: async () => fixture
+      };
+    }
+    return originalFetch(url);
+  };
+
+  const client = stubClient({ live: [] });
+
+  try {
+    const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });
+
+    // A refusal is NOT "ok". The tool declines to price from a document it
+    // cannot vouch for, and says so -- so the honest status is "partial".
+    // Asserting "ok" here would have passed only if the fingerprint were
+    // ignored, i.e. the assertion would have been satisfied by the bug.
+    assert.equal(output.status, "partial");
+
+    const sailModel = (output as any).models.find((m: any) => m.provider === "sail");
+    assert.equal(sailModel, undefined, "Sail models must be omitted on mismatch");
+
+    // It must REFUSE, never fall back to the unverified prices.
+    const said = [(output as any).summary, ...((output as any).warnings ?? [])].join(" ");
+    assert.match(said, /PRICES ARE STALE/, "Must report staleness");
+    assert.match(said, /does not match expected/, "Must name the digest mismatch");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

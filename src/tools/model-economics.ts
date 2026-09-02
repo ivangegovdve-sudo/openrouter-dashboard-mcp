@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -317,6 +318,11 @@ export const modelEconomicsInputSchema = z
     /** Keep only genuinely free models. Excludes the rate-limited free router. */
     genuinelyFreeOnly: z.boolean().default(false),
     /**
+     * Latency tolerance for Sail models, which price per completion window.
+     * Required if Sail is included; models offering only slower windows than requested are dropped.
+     */
+    latencyTolerance: z.enum(["asap", "balanced", "flex"]).default("asap"),
+    /**
      * Drop models that are deprecated, expiring soon, already disappeared, or
      * whose lifecycle is unreadable. Does NOT drop `not_published_by_provider`:
      * that is a whole-provider property the caller can already see, and dropping
@@ -464,6 +470,107 @@ export async function runModelEconomics(
   // 2. OpenRouter-only enrichment. Groq and Cerebras publish no lifecycle, rank or
   //    parameter list, so there is nothing equivalent to fetch for them — that is a
   //    fact recorded in the provider registry, not an omission here.
+
+  const wantsSail = input.providers === undefined || input.providers.includes("sail");
+  if (wantsSail) {
+    try {
+      const sailDocUrl = "https://docs.sailresearch.com/pricing.md";
+      const sailRes = await fetch(sailDocUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!sailRes.ok) {
+        throw new Error(`Failed to fetch Sail pricing doc: ${sailRes.status}`);
+      }
+      const docBuffer = await sailRes.arrayBuffer();
+      const doc = Buffer.from(docBuffer);
+      const digest = createHash("sha256").update(doc).digest("hex");
+      
+      const expectedDigest = "f6e51e2acb2672bc7c0fb6ad01db5ced688e757964fcdc827dbf0a149107a9a0";
+      if (digest !== expectedDigest) {
+        warnings.push(`PRICES ARE STALE: Sail pricing document digest ${digest} does not match expected ${expectedDigest}. Sail models omitted.`);
+      } else {
+        evidence.push({
+          endpoint: sailDocUrl,
+          window: null,
+          completeness: null,
+          stale: false,
+          watermark: null,
+          provenance: [],
+          freshness: null
+        });
+        
+        const docStr = doc.toString('utf-8');
+        const groupRe = /data-model="([^"]+)"(.*?)(?=data-model="|$)/gs;
+        
+        let match;
+        while ((match = groupRe.exec(docStr)) !== null) {
+          const modelId = match[1] || "";
+          const block = match[2] || "";
+          
+          const rowRe = /aria-label="([^"]*?) pricing: input \$([\d.]+), cached \$([\d.]+), output \$([\d.]+)/g;
+          let bestRow: { window: "asap" | "balanced" | "flex"; inputUsd: string; cachedUsd: string; outputUsd: string } | null = null;
+          let rowMatch;
+          
+          const windowMap = { 'asap': 3, 'balanced': 2, 'flex': 1 };
+          const requestLevel = windowMap[input.latencyTolerance];
+          
+          while ((rowMatch = rowRe.exec(block)) !== null) {
+            if (!rowMatch[1] || !rowMatch[2] || !rowMatch[3] || !rowMatch[4]) continue;
+            
+            const labelLower = rowMatch[1].toLowerCase();
+            let rowWindow: "asap" | "balanced" | "flex" | null = null;
+            if (labelLower.includes('asap')) rowWindow = 'asap';
+            else if (labelLower.includes('balanced')) rowWindow = 'balanced';
+            else if (labelLower.includes('flex')) rowWindow = 'flex';
+            else continue;
+            
+            const rowLevel = windowMap[rowWindow];
+            if (rowLevel >= requestLevel) {
+              if (bestRow === null || rowLevel < windowMap[bestRow.window]) {
+                bestRow = {
+                  window: rowWindow,
+                  inputUsd: rowMatch[2],
+                  cachedUsd: rowMatch[3],
+                  outputUsd: rowMatch[4]
+                };
+              }
+            }
+          }
+          
+          if (bestRow !== null) {
+            const promptUsdPerToken = (parseFloat(bestRow.inputUsd) / 1000000).toFixed(10);
+            const completionUsdPerToken = (parseFloat(bestRow.outputUsd) / 1000000).toFixed(10);
+            
+            liveRows.push({
+              provider: "sail",
+              id: modelId,
+              displayName: modelId,
+              ownedBy: null,
+              contextLength: null,
+              pricing: {
+                promptUsdPerToken,
+                completionUsdPerToken
+              },
+              isFree: false,
+              freeKind: "paid_or_unknown",
+              providerActive: null,
+              reasoningEfforts: null,
+              outputModalities: null,
+              performance: null,
+              availability: "available",
+              firstSeenAt: asOfIso,
+              lastSeenAt: asOfIso,
+              lastConfirmedAt: asOfIso,
+              disappearedAt: null,
+              absenceStreak: "0",
+              missingFields: ["availabilitySource_absent_assumed_available"]
+            });
+          }
+        }
+      }
+    } catch (e) {
+      warnings.push("Failed to fetch or parse Sail pricing doc: " + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
   const openRouterExtras = new Map<string, OpenRouterExtra>();
   const wantsOpenRouter =
     input.providers === undefined || input.providers.includes("openrouter");

@@ -27,7 +27,7 @@ import { z } from "zod";
  * providerIdSchema. Nothing else in this server enumerates providers.
  */
 
-export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras"]);
+export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras", "sail"]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
 export const publicationSchema = z.enum([
@@ -146,6 +146,25 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "no_billing_api",
     comparabilityNote:
       "Cerebras publishes only a model id and owner — no price, no context length, no modality. Its models therefore cannot be ranked on cost or filtered on capability from catalogue data alone, and are reported as unrankable rather than dropped. It exposes no billing API, so per-key spend cannot be read.",
+  },
+  sail: {
+    id: "sail",
+    displayName: "Sail",
+    catalogueUrl: "https://api.sailresearch.com/v1/models",
+    citationUrl: "https://docs.sailresearch.com/pricing.md",
+    publishes: {
+      pricing: "never",
+      contextLength: "never",
+      outputModalities: "never",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "Sail models expose no programmatic price endpoint and are parsed periodically from a markdown document. Prices are strictly per-completion window; an optional availability source is absent.",
   },
 };
 

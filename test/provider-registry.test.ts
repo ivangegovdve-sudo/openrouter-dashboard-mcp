@@ -10,7 +10,7 @@ import {
 } from "../src/providers/registry.js";
 
 test("covers the three providers this build normalises", () => {
-  assert.deepEqual(PROVIDER_IDS.sort(), ["cerebras", "groq", "openrouter"]);
+  assert.deepEqual(PROVIDER_IDS.sort(), ["cerebras", "groq", "openrouter", "sail"]);
 });
 
 test("every provider declares each capability, so a null always has a stated cause", () => {
@@ -52,6 +52,7 @@ test("records that only OpenRouter exposes a billing API", () => {
   assert.equal(PROVIDER_REGISTRY.openrouter.spendVisibility, "api");
   assert.equal(PROVIDER_REGISTRY.groq.spendVisibility, "no_billing_api");
   assert.equal(PROVIDER_REGISTRY.cerebras.spendVisibility, "no_billing_api");
+  assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "no_billing_api");
 });
 
 test("phrases an unpriced model as a provider fact and never as free", () => {
