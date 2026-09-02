@@ -6,7 +6,7 @@ import {
   publicCollectionSchema,
 } from "./common.js";
 
-export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras"]);
+export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras", "sail"]);
 export const availabilitySchema = z.enum(["available", "disappeared"]);
 export const freeKindSchema = z.enum([
   "concrete_free",
@@ -84,6 +84,12 @@ export const liveModelSchema = z
     disappearedAt: z.string().datetime({ offset: true }).nullable(),
     absenceStreak: exactIntegerStringSchema,
     missingFields: z.array(z.string()),
+    // The completion window a price belongs to, when the provider prices per
+    // window. Sail publishes asap/balanced/flex at different rates, and the
+    // window is part of the price: two rows can look identical and require
+    // different settings to obtain. Optional, so the providers that do not
+    // price per window are unaffected.
+    pricingWindow: z.string().nullable().optional(),
   })
   .strict()
   .superRefine((value, context) => {

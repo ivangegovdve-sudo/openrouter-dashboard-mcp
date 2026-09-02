@@ -1,7 +1,21 @@
+import fs from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { DashboardClient } from "../src/dashboard/client.js";
+
+const _originalFetch = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  if (url === "https://docs.sailresearch.com/pricing.md") {
+    // Return empty document by default so no models are injected for other tests
+    return {
+      ok: true,
+      arrayBuffer: async () => Buffer.from("")
+    };
+  }
+  return _originalFetch(url);
+};
+
 import { DashboardRequestError } from "../src/dashboard/errors.js";
 import {
   DISCOUNT_ENRICHMENT_LIMIT,
@@ -694,4 +708,109 @@ test("flags a provider that is merely a day behind the freshest one", async () =
   // Under two days absolute, but a day behind the freshest -- the comparison is
   // still not like-for-like in time, and says so.
   assert.match(output.warnings.join(" "), /hours older than the freshest provider/);
+});
+
+
+
+test("Sail integration: parses three windows, matches fingerprint", async () => {
+  const fixture = fs.readFileSync('sail-pricing.md');
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === "https://docs.sailresearch.com/pricing.md") {
+      return {
+        ok: true,
+        arrayBuffer: async () => fixture
+      };
+    }
+    return originalFetch(url);
+  };
+
+  // ⚠ A CATALOGUE-SUPPLIED Sail row with DIFFERENT pricing, present before the
+  // verified document is parsed. The success path used to append beside it,
+  // emitting a duplicate identity and catalogue pricing that never passed the
+  // digest check. The mismatch path had the same hole; fixing only one left the
+  // other, which is why the rows are now stripped unconditionally before
+  // injection rather than conditionally after it.
+  const client = stubClient({
+    live: [
+      liveModel({ provider: "openrouter", id: "openrouter/model" }),
+      liveModel({ provider: "sail", id: "zai-org/GLM-5.3", prompt: "0.0000099999" }),
+    ],
+  });
+
+  try {
+    const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });
+    assert.equal(output.status, "ok");
+    
+    // The fixture has ASAP input $1.40 and output $4.40
+    // promptUsdPerToken = 0.0000014000
+    // completionUsdPerToken = 0.0000044000
+    
+    const sailModel = (output as any).models.find((m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3");
+    assert.ok(sailModel, "Sail model should be injected");
+    assert.equal(sailModel.pricing.promptUsdPerToken, "0.0000014000");
+    // The verified document's price, NOT the catalogue's 0.0000099999.
+    assert.notEqual(sailModel.pricing.promptUsdPerToken, "0.0000099999");
+    // Exactly one Sail row for this id -- the catalogue copy must be gone, not
+    // sitting beside the verified one.
+    assert.equal(
+      (output as any).models.filter(
+        (m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3").length,
+      1, "the catalogue row must be replaced, not duplicated");
+    assert.equal(sailModel.pricing.completionUsdPerToken, "0.0000044000");
+    assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
+    // The window the price belongs to must travel WITH the price. Selection can
+    // fall back to a faster window than requested, so two rows that look
+    // identical may require different Sail settings to obtain -- a caller
+    // omitting the setting would be charged the ASAP rate.
+    assert.equal(sailModel.pricingWindow, "asap",
+      "the price must name the completion window it came from");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Sail integration: fingerprint MISMATCH refuses and reports staleness", async () => {
+  const fixture = Buffer.from("wrong content");
+  
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (url === "https://docs.sailresearch.com/pricing.md") {
+      return {
+        ok: true,
+        arrayBuffer: async () => fixture
+      };
+    }
+    return originalFetch(url);
+  };
+
+  // ⚠ A PRE-POPULATED SAIL ROW. The original test used `live: []`, so "no Sail
+  // model survives" was true because none ever existed -- satisfied by the
+  // ABSENCE of the case it exists to check. The live-model schema permits
+  // provider: "sail", so a catalogue row can arrive without the Sail block
+  // having produced it, and that is the row a warning-only refusal leaves
+  // priced from an unverified document.
+  const client = stubClient({
+    live: [liveModel({ provider: "sail", id: "zai-org/GLM-5.3", prompt: "0.0000099999" })],
+  });
+
+  try {
+    const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });
+
+    // A refusal is NOT "ok". The tool declines to price from a document it
+    // cannot vouch for, and says so -- so the honest status is "partial".
+    // Asserting "ok" here would have passed only if the fingerprint were
+    // ignored, i.e. the assertion would have been satisfied by the bug.
+    assert.equal(output.status, "partial");
+
+    const sailModel = (output as any).models.find((m: any) => m.provider === "sail");
+    assert.equal(sailModel, undefined, "Sail models must be omitted on mismatch");
+
+    // It must REFUSE, never fall back to the unverified prices.
+    const said = [(output as any).summary, ...((output as any).warnings ?? [])].join(" ");
+    assert.match(said, /PRICES ARE STALE/, "Must report staleness");
+    assert.match(said, /does not match expected/, "Must name the digest mismatch");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

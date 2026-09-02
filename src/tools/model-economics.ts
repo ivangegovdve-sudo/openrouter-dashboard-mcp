@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
@@ -222,6 +223,18 @@ const economicsModelSchema = z
      */
     emitsText: z.boolean().nullable(),
     reasoningEfforts: z.array(z.string()).nullable(),
+    /**
+     * The provider completion window this price belongs to, or null where the
+     * provider does not price per window.
+     *
+     * Sail publishes asap / balanced / flex at different rates, so the window is
+     * part of the price, not a detail about it: two rows can carry identical
+     * numbers and require different settings to obtain. A caller that omits the
+     * setting pays the ASAP rate. The value was selected upstream and dropped at
+     * the projection -- a price whose qualifier is missing is a number whose
+     * meaning has to be inferred.
+     */
+    pricingWindow: z.string().nullable(),
     pricing: z
       .object({
         promptUsdPerToken: z.string().nullable(),
@@ -316,6 +329,11 @@ export const modelEconomicsInputSchema = z
     minContextLength: z.number().int().positive().optional(),
     /** Keep only genuinely free models. Excludes the rate-limited free router. */
     genuinelyFreeOnly: z.boolean().default(false),
+    /**
+     * Latency tolerance for Sail models, which price per completion window.
+     * Required if Sail is included; models offering only slower windows than requested are dropped.
+     */
+    latencyTolerance: z.enum(["asap", "balanced", "flex"]).default("asap"),
     /**
      * Drop models that are deprecated, expiring soon, already disappeared, or
      * whose lifecycle is unreadable. Does NOT drop `not_published_by_provider`:
@@ -464,6 +482,125 @@ export async function runModelEconomics(
   // 2. OpenRouter-only enrichment. Groq and Cerebras publish no lifecycle, rank or
   //    parameter list, so there is nothing equivalent to fetch for them — that is a
   //    fact recorded in the provider registry, not an omission here.
+
+  const wantsSail = input.providers === undefined || input.providers.includes("sail");
+  if (wantsSail) {
+    // Every Sail row in the answer must come from the digest-verified document,
+    // and ONLY from it. The live-model schema permits provider: "sail", so the
+    // catalogue can supply rows this block did not produce -- carrying pricing
+    // that was never verified against the pinned digest.
+    //
+    // Strip them FIRST, unconditionally, then add back only what verification
+    // produces. The earlier version cleared them only on the failure path, which
+    // left the success path emitting duplicate identities and catalogue-derived
+    // prices beside verified ones. Removing before injecting makes both paths
+    // correct by construction instead of by two separate conditionals.
+    for (let i = liveRows.length - 1; i >= 0; i -= 1) {
+      if (liveRows[i]!.provider === "sail") liveRows.splice(i, 1);
+    }
+    try {
+      const sailDocUrl = "https://docs.sailresearch.com/pricing.md";
+      const sailRes = await fetch(sailDocUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!sailRes.ok) {
+        throw new Error(`Failed to fetch Sail pricing doc: ${sailRes.status}`);
+      }
+      const docBuffer = await sailRes.arrayBuffer();
+      const doc = Buffer.from(docBuffer);
+      const digest = createHash("sha256").update(doc).digest("hex");
+      
+      const expectedDigest = "f6e51e2acb2672bc7c0fb6ad01db5ced688e757964fcdc827dbf0a149107a9a0";
+      if (digest !== expectedDigest) {
+        warnings.push(`PRICES ARE STALE: Sail pricing document digest ${digest} does not match expected ${expectedDigest}. Sail models omitted.`);
+      } else {
+        evidence.push({
+          endpoint: sailDocUrl,
+          window: null,
+          completeness: null,
+          stale: false,
+          watermark: null,
+          provenance: [],
+          freshness: null
+        });
+        
+        const docStr = doc.toString('utf-8');
+        const groupRe = /data-model="([^"]+)"(.*?)(?=data-model="|$)/gs;
+        
+        let match;
+        while ((match = groupRe.exec(docStr)) !== null) {
+          const modelId = match[1] || "";
+          const block = match[2] || "";
+          
+          const rowRe = /aria-label="([^"]*?) pricing: input \$([\d.]+), cached \$([\d.]+), output \$([\d.]+)/g;
+          let bestRow: { window: "asap" | "balanced" | "flex"; inputUsd: string; cachedUsd: string; outputUsd: string } | null = null;
+          let rowMatch;
+          
+          const windowMap = { 'asap': 3, 'balanced': 2, 'flex': 1 };
+          const requestLevel = windowMap[input.latencyTolerance];
+          
+          while ((rowMatch = rowRe.exec(block)) !== null) {
+            if (!rowMatch[1] || !rowMatch[2] || !rowMatch[3] || !rowMatch[4]) continue;
+            
+            const labelLower = rowMatch[1].toLowerCase();
+            let rowWindow: "asap" | "balanced" | "flex" | null = null;
+            if (labelLower.includes('asap')) rowWindow = 'asap';
+            else if (labelLower.includes('balanced')) rowWindow = 'balanced';
+            else if (labelLower.includes('flex')) rowWindow = 'flex';
+            else continue;
+            
+            const rowLevel = windowMap[rowWindow];
+            if (rowLevel >= requestLevel) {
+              if (bestRow === null || rowLevel < windowMap[bestRow.window]) {
+                bestRow = {
+                  window: rowWindow,
+                  inputUsd: rowMatch[2],
+                  cachedUsd: rowMatch[3],
+                  outputUsd: rowMatch[4]
+                };
+              }
+            }
+          }
+          
+          if (bestRow !== null) {
+            const promptUsdPerToken = (parseFloat(bestRow.inputUsd) / 1000000).toFixed(10);
+            const completionUsdPerToken = (parseFloat(bestRow.outputUsd) / 1000000).toFixed(10);
+            
+            liveRows.push({
+              provider: "sail",
+              id: modelId,
+              displayName: modelId,
+              ownedBy: null,
+              contextLength: null,
+              pricing: {
+                promptUsdPerToken,
+                completionUsdPerToken
+              },
+              // The window this price was read from. Selection may fall back to a
+              // faster window than requested, so without this a caller cannot
+              // know which Sail setting the number requires -- and a price whose
+              // qualifier is missing is a number whose meaning is inferred.
+              pricingWindow: bestRow.window,
+              isFree: false,
+              freeKind: "paid_or_unknown",
+              providerActive: null,
+              reasoningEfforts: null,
+              outputModalities: null,
+              performance: null,
+              availability: "available",
+              firstSeenAt: asOfIso,
+              lastSeenAt: asOfIso,
+              lastConfirmedAt: asOfIso,
+              disappearedAt: null,
+              absenceStreak: "0",
+              missingFields: ["availabilitySource_absent_assumed_available"]
+            });
+          }
+        }
+      }
+    } catch (e) {
+      warnings.push("Failed to fetch or parse Sail pricing doc: " + (e instanceof Error ? e.message : String(e)));
+    }
+  }
+
   const openRouterExtras = new Map<string, OpenRouterExtra>();
   const wantsOpenRouter =
     input.providers === undefined || input.providers.includes("openrouter");
@@ -519,6 +656,11 @@ export async function runModelEconomics(
       emitsText:
         row.outputModalities === null ? null : row.outputModalities.includes("text"),
       reasoningEfforts: row.reasoningEfforts,
+      // Carried through the projection deliberately. The window was already
+      // selected upstream and then dropped HERE -- an explicit field-by-field
+      // map silently discards anything nobody remembered to list, which is the
+      // same defect as computing a value and never comparing it.
+      pricingWindow: row.pricingWindow ?? null,
       pricing: {
         promptUsdPerToken: promptPrice,
         completionUsdPerToken: completionPrice,
