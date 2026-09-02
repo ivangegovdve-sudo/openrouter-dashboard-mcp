@@ -766,7 +766,15 @@ test("Sail integration: fingerprint MISMATCH refuses and reports staleness", asy
     return originalFetch(url);
   };
 
-  const client = stubClient({ live: [] });
+  // ⚠ A PRE-POPULATED SAIL ROW. The original test used `live: []`, so "no Sail
+  // model survives" was true because none ever existed -- satisfied by the
+  // ABSENCE of the case it exists to check. The live-model schema permits
+  // provider: "sail", so a catalogue row can arrive without the Sail block
+  // having produced it, and that is the row a warning-only refusal leaves
+  // priced from an unverified document.
+  const client = stubClient({
+    live: [liveModel({ provider: "sail", id: "zai-org/GLM-5.3", prompt: "0.0000099999" })],
+  });
 
   try {
     const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });

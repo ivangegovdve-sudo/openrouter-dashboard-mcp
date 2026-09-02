@@ -472,6 +472,10 @@ export async function runModelEconomics(
   //    fact recorded in the provider registry, not an omission here.
 
   const wantsSail = input.providers === undefined || input.providers.includes("sail");
+  // Sail prices are only trustworthy when the pinned document digest matches.
+  // Anything that leaves this false must remove EVERY Sail row, including any
+  // that arrived from the live catalogue rather than from this block.
+  let sailPricingVerified = true;
   if (wantsSail) {
     try {
       const sailDocUrl = "https://docs.sailresearch.com/pricing.md";
@@ -485,6 +489,7 @@ export async function runModelEconomics(
       
       const expectedDigest = "f6e51e2acb2672bc7c0fb6ad01db5ced688e757964fcdc827dbf0a149107a9a0";
       if (digest !== expectedDigest) {
+        sailPricingVerified = false;
         warnings.push(`PRICES ARE STALE: Sail pricing document digest ${digest} does not match expected ${expectedDigest}. Sail models omitted.`);
       } else {
         evidence.push({
@@ -567,7 +572,20 @@ export async function runModelEconomics(
         }
       }
     } catch (e) {
+      sailPricingVerified = false;
       warnings.push("Failed to fetch or parse Sail pricing doc: " + (e instanceof Error ? e.message : String(e)));
+    }
+
+    // FAIL CLOSED. The promise is "Sail models omitted", not "no NEW Sail models
+    // added". The live-model schema permits provider: "sail", so a catalogue row
+    // can be present without this block having put it there -- and pricing it
+    // from a document we could not verify is exactly the failure the digest
+    // exists to prevent. A router quoting unverifiable prices is worse than one
+    // that returns nothing, because the caller cannot tell.
+    if (!sailPricingVerified) {
+      for (let i = liveRows.length - 1; i >= 0; i -= 1) {
+        if (liveRows[i]!.provider === "sail") liveRows.splice(i, 1);
+      }
     }
   }
 
