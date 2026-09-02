@@ -725,12 +725,16 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
     return originalFetch(url);
   };
 
+  // ⚠ A CATALOGUE-SUPPLIED Sail row with DIFFERENT pricing, present before the
+  // verified document is parsed. The success path used to append beside it,
+  // emitting a duplicate identity and catalogue pricing that never passed the
+  // digest check. The mismatch path had the same hole; fixing only one left the
+  // other, which is why the rows are now stripped unconditionally before
+  // injection rather than conditionally after it.
   const client = stubClient({
     live: [
-      liveModel({
-        provider: "openrouter",
-        id: "openrouter/model",
-      }),
+      liveModel({ provider: "openrouter", id: "openrouter/model" }),
+      liveModel({ provider: "sail", id: "zai-org/GLM-5.3", prompt: "0.0000099999" }),
     ],
   });
 
@@ -745,6 +749,14 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
     const sailModel = (output as any).models.find((m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3");
     assert.ok(sailModel, "Sail model should be injected");
     assert.equal(sailModel.pricing.promptUsdPerToken, "0.0000014000");
+    // The verified document's price, NOT the catalogue's 0.0000099999.
+    assert.notEqual(sailModel.pricing.promptUsdPerToken, "0.0000099999");
+    // Exactly one Sail row for this id -- the catalogue copy must be gone, not
+    // sitting beside the verified one.
+    assert.equal(
+      (output as any).models.filter(
+        (m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3").length,
+      1, "the catalogue row must be replaced, not duplicated");
     assert.equal(sailModel.pricing.completionUsdPerToken, "0.0000044000");
     assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
   } finally {
