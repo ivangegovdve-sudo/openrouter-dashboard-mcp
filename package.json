@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "0.4.0",
-  "description": "Read-only MCP server that compares AI models across OpenRouter, Groq and Cerebras on price, published discounts, capability and retirement risk -- and reports models that quietly stopped being free.",
+  "version": "0.5.1",
+  "description": "Read-only MCP server comparing models on OpenRouter, Groq, Cerebras and Sail by price, discounts, capability and retirement risk. Reports models that quietly stopped being free, and refuses to quote Sail prices when its pinned pricing document changes.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -48,5 +48,6 @@
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
-  }
+  },
+  "homepage": "https://sdforest.site/web/open-overview/mcp/"
 }
