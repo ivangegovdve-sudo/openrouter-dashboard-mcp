@@ -68,7 +68,22 @@ function documentedToolNames(): string[] {
     "the README must keep its tools:begin/tools:end markers; without them this guard has nothing authoritative to compare",
   );
   const block = readme.slice(begin, end);
-  return [...new Set(block.match(/dashboard_[a-z0-9_]+/g) ?? [])].sort();
+  // Backtick-delimited, so the match has EXPLICIT boundaries. A bare
+  // /dashboard_[a-z0-9_]+/ scan extracts a prefix: a table documenting
+  // `dashboard_foo-v2` while the server serves `dashboard_foo` yielded
+  // "dashboard_foo" and compared equal, so a wrong documented identifier passed.
+  // MCP tool names permit hyphens and dots, which that character class silently
+  // truncates, and preceding text like `notdashboard_foo` matched too.
+  const names = [...block.matchAll(/`([A-Za-z0-9_.-]+)`/g)]
+    .map((match) => match[1]!)
+    .filter((name) => name.startsWith("dashboard_"));
+  const unique = [...new Set(names)];
+  assert.equal(
+    unique.length,
+    names.length,
+    "the tools table lists the same tool twice; a Set would have hidden that",
+  );
+  return unique.sort();
 }
 
 test("the README's tool table matches the server's live tools/list exactly", async () => {
