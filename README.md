@@ -1,6 +1,6 @@
 # Open Dashboard MCP
 
-Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq and Cerebras** in one comparable shape, plus GitHub trending repositories. The server exposes ten bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq, Cerebras and Sail** in one comparable shape, plus **GitHub trending repositories** dated by when they were collected. The server exposes ten bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
@@ -89,14 +89,18 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 | OpenRouter | 560+ | most | yes | yes | yes | per endpoint | yes |
 | Groq | 13 | some | yes | yes | **no** | no | **no** |
 | Cerebras | 2 | **no** | **no** | **no** | **no** | no | **no** |
+| Sail | 10 | **no** (see below) | **no** | **no** | **no** | no | **no** |
 
-Measured 2026-08-27. The catalogues disagree about almost everything, and **normalising them is the work** — the API calls are the easy part.
+Provider rows measured 2026-08-27; Sail measured 2026-09-04. The catalogues disagree about almost everything, and **normalising them is the work** — the API calls are the easy part.
 
-Three rules follow from that table, and the tools enforce all three:
+Sail is the sharpest case. Its catalogue API publishes *nothing* beyond model ids, so every field above is a `never` in [`src/providers/registry.ts`](src/providers/registry.ts). Its prices exist only in a human-readable pricing document, which this server treats as evidence rather than as an API — see [Sail pricing](#sail-pricing-a-pinned-document-not-an-api).
 
-- **An unpriced model is cost-unknown, never free.** Cerebras publishes no prices at all; Groq publishes them for part of its catalogue. Those rows keep their place in the answer with `priceComparable: false` and a stated `unrankableReason`, listed after the ranked rows rather than dropped — otherwise "cheapest across everything" silently means "cheapest among the rows that happened to carry a number".
-- **No lifecycle signal is not the same as no risk.** Only OpenRouter publishes deprecation. Groq and Cerebras models report `retirementRisk: "not_published_by_provider"`, because `"none"` would be a false reassurance. For those two, a model vanishing from the list is the only retirement notice there is — so `availability: "disappeared"` is treated as imminent.
-- **Every null cites the provider that withheld it.** [`src/providers/registry.ts`](src/providers/registry.ts) declares, per provider, what is published `always`, `partial` or `never`. Adding a fourth provider is a new entry there plus its id in `providerIdSchema`; nothing else in this server enumerates providers.
+Four rules follow from that table, and the tools enforce all four:
+
+- **An unpriced model is cost-unknown, never free.** Cerebras and Sail publish no prices in their catalogues at all; Groq publishes them for part of its. Those rows keep their place in the answer with `priceComparable: false` and a stated `unrankableReason`, listed after the ranked rows rather than dropped — otherwise "cheapest across everything" silently means "cheapest among the rows that happened to carry a number".
+- **No lifecycle signal is not the same as no risk.** Only OpenRouter publishes deprecation. Groq, Cerebras and Sail models report `retirementRisk: "not_published_by_provider"`, because `"none"` would be a false reassurance. For those three, a model vanishing from the list is the only retirement notice there is — so `availability: "disappeared"` is treated as imminent.
+- **Every null cites the provider that withheld it.** [`src/providers/registry.ts`](src/providers/registry.ts) declares, per provider, what is published `always`, `partial` or `never`. Adding a fifth provider is a new entry there plus its id in `providerIdSchema`; nothing else in this server enumerates providers.
+- **A price read from a document is only as good as the document.** Sail's prices come from a pinned pricing page rather than an API, so the server verifies the document before quoting from it and declines rather than guessing when it has changed.
 
 ## Build and run
 
@@ -116,8 +120,8 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 
 | Tool | Purpose |
 |---|---|
-| `dashboard_model_economics` | Compare models **across all three providers** on price per token and per million tokens, discounts, context, modality, tool/reasoning support, measured throughput/latency and retirement risk. Cheapest priced first. |
-| `dashboard_key_inventory` | Report configured OpenRouter, Groq and Cerebras keys by Secret Manager name: liveness for all three, spend and ceiling for OpenRouter. Opt-in; read-only. |
+| `dashboard_model_economics` | Compare models **across all four providers** on price per token and per million tokens, discounts, context, modality, tool/reasoning support, measured throughput/latency and retirement risk. Cheapest priced first. Sail rows appear only when its pinned pricing document verifies. |
+| `dashboard_key_inventory` | Report configured OpenRouter, Groq, Cerebras and Sail keys by Secret Manager name: liveness for all four, spend and ceiling for OpenRouter. Opt-in; read-only. |
 | `dashboard_resolve_model` | Resolve bounded, evidence-backed model fallbacks from intent and capability constraints. |
 | `dashboard_model_status` | Check an exact model id, lifecycle evidence, and bounded suggestions. |
 | `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. Price movement states the window it was actually compared over. |
@@ -125,10 +129,39 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | `dashboard_usage_leaders` | Compare bounded public model/app usage and latest complete app-model evidence. |
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
 | `dashboard_github_movers` | Compare category-scoped GitHub project-family momentum with explicit baseline coverage. |
+| `dashboard_github_trending` | List GitHub trending repositories **with the timestamp they were collected at**, which path served them, and whether the list is stale. |
 
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
 
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
+
+## Sail pricing: a pinned document, not an API
+
+Sail's catalogue API returns model ids and nothing else — no price, no context length, no modality. Its prices live in a human-readable pricing page, `https://docs.sailresearch.com/pricing.md`.
+
+A page is not an API. It can be restructured, reworded or repriced without warning, and a parser that keeps reading it regardless will keep returning numbers that look exactly as confident as they did when they were right. So the server hashes the document and compares it to a pinned digest before quoting anything from it:
+
+- **Digest matches** — prices are parsed and Sail models join the ranking.
+- **Digest differs** — Sail models are **omitted**, and the answer carries `PRICES ARE STALE`, naming both digests. It does not fall back to the last known prices, because a price that was true last week is not a price.
+
+The trade is deliberate: the tool goes quiet about Sail rather than quoting a number it cannot stand behind. What it costs is availability — every legitimate upstream change also silences Sail until the pin is reconciled against the live document.
+
+That is not hypothetical. Between two captures the document grew about 10% and Sail's catalogue gained a model (`google/gemma-4-12B-it`, 9 → 10) while `zai-org/GLM-5.3` held at $1.40 / $4.40 per million. **A digest that changes tells you the document moved. It cannot tell you whether the prices did.**
+
+The fixture used in tests is byte-identical to the live document and is marked `-text` in `.gitattributes`, because `core.autocrlf` will otherwise rewrite its line endings on checkout and change the hash — which looks precisely like an upstream price change and is not one.
+
+## GitHub trending
+
+`dashboard_github_trending` reads `/api/public/v2/github/trending`, which scrapes `github.com/trending` because GitHub publishes no API for it.
+
+GitHub's trending board turns over through the day, so **a list without a collection time is not interpretable**: a fresh one and a three-day-old one look identical. Every answer therefore carries:
+
+- `collectedAt` — when the upstream page was actually retrieved, taken from the origin's `Date` header. **Not** when the tool ran, and not when the response was assembled; the underlying fetch is cached, so those would overstate freshness by up to three hours.
+- `ageHours` and `stale` — computed against a six-hour window, well inside one turnover. An unparseable timestamp reads as maximally stale rather than fresh.
+- `source` — `direct` or `firecrawl`, recorded rather than inferred.
+- `fallbackReason` — why the free direct scrape was abandoned, when it was. Null on the happy path.
+
+The direct scrape is the primary path and carries production traffic. A paid Firecrawl fallback exists for the day GitHub blocks the scrape or changes its markup; when it serves, the tool says so unprompted, because a fallback nobody is told about is how you end up on the paid path for months without knowing the free one died.
 
 ## Models that stopped being free
 
@@ -206,9 +239,9 @@ Only models present in **both** runs are compared. A model that appeared or vani
 
 ## Discounts
 
-**Discount coverage is rich for OpenRouter and absent everywhere else.** Of the three providers, **only OpenRouter publishes discounts at all** — Groq and Cerebras rows always report `not_published_by_provider`, which is a fact about those providers and not a gap this server can close. Do not read the discount features as working equally across providers; they do not.
+**Discount coverage is rich for OpenRouter and absent everywhere else.** Of the four providers, **only OpenRouter publishes discounts at all** — Groq, Cerebras and Sail rows always report `not_published_by_provider`, which is a fact about those providers and not a gap this server can close. Do not read the discount features as working equally across providers; they do not.
 
-OpenRouter publishes discounts as a **provider-endpoint** fact rather than a model fact — measured 2026-08-19, zero of 550 models carry a `discount` key while 272 of 272 provider endpoints do. `dashboard_model_economics` therefore reads `/api/public/v2/models/{id}/providers` per model and reports the best published discount with the provider named, so the number is checkable. Groq and Cerebras rows report `not_published_by_provider` and cost no upstream request.
+OpenRouter publishes discounts as a **provider-endpoint** fact rather than a model fact — measured 2026-08-19, zero of 550 models carry a `discount` key while 272 of 272 provider endpoints do. `dashboard_model_economics` therefore reads `/api/public/v2/models/{id}/providers` per model and reports the best published discount with the provider named, so the number is checkable. Groq, Cerebras and Sail rows report `not_published_by_provider` and cost no upstream request.
 
 Four distinctions the tool refuses to collapse:
 
@@ -218,7 +251,7 @@ Four distinctions the tool refuses to collapse:
 - **`not_published_by_provider`** — this provider has no discount concept at all. Nothing to look up.
 - **`not_checked`** — the per-call enrichment bound was reached. Also unknown.
 
-**No expiry is published by any provider.** OpenRouter exposes a discount ratio and no end date; Groq and Cerebras expose no discounts at all. So `expiresAt` is always `null` with `expiryPublished: false`, and the registry records `discountExpiry: "never"` for all three. That is an absence of upstream data, not a claim that a discount is permanent.
+**No expiry is published by any provider.** OpenRouter exposes a discount ratio and no end date; Groq, Cerebras and Sail expose no discounts at all. So `expiresAt` is always `null` with `expiryPublished: false`, and the registry records `discountExpiry: "never"` for all four. That is an absence of upstream data, not a claim that a discount is permanent.
 
 There is no public route listing all discounted models, so discovery is per model and bounded by `discountEnrichment`.
 
@@ -244,7 +277,7 @@ OPEN_DASHBOARD_KEY_SOURCES=openrouter:my-openrouter-key=OPENROUTER_API_KEY,groq:
 
 Only the Secret Manager names are ever reported. Key values are never returned, logged, or written to evidence — a test asserts the serialized result contains no key material. The tool issues GET requests only and contains no code path that can mint, modify, or revoke a key. Keep provisioning with a separate, privileged key that this server never sees.
 
-**Spend is not uniformly readable, and the tool says so rather than leaving a blank.** OpenRouter exposes per-key usage and ceiling. Groq and Cerebras expose **no billing API at all**, so their keys report `spendReadability: "no_billing_api"` with `usdSpent: null` and a stated reason. A blank money field reads as zero, and zero is a different claim.
+**Spend is not uniformly readable, and the tool says so rather than leaving a blank.** OpenRouter exposes per-key usage and ceiling. Groq, Cerebras and Sail expose **no billing API at all**, so their keys report `spendReadability: "no_billing_api"` with `usdSpent: null` and a stated reason. A blank money field reads as zero, and zero is a different claim.
 
 `usdLimit: null` with `uncapped: true` is the finding worth acting on: a key with no spend ceiling can spend without bound if it leaks.
 
@@ -267,7 +300,7 @@ npm run verify:stdout
 npm run verify:stdio -- --mode alien-cwd
 ```
 
-All six modes pass as of 2026-08-27. The fixture mode asserts that all three providers survive into one answer, that a priced Groq model ranks while an unpriced Cerebras model is kept and explained, and that no discount expiry is invented.
+All six modes pass as of 2026-08-27. The fixture mode asserts that all four providers survive into one answer, that a priced Groq model ranks while an unpriced Cerebras model is kept and explained, that Sail is injected only when its pinned document verifies, and that no discount expiry is invented.
 
 `live` and `alien-cwd` use the public zero-credential default. `fixture`, `offline`, `html`, and `verify:stdout` use loopback-only test infrastructure. Evidence is written under ignored `verification/raw/` only after validation. The raw verifier is separate because the official stdio transport does not expose child stdout and therefore cannot prove byte purity on its own.
 
