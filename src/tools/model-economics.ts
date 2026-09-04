@@ -508,7 +508,7 @@ export async function runModelEconomics(
       const doc = Buffer.from(docBuffer);
       const digest = createHash("sha256").update(doc).digest("hex");
       
-      const expectedDigest = "f6e51e2acb2672bc7c0fb6ad01db5ced688e757964fcdc827dbf0a149107a9a0";
+      const expectedDigest = "32447697c3305a5bc8c5c40c9923e1b81aaefbc5ab8092ee59fb94dfdfd017e6";
       if (digest !== expectedDigest) {
         warnings.push(`PRICES ARE STALE: Sail pricing document digest ${digest} does not match expected ${expectedDigest}. Sail models omitted.`);
       } else {

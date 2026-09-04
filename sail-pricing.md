@@ -1005,6 +1005,189 @@
         </tr>
       </tbody>
 
+      <tbody className="pricing-model-group" data-model="google/gemma-4-12B-it">
+        <tr className="pricing-row pricing-row-window pricing-row-model-first" aria-label="Gemma 4 12B IT Default (ASAP) pricing: input $0.30, cached $0.15, output $2.00 per 1M tokens.">
+          <td className="pricing-cell pricing-cell-model" rowSpan={3} style={{ width: "18.0rem", minWidth: "18.0rem" }}>
+            <div className="pricing-cell-model-inner">
+              <span className="cap-logo" data-org="gemma" role="img" aria-label="Google" />
+
+              <div className="pricing-model-meta">
+                <div className="cap-model-name">Gemma 4 12B IT</div>
+
+                <div className="cap-slug-actions">
+                  <span className="cap-slug-text" title="google/gemma-4-12B-it">
+                    <code>google/gemma-4-12B-it</code>
+                  </span>
+
+                  <button
+                    type="button"
+                    className="cap-copy-btn"
+                    aria-label="Copy google/gemma-4-12B-it"
+                    onClick={(e) => {
+                  const b = e.currentTarget;
+                  const t = "google/gemma-4-12B-it";
+                  const ok = () => {
+                    b.classList.add("cap-copy-done");
+                    setTimeout(
+                      () => b.classList.remove("cap-copy-done"),
+                      1500,
+                    );
+                  };
+                  if (
+                    navigator.clipboard &&
+                    navigator.clipboard.writeText
+                  ) {
+                    navigator.clipboard
+                      .writeText(t)
+                      .then(ok)
+                      .catch(() => fallback(b, t, ok));
+                  } else {
+                    fallback(b, t, ok);
+                  }
+                  function fallback(_b, _t, _ok) {
+                    const ta = document.createElement("textarea");
+                    ta.value = _t;
+                    ta.style.position = "absolute";
+                    ta.style.left = "-9999px";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                      document.execCommand("copy");
+                      _ok();
+                    } catch (_) {
+                      _ok();
+                    }
+                    document.body.removeChild(ta);
+                  }
+                }}
+                  >
+                    <span className="cap-copy-icon-wrap">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="cap-copy-icon cap-copy-icon-default" aria-hidden="true">
+                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                      </svg>
+
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="cap-copy-icon cap-copy-icon-done" aria-hidden="true">
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </td>
+
+          <td className="pricing-cell pricing-cell-window" data-window="asap">
+            <span className="price-window-label">
+              Default <span className="price-window-suffix">(ASAP)</span>
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Input" data-window="asap">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.30
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Cached" data-window="asap">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.15
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Output" data-window="asap">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              2.00
+            </span>
+          </td>
+        </tr>
+
+        <tr className="pricing-row pricing-row-window" aria-label="Gemma 4 12B IT Balanced pricing: input $0.10, cached $0.07, output $2.00 per 1M tokens.">
+          <td className="pricing-cell pricing-cell-window" data-window="standard">
+            <span className="price-window-label">Balanced</span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Input" data-window="standard">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.10
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Cached" data-window="standard">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.07
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Output" data-window="standard">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              2.00
+            </span>
+          </td>
+        </tr>
+
+        <tr className="pricing-row pricing-row-window pricing-row-model-last" aria-label="Gemma 4 12B IT Flex pricing: input $0.05, cached $0.02, output $1.00 per 1M tokens.">
+          <td className="pricing-cell pricing-cell-window" data-window="flex">
+            <span className="price-window-label">Flex</span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Input" data-window="flex">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.05
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Cached" data-window="flex">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              0.02
+            </span>
+          </td>
+
+          <td className="pricing-cell pricing-cell-price" data-axis="Output" data-window="flex">
+            <span className="price-amount">
+              <span className="price-currency" aria-hidden="true">
+                \$
+              </span>
+
+              1.00
+            </span>
+          </td>
+        </tr>
+      </tbody>
+
       <tbody className="pricing-model-group" data-model="nvidia/Gemma-4-31B-IT-NVFP4">
         <tr className="pricing-row pricing-row-window pricing-row-model-first" aria-label="Gemma 4 31B IT (NVFP4) Default (ASAP) pricing: input $0.14, cached $0.07, output $0.40 per 1M tokens.">
           <td className="pricing-cell pricing-cell-model" rowSpan={2} style={{ width: "18.0rem", minWidth: "18.0rem" }}>

@@ -111,6 +111,10 @@ export const STANDARD_CALLS = [
     arguments: { category: "mcp", windowDays: 7, limit: 5 },
   },
   {
+    name: "dashboard_github_trending",
+    arguments: { since: "daily", limit: 5 },
+  },
+  {
     name: "dashboard_model_economics",
     arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
   },
@@ -151,6 +155,10 @@ export const DIAGNOSTIC_CALLS = [
   {
     name: "dashboard_github_movers",
     arguments: { category: "mcp", windowDays: 7, limit: 3 },
+  },
+  {
+    name: "dashboard_github_trending",
+    arguments: { since: "daily", limit: 3 },
   },
   {
     name: "dashboard_model_economics",

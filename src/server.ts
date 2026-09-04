@@ -13,6 +13,7 @@ import { registerKeyInventory } from "./tools/key-inventory.js";
 import { registerModelEconomics } from "./tools/model-economics.js";
 import { registerModelStatus } from "./tools/model-status.js";
 import { registerResolveModel } from "./tools/resolve-model.js";
+import { registerGitHubTrending } from "./tools/github-trending.js";
 import { registerSourceHealth } from "./tools/source-health.js";
 import { registerUsageLeaders } from "./tools/usage-leaders.js";
 import { registerWhatsChanged } from "./tools/whats-changed.js";
@@ -31,6 +32,7 @@ export function createServer(
   });
   const client = createDashboardClient(options);
   registerSourceHealth(server, { client });
+  registerGitHubTrending(server, { client });
   registerFreeModels(server, { client });
   registerResolveModel(server, { client });
   registerModelStatus(server, { client });
