@@ -33,7 +33,7 @@ Requires Node.js 20 or newer. No API key is needed for any tool except the optio
 
 ### Where the data comes from
 
-Every tool reads a **public, zero-credential HTTP API** that ingests OpenRouter, Groq, Cerebras and GitHub daily and republishes the result. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+Every tool reads a **public, zero-credential HTTP API** that ingests OpenRouter, Groq, Cerebras and GitHub daily and republishes the result. Sail is not ingested there — the MCP reads Sail's pinned pricing document directly, which is why its coverage differs from the other three. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -118,6 +118,8 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 
 ## Tools
 
+<!-- tools:begin — this block is checked against the server's live tools/list by test/readme-truth.test.ts. Every registered tool needs a row here; nothing else may be listed. -->
+
 | Tool | Purpose |
 |---|---|
 | `dashboard_model_economics` | Compare models **across all four providers** on price per token and per million tokens, discounts, context, modality, tool/reasoning support, measured throughput/latency and retirement risk. Cheapest priced first. Sail rows appear only when its pinned pricing document verifies. |
@@ -130,6 +132,8 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
 | `dashboard_github_movers` | Compare category-scoped GitHub project-family momentum with explicit baseline coverage. |
 | `dashboard_github_trending` | List GitHub trending repositories **with the timestamp they were collected at**, which path served them, and whether the list is stale. |
+
+<!-- tools:end -->
 
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
 
