@@ -1,0 +1,11 @@
+# The Sail pricing fixture is DIGESTED BYTE FOR BYTE, so git must not touch it.
+#
+# `core.autocrlf` rewrites LF to CRLF on checkout. The fixture is 1,618 pure-LF
+# lines, so a fresh clone materialised 66,180 bytes instead of 64,562 -- one
+# extra byte per line -- and sha256 0906ab7a... instead of 32447697.... The
+# pinned digest then matched nothing, the Sail guard reported PRICES ARE STALE,
+# and the happy-path test failed on a tree where nothing was actually wrong.
+#
+# That is why the fixture and the pin disagreed in the first place. Recomputing
+# the pin without this line fixes it only until the next checkout.
+sail-pricing.md -text
