@@ -151,7 +151,7 @@ test("dead-port allocation returns a loopback URL that refuses connections", asy
   );
 });
 
-test("standard call matrix covers the exact nine tools and arguments", async () => {
+test("standard call matrix covers the exact ten tools and arguments", async () => {
   const { STANDARD_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(STANDARD_CALLS, [
@@ -186,6 +186,10 @@ test("standard call matrix covers the exact nine tools and arguments", async () 
       arguments: { category: "mcp", windowDays: 7, limit: 5 },
     },
     {
+      name: "dashboard_github_trending",
+      arguments: { since: "daily", limit: 5 },
+    },
+    {
       name: "dashboard_model_economics",
       arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
     },
@@ -193,7 +197,7 @@ test("standard call matrix covers the exact nine tools and arguments", async () 
   ]);
 });
 
-test("diagnostic call matrix covers all nine deliberate assertions", async () => {
+test("diagnostic call matrix covers all ten deliberate assertions", async () => {
   const { DIAGNOSTIC_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(DIAGNOSTIC_CALLS, [
@@ -232,6 +236,10 @@ test("diagnostic call matrix covers all nine deliberate assertions", async () =>
       arguments: { category: "mcp", windowDays: 7, limit: 3 },
     },
     {
+      name: "dashboard_github_trending",
+      arguments: { since: "daily", limit: 3 },
+    },
+    {
       name: "dashboard_model_economics",
       arguments: {
         ids: [
@@ -245,7 +253,7 @@ test("diagnostic call matrix covers all nine deliberate assertions", async () =>
     },
     { name: "dashboard_key_inventory", arguments: {} },
   ]);
-  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 9);
+  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 10);
 });
 
 test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {

@@ -32,6 +32,14 @@ test("the description still carries the behaviour the package is for", () => {
   assert.match(manifest.description ?? "", /refuses to quote Sail prices/);
 });
 
+test("the description names what 0.6.0 actually added", () => {
+  // The description is the only thing most people read before installing, and
+  // it is the field npm silently truncates. Shortening it to fit the limit must
+  // not drop the capability the release exists for -- that is the same defect
+  // as the truncation, committed deliberately instead of by accident.
+  assert.match(manifest.description ?? "", /GitHub trending/);
+});
+
 test("the homepage points somewhere, since the description defers to it", () => {
   assert.match(manifest.homepage ?? "", /^https:\/\//);
 });

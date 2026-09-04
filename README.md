@@ -1,6 +1,6 @@
 # Open Dashboard MCP
 
-Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq and Cerebras** in one comparable shape. The server exposes nine bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq and Cerebras** in one comparable shape, plus GitHub trending repositories. The server exposes ten bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 

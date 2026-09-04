@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "0.5.1",
-  "description": "Read-only MCP server comparing models on OpenRouter, Groq, Cerebras and Sail by price, discounts, capability and retirement risk. Reports models that quietly stopped being free, and refuses to quote Sail prices when its pinned pricing document changes.",
+  "version": "0.6.0",
+  "description": "Read-only MCP server comparing models on OpenRouter, Groq, Cerebras and Sail by price, discounts, capability and retirement risk, plus GitHub trending dated by collection time. It refuses to quote Sail prices when its pinned document changes.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -12,7 +12,9 @@
     "model-routing",
     "pricing",
     "llm-pricing",
-    "claude"
+    "claude",
+    "github-trending",
+    "trending"
   ],
   "license": "MIT",
   "author": "Ivan Gegov",

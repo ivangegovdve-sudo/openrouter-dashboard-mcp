@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 
 import { createServer } from "../src/server.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
 import {
   manifestFixture,
@@ -36,7 +37,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers exactly the nine tools without fetching during construction or tools/list", async () => {
+test("registers exactly the ten tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -52,6 +53,7 @@ test("registers exactly the nine tools without fetching during construction or t
       [
         "dashboard_free_models",
         "dashboard_github_movers",
+        "dashboard_github_trending",
         "dashboard_key_inventory",
         "dashboard_model_economics",
         "dashboard_model_status",
@@ -97,6 +99,11 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
         arguments: { category: "mcp", windowDays: 7, limit: 1 },
         schema: githubMoversOutputSchema,
       },
+      {
+        name: "dashboard_github_trending",
+        arguments: { since: "daily", limit: 1 },
+        schema: githubTrendingOutputSchema,
+      },
     ] as const;
 
     for (const call of calls) {
@@ -117,7 +124,7 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
     }
 
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 9);
+    assert.equal(listed.tools.length, 10);
   } finally {
     await client.close();
   }

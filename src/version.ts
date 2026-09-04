@@ -6,4 +6,4 @@
  * release -- a drift no test could see, in the one field a client logs.
  * `test/version.test.ts` holds this equal to package.json.
  */
-export const SERVER_VERSION = "0.5.1";
+export const SERVER_VERSION = "0.6.0";
