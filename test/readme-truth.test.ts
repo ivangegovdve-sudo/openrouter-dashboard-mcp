@@ -43,6 +43,26 @@ function registeredToolNames(): string[] {
   return [...names].sort();
 }
 
+test("the tool scan finds a name in every file that registers one", () => {
+  // The scan is a source regex, so a registration written any other way -- a
+  // name held in a variable, a template literal -- would be skipped SILENTLY,
+  // and a guard that quietly scans nothing passes forever. Counting the files
+  // that call registerTool and requiring one name from each turns that silence
+  // into a failure.
+  const toolsDir = readUrl("../src/tools/");
+  const registering = readdirSync(toolsDir).filter((file) => {
+    if (!file.endsWith(".ts") || file.endsWith(".test.ts")) return false;
+    return readFileSync(new URL(file, toolsDir), "utf8").includes("registerTool(");
+  });
+  assert.equal(
+    registeredToolNames().length,
+    registering.length,
+    `${registering.length} files call registerTool but the scan extracted ` +
+      `${registeredToolNames().length} names; a registration the regex cannot see ` +
+      `would leave that tool undocumented with every test still green`,
+  );
+});
+
 test("every provider the description promises is documented in the README", () => {
   const description = manifest.description ?? "";
   for (const provider of PROVIDER_NAMES) {
