@@ -384,9 +384,27 @@ const designBenchmarkSchema = z
       .strict(),
   })
   .strict();
+const openRouterBenchmarkSchema = z
+  .object({
+    source: z.literal("openrouter"),
+    ...benchmarkBase,
+    benchmarkType: z.string(),
+    primaryMetric: z.string().nullable(),
+    primaryScore: z.number().nullable(),
+    accuracy: z.number().nullable(),
+    accuracyStddev: z.number().nullable(),
+    avgCostPerTask: z.number().nonnegative().nullable(),
+    avgLatencyPerTaskMs: z.number().nonnegative().nullable(),
+    totalTasks: z.number().int().nonnegative().nullable(),
+    lastRunTimestamp: z.string().datetime({ offset: true }).nullable(),
+    searchEngine: z.string().nullable(),
+    searchSurface: z.string().nullable(),
+  })
+  .strict();
 export const publicBenchmarkSchema = z.discriminatedUnion("source", [
   artificialBenchmarkSchema,
   designBenchmarkSchema,
+  openRouterBenchmarkSchema,
 ]);
 export const publicBenchmarksResponseSchema = publicCollectionSchema(
   publicBenchmarkSchema,
@@ -504,6 +522,7 @@ export const publicAppModelMatrixResponseSchema = z.discriminatedUnion(
         status: z.literal("unavailable"),
         reason: z.enum([
           "collection_disabled",
+          "approval_incomplete",
           "not_published",
           "no_observed_period",
           "no_common_period",
@@ -571,6 +590,7 @@ export const publicAppModelsResponseSchema = z.discriminatedUnion("status", [
       status: z.literal("unavailable"),
       reason: z.enum([
         "collection_disabled",
+        "approval_incomplete",
         "unmapped_alias",
         "not_published",
         "no_observed_period",

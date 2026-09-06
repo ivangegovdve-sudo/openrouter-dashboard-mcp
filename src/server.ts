@@ -8,10 +8,12 @@ import {
   type DashboardClientOptions,
 } from "./dashboard/client.js";
 import { registerFreeModels } from "./tools/free-models.js";
+import { registerBenchmarks } from "./tools/benchmarks.js";
 import { registerGithubMovers } from "./tools/github-movers.js";
 import { registerKeyInventory } from "./tools/key-inventory.js";
 import { registerModelEconomics } from "./tools/model-economics.js";
 import { registerModelStatus } from "./tools/model-status.js";
+import { registerMatrix } from "./tools/matrix.js";
 import { registerResolveModel } from "./tools/resolve-model.js";
 import { registerGitHubTrending } from "./tools/github-trending.js";
 import { registerSourceHealth } from "./tools/source-health.js";
@@ -32,6 +34,7 @@ export function createServer(
   });
   const client = createDashboardClient(options);
   registerSourceHealth(server, { client });
+  registerBenchmarks(server, { client });
   registerGitHubTrending(server, { client });
   registerFreeModels(server, { client });
   registerResolveModel(server, { client });
@@ -39,6 +42,7 @@ export function createServer(
   registerModelEconomics(server, { client });
   registerWhatsChanged(server, { client });
   registerUsageLeaders(server, { client });
+  registerMatrix(server, { client });
   registerGithubMovers(server, { client });
   registerKeyInventory(server);
   return server;

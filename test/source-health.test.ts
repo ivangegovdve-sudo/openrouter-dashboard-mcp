@@ -140,6 +140,19 @@ test("fetches manifest and the eight-source status view concurrently", async () 
   });
 });
 
+test("warns when a source missed its scheduled refresh before the stale threshold", async () => {
+  const deps = sourceHealthClient();
+
+  const result = await runSourceHealth(
+    {},
+    { client: deps.client, now: () => new Date("2026-08-20T14:00:00.000Z") },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.ok(result.warnings.some((warning) => /missed.*scheduled refresh/i.test(warning)));
+});
+
 test("returns a safe structured catalogue error instead of throwing", async () => {
   const client: DashboardClient = {
     async get() {
