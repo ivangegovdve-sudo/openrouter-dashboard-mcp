@@ -1,6 +1,6 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "Read-only MCP server comparing models on OpenRouter, Groq, Cerebras and Sail by price, discounts, capability and retirement risk, plus GitHub trending dated by collection time. It refuses to quote Sail prices when its pinned document changes.",
   "keywords": [
     "mcp",

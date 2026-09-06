@@ -63,11 +63,12 @@ export type SourceHealthOutput = z.infer<typeof sourceHealthOutputSchema>;
 
 export type SourceHealthDependencies = {
   client: DashboardClient;
+  now?: () => Date;
 };
 
 export async function runSourceHealth(
   _input: SourceHealthInput,
-  { client }: SourceHealthDependencies,
+  { client, now = () => new Date() }: SourceHealthDependencies,
 ): Promise<SourceHealthOutput> {
   try {
     const [manifest, sourceStatus] = await Promise.all([
@@ -87,6 +88,20 @@ export async function runSourceHealth(
     const failedCount = sourceStatus.data.filter(
       (source) => source.lastAttemptStatus === "failed",
     ).length;
+    const currentTime = now().getTime();
+    const missedScheduleCount = sourceStatus.data.filter((source) => {
+      const scheduledAt = source.nextScheduledAt
+        ? Date.parse(source.nextScheduledAt)
+        : Number.NaN;
+      const attemptedAt = source.lastAttemptStartedAt
+        ? Date.parse(source.lastAttemptStartedAt)
+        : source.lastAttemptFinishedAt
+          ? Date.parse(source.lastAttemptFinishedAt)
+          : Number.NaN;
+      return Number.isFinite(currentTime) && Number.isFinite(scheduledAt)
+        && scheduledAt <= currentTime
+        && (!Number.isFinite(attemptedAt) || attemptedAt < scheduledAt);
+    }).length;
     const warnings: string[] = [];
     if (staleCount > 0) {
       warnings.push(`${staleCount} source${staleCount === 1 ? " is" : "s are"} stale.`);
@@ -94,6 +109,11 @@ export async function runSourceHealth(
     if (failedCount > 0) {
       warnings.push(
         `${failedCount} source${failedCount === 1 ? " has" : "s have"} a failed latest attempt.`,
+      );
+    }
+    if (missedScheduleCount > 0) {
+      warnings.push(
+        `${missedScheduleCount} source${missedScheduleCount === 1 ? " missed" : "s missed"} its scheduled refresh; the 48-hour stale threshold may not have been crossed yet.`,
       );
     }
 

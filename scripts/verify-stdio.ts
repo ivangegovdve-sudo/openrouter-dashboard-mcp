@@ -12,9 +12,11 @@ import {
   freeModelsOutputSchema,
   type FreeModelsOutput,
 } from "../src/tools/free-models.js";
+import { benchmarksOutputSchema } from "../src/tools/benchmarks.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
 import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
 import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
+import { matrixOutputSchema } from "../src/tools/matrix.js";
 import {
   modelStatusInputSchema,
   modelStatusOutputSchema,
@@ -68,6 +70,7 @@ type VerificationEvidence = {
 };
 
 export const EXPECTED_TOOL_NAMES = [
+  "dashboard_benchmarks",
   "dashboard_free_models",
   "dashboard_github_movers",
   "dashboard_key_inventory",
@@ -80,6 +83,7 @@ export const EXPECTED_TOOL_NAMES = [
 ] as const;
 
 export const STANDARD_CALLS = [
+  { name: "dashboard_benchmarks", arguments: { limit: 50 } },
   {
     name: "dashboard_resolve_model",
     arguments: {
@@ -119,9 +123,11 @@ export const STANDARD_CALLS = [
     arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 export const DIAGNOSTIC_CALLS = [
+  { name: "dashboard_benchmarks", arguments: { source: "openrouter", limit: 50 } },
   {
     name: "dashboard_resolve_model",
     arguments: {
@@ -173,6 +179,7 @@ export const DIAGNOSTIC_CALLS = [
     },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -199,6 +206,7 @@ const CAPABILITY_MESSAGE =
   "This tool needs /api/public/v2/live-models, which the dashboard is not currently publishing. Ask about deprecations or history instead, and check dashboard_source_health for which collector is failing.";
 
 const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
+  ["dashboard_benchmarks", benchmarksOutputSchema],
   ["dashboard_resolve_model", resolveModelOutputSchema],
   ["dashboard_model_status", modelStatusOutputSchema],
   ["dashboard_whats_changed", whatsChangedOutputSchema],
@@ -208,6 +216,7 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_github_movers", githubMoversOutputSchema],
   ["dashboard_model_economics", modelEconomicsOutputSchema],
   ["dashboard_key_inventory", keyInventoryOutputSchema],
+  ["dashboard_matrix", matrixOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([

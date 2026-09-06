@@ -17,6 +17,7 @@ import {
 import { liveModelsResponseSchema } from "../src/dashboard/schemas/live-models.js";
 import {
   manifestSchema,
+  benchmarksResponseSchema,
   publicAppModelMatrixResponseSchema,
   publicManifestResponseSchema,
 } from "../src/dashboard/schemas/openrouter.js";
@@ -93,6 +94,45 @@ test("validates both available and unavailable app-model envelopes", () => {
   assert.equal(available.cells[0]?.state, "observed");
   assert.equal(unavailable.status, "unavailable");
   assert.deepEqual(unavailable.cells, []);
+});
+
+test("validates the merged benchmark source and approval-pending matrix reason", () => {
+  const benchmarks = benchmarksResponseSchema.parse({
+    schemaVersion: "2.0",
+    data: [{
+      source: "openrouter",
+      modelPermaslug: "vendor/model",
+      displayName: "Model",
+      matchStatus: "unmatched",
+      pricing: { prompt: null, completion: null },
+      citation: "OpenRouter",
+      sourceUrl: null,
+      benchmarkType: "gpqa_diamond",
+      primaryMetric: null,
+      primaryScore: null,
+      accuracy: null,
+      accuracyStddev: null,
+      avgCostPerTask: null,
+      avgLatencyPerTaskMs: null,
+      totalTasks: null,
+      lastRunTimestamp: null,
+      searchEngine: null,
+      searchSurface: null,
+    }],
+    cursor: null,
+    window: publicWindow,
+    completeness: publicCompleteness,
+    stale: false,
+    rank: null,
+    provenance: publicProvenance,
+  });
+  assert.equal(benchmarks.data[0]?.source, "openrouter");
+
+  const approvalPending = publicAppModelMatrixResponseSchema.parse({
+    ...appModelMatrixUnavailableFixture,
+    reason: "approval_incomplete",
+  });
+  assert.equal(approvalPending.reason, "approval_incomplete");
 });
 
 test("validates distinct GitHub ranking and history envelopes without numeric coercion", () => {

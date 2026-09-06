@@ -151,10 +151,11 @@ test("dead-port allocation returns a loopback URL that refuses connections", asy
   );
 });
 
-test("standard call matrix covers the exact ten tools and arguments", async () => {
+test("standard call matrix covers the exact twelve tools and arguments", async () => {
   const { STANDARD_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(STANDARD_CALLS, [
+    { name: "dashboard_benchmarks", arguments: { limit: 50 } },
     {
       name: "dashboard_resolve_model",
       arguments: {
@@ -194,13 +195,15 @@ test("standard call matrix covers the exact ten tools and arguments", async () =
       arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_matrix", arguments: {} },
   ]);
 });
 
-test("diagnostic call matrix covers all ten deliberate assertions", async () => {
+test("diagnostic call matrix covers all twelve deliberate assertions", async () => {
   const { DIAGNOSTIC_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(DIAGNOSTIC_CALLS, [
+    { name: "dashboard_benchmarks", arguments: { source: "openrouter", limit: 50 } },
     {
       name: "dashboard_resolve_model",
       arguments: {
@@ -252,8 +255,9 @@ test("diagnostic call matrix covers all ten deliberate assertions", async () => 
       },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_matrix", arguments: {} },
   ]);
-  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 10);
+  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 12);
 });
 
 test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {

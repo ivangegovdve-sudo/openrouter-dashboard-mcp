@@ -1,6 +1,6 @@
 # Open Dashboard MCP
 
-Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq, Cerebras and Sail** in one comparable shape, plus **GitHub trending repositories** dated by when they were collected. The server exposes ten bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq, Cerebras and Sail** in one comparable shape, plus **GitHub trending repositories** dated by when they were collected. The server exposes twelve bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
@@ -123,12 +123,14 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 | Tool | Purpose |
 |---|---|
 | `dashboard_model_economics` | Compare models **across all four providers** on price per token and per million tokens, discounts, context, modality, tool/reasoning support, measured throughput/latency and retirement risk. Cheapest priced first. Sail rows appear only when its pinned pricing document verifies. |
+| `dashboard_benchmarks` | Read published Artificial Analysis, Design Arena and OpenRouter benchmark observations with exact provenance; upstream HTTP failures remain explicit. |
 | `dashboard_key_inventory` | Report configured OpenRouter, Groq, Cerebras and Sail keys by Secret Manager name: liveness for all four, spend and ceiling for OpenRouter. Opt-in; read-only. |
 | `dashboard_resolve_model` | Resolve bounded, evidence-backed model fallbacks from intent and capability constraints. |
 | `dashboard_model_status` | Check an exact model id, lifecycle evidence, and bounded suggestions. |
 | `dashboard_whats_changed` | Summarize appearances, disappearances, deprecations, **models that stopped being free**, and rank movements since an archived date. Price movement states the window it was actually compared over. |
 | `dashboard_free_models` | List usable free models and public frontier evidence without treating unknown prices as free. |
 | `dashboard_usage_leaders` | Compare bounded public model/app usage and latest complete app-model evidence. |
+| `dashboard_matrix` | Read the published app-model matrix, preserving the distinction between approval pending, collection disabled, unavailable and available observed cells. |
 | `dashboard_source_health` | Report public route, freshness, completeness, and latest-attempt source health. |
 | `dashboard_github_movers` | Compare category-scoped GitHub project-family momentum with explicit baseline coverage. |
 | `dashboard_github_trending` | List GitHub trending repositories **with the timestamp they were collected at**, which path served them, and whether the list is stale. |
