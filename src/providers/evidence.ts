@@ -73,6 +73,7 @@ const quotes: Record<string, { text: string; attribution: string; sourceUrl: str
   chutes: { text: "Breakthrough Serverless Compute for AI, at Scale.", attribution: "Chutes", sourceUrl: "https://chutes.ai/" },
   wavespeed: { text: "WaveSpeedAI is the ultimate AI media generation platform — easy to use, affordable, scalable, and fast.", attribution: "WaveSpeedAI", sourceUrl: "https://wavespeed.ai/" },
   fal: { text: "The generative media platform powering the world’s top AI apps.", attribution: "fal", sourceUrl: "https://fal.ai/docs/documentation" },
+  crazyrouter: { text: "Same OpenAI-style workflow. More models. Lower pricing. Easier experimentation.", attribution: "Crazyrouter", sourceUrl: "https://crazyrouter.com/tools/" },
 };
 
 const numericCaveats: Record<string, ProviderCaveat[]> = {

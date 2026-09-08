@@ -106,6 +106,48 @@ export function normalizeFal(row: NativeRecord, sourceUrl: string, observedAt: s
   return { provider: "fal", id, displayName: scalar(metadata.display_name) ?? id, mediaKind: kind, nativeType: type ?? null,
     pricing: pricing(published ?? null, prices, reason), provenance: { sourceUrl, observedAt, sourceIndex } };
 }
+/** Explicit output-second contracts checked on fal's own model pages. A generic
+ * seconds unit alone may describe GPU execution and is not sufficient. */
+const FAL_OUTPUT_SECOND_CONTRACTS: Record<string, { sourceUrl: string; observedAt: string }> = {
+  "fal-ai/kling-video/v2.5-turbo/pro/image-to-video": {
+    sourceUrl: "https://fal.ai/models/fal-ai/kling-video/v2.5-turbo/pro/image-to-video",
+    observedAt: "2026-09-08", // $0.35 for 5 output seconds; $0.07 each additional second.
+  },
+};
+export function normalizeFalAuthenticated(row: NativeRecord, sourceUrl: string, observedAt: string, sourceIndex: number, nativePrices: NativeRecord[]): CatalogueModel {
+  const model = normalizeFal(row, sourceUrl, observedAt, sourceIndex);
+  const native = nativePrices, prices: ExactPrice[] = [];
+  let reason = native.length ? "native_billing_unit_not_comparable" : "price_not_returned_by_authenticated_source";
+  if (native.length > 1) reason = "multiple_native_price_entries_require_selection";
+  if (native.length === 1) {
+    const p = native[0]!, unit = scalar(p.unit)?.toLowerCase(), value = scalar(p.unit_price);
+    const priceSource = "https://api.fal.ai/v1/models/pricing";
+    const conditions: NativeRecord = { priceScope: "authenticated_account", accountDiscountMayApply: true, basis: "provider_base_billing_unit", endpointId: model.id };
+    let canonical: ExactPrice["unit"] | undefined;
+    if (p.currency !== "USD") reason = "native_currency_not_usd";
+    else if (unit && /gpu|compute/.test(unit)) reason = "compute_billing_unit_not_output_quantity";
+    else if (["image", "images"].includes(unit ?? "") && model.mediaKind === "image") {
+      canonical = "usd_per_image"; conditions.outputImages = "1";
+    } else if (["megapixel", "megapixels"].includes(unit ?? "") && model.mediaKind === "image") {
+      canonical = "usd_per_image"; conditions.outputImages = "1"; conditions.outputMegapixels = "1";
+      conditions.basis = "one_megapixel_reference_image";
+    } else if (["video_second", "video_seconds", "output_video_second", "output_video_seconds"].includes(unit ?? "") && model.mediaKind === "video") {
+      canonical = "usd_per_video_second";
+    } else if (["second", "seconds"].includes(unit ?? "")) {
+      const contract = Object.hasOwn(FAL_OUTPUT_SECOND_CONTRACTS, model.id) ? FAL_OUTPUT_SECOND_CONTRACTS[model.id] : undefined;
+      if (contract && model.mediaKind === "video") {
+        canonical = "usd_per_video_second";
+        conditions.outputUnitEvidence = contract;
+      } else reason = "second_unit_not_established_as_video_output";
+    } else if (["video", "videos"].includes(unit ?? "")) reason = "video_unit_requires_verified_output_duration";
+    if (canonical && value !== undefined) {
+      try { prices.push(normalizeExactPrice({ value, nativeUnit: `USD/${p.unit}`, sourceField: "prices[].unit_price", unit: canonical, sourceUrl: priceSource, conditions })); }
+      catch { reason = "invalid_native_decimal"; }
+    } else if (canonical) reason = "invalid_native_decimal";
+  }
+  model.pricing = pricing(native, prices, reason);
+  return model;
+}
 export function normalizeChutes(row: NativeRecord, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel {
   // chute_id is the provider's identity; names can collide across owner/deployment.
   const id = scalar(row.chute_id); if (!id) throw new Error("MODEL_ID_MISSING");

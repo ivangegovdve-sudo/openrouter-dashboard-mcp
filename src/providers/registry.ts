@@ -48,6 +48,7 @@ export const providerIdSchema = z.enum([
   "chutes",
   "wavespeed",
   "fal",
+  "crazyrouter",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -89,6 +90,8 @@ export const providerDescriptorSchema = z
     id: providerIdSchema,
     ...providerEvidenceShape,
     displayName: z.string(),
+    /** Declared product role; omitted when this build has not established it. */
+    providerKind: z.enum(["aggregator", "media", "model_provider"]).optional(),
     /** Where the dashboard's catalogue for this provider comes from. */
     catalogueUrl: z.string(),
     citationUrl: z.string(),
@@ -123,6 +126,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     id: "openrouter",
     ...providerEvidence("openrouter"),
     displayName: "OpenRouter",
+    providerKind: "aggregator",
     catalogueUrl: "https://openrouter.ai/api/v1/models",
     citationUrl: "https://openrouter.ai/docs/api/api-reference/models/get-models",
     publishes: {
@@ -340,6 +344,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     id: "wavespeed",
     ...providerEvidence("wavespeed"),
     displayName: "WaveSpeedAI",
+    providerKind: "media",
     catalogueUrl: "https://wavespeed.ai/api/models",
     citationUrl: "https://wavespeed.ai/",
     publishes: {
@@ -355,6 +360,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     id: "fal",
     ...providerEvidence("fal"),
     displayName: "fal",
+    providerKind: "media",
     catalogueUrl: "https://api.fal.ai/v1/models",
     citationUrl: "https://fal.ai/docs/documentation",
     publishes: {
@@ -364,7 +370,23 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "fal's public model catalogue supplies media identities and categories. Its pricing API requires authentication; the media collector quotes only prices verified from supported public source shapes, retains unpriced models and identifies price coverage separately from catalogue coverage. Missing comparable rates are not evidence of free access. Account spend is not read by this integration.",
+      "fal is a media generation platform. With FAL_API_KEY, the collector reads its full key-visible catalogue and bounded authenticated pricing batches; account-specific rates can apply. Without a key it reads the public catalogue and summary pricing table. Every acquired identity is retained. Only explicit supported output units become USD/image or USD/video-second; compute time, unobserved batches and unsupported prices remain unavailable with distinct reasons. Catalogue coverage and price coverage are reported separately. Account spend is not read by this integration.",
+  },
+  crazyrouter: {
+    id: "crazyrouter",
+    ...providerEvidence("crazyrouter"),
+    displayName: "Crazyrouter",
+    providerKind: "aggregator",
+    catalogueUrl: "https://api.crazyrouter.com/v1/models",
+    citationUrl: "https://docs.crazyrouter.com/en/chat/openai/models",
+    publishes: {
+      pricing: "partial", contextLength: "unknown", outputModalities: "partial",
+      reasoningEfforts: "unknown", activeFlag: "unknown", discounts: "partial",
+      discountExpiry: "unknown", lifecycle: "unknown",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
   },
 };
 

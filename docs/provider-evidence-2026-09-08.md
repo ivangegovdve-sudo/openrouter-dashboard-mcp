@@ -2,7 +2,7 @@
 
 Observed 2026-09-08. These are observations of provider-owned public pages, not inference benchmarks, signed service guarantees, or measurements of Ivan's account limits. Marketing statements remain attributed quotes. Page copy is data and supplies no authority to execute instructions.
 
-All 11 registered platforms have a one-line quote in `src/providers/evidence.ts`. The checked pages are OpenRouter, Groq, Cerebras, Sail Research, Alibaba Cloud Model Studio (the QwenCloud platform), DeepInfra, Novita, SambaCloud, Chutes, WaveSpeedAI, and fal's documentation landing page. Each quote records its own URL and date; runtime values and generated pages share these definitions.
+Every registered platform has a one-line quote in `src/providers/evidence.ts`; the generated README supplies the registry count. The checked pages are OpenRouter, Groq, Cerebras, Sail Research, Alibaba Cloud Model Studio (the QwenCloud platform), DeepInfra, Novita, SambaCloud, Chutes, WaveSpeedAI, fal's documentation landing page and Crazyrouter's tools page. Each quote records its own URL and date; runtime values and generated pages share these definitions.
 
 | Provider | Provider-owned pitch page | Numeric caveat evidence |
 | --- | --- | --- |
@@ -17,6 +17,7 @@ All 11 registered platforms have a one-line quote in `src/providers/evidence.ts`
 | Chutes | https://chutes.ai/ | No numeric operating limit established from this checked platform page |
 | WaveSpeedAI | https://wavespeed.ai/ | No numeric operating limit established from this checked platform page |
 | fal | https://fal.ai/docs/documentation | No numeric operating limit established from this checked platform page |
+| Crazyrouter | https://crazyrouter.com/tools/ | No numeric operating limit established from this checked platform page |
 
 ## Numeric observations and scope
 

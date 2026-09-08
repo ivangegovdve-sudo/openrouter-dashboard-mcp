@@ -4,12 +4,23 @@ This is an unmerged release candidate. Different-family review and the companion
 
 ## Implemented
 
-- Eleven provider descriptors expose attributed, verbatim pitches and research states. Measured numeric caveats are optional structured fields, never null placeholders. Unknown, not researched, not found in checked sources, and explicit non-publication remain distinct.
-- `dashboard_catalogue` is the thirteenth read-only tool. It preserves unpriced identities, provides exact canonical image/video/token prices with native values, conditions and conversion arithmetic, and reports source population and local filtering/pagination separately.
-- DeepInfra, WaveSpeed, fal and Chutes use bounded native public catalogue readers. Legacy providers retain their dashboard identities and prices. No price filter is applied during acquisition.
+- Provider descriptors expose attributed, verbatim pitches and research states. Numeric published caveats are optional structured fields, never null placeholders. Unknown, not researched, not found in checked sources, and explicit non-publication remain distinct. The generated README supplies current registry and tool counts.
+- `dashboard_catalogue` preserves unpriced identities, provides exact canonical image/video/token prices with native values, conditions and conversion arithmetic, and reports source population and local filtering/pagination separately. `dashboard_price_comparison` joins supported exact Crazyrouter aliases to OpenRouter and dated direct-provider references, with scoped vendor-claim assessments.
+- DeepInfra, WaveSpeed and Chutes use bounded public native readers. fal and Crazyrouter use distinct authenticated sources when their optional environment keys are supplied, with explicitly limited public fallbacks. Legacy providers retain dashboard identities and prices. No price filter is applied during acquisition.
 - README facts derive from the registry and a real MCP `tools/list`. CI checks committed facts before the build regenerates them. The companion site pins this source commit and facts digest, with candidate facts distinguished from the currently published npm dependency.
 
-## Measured 2026-09-08
+## Provider addendum verification, 2026-09-08
+
+- Final built checkout: **314 tests passed**, zero failures/cancellations/skips. This includes ten compiled provider tests; clean CI runs are recorded separately on the PR. Build, harness typecheck and generated README check passed.
+- Compiled authenticated stdio: **0.9.0 / 14 read-only tools**. fal retained **1,494/1,494** identities and Crazyrouter **146/146**, both zero excluded. fal observed 500 native prices, normalized 127, retained 373 unsupported/ambiguous quotes, then stopped at HTTP 429; 994 prices remained unobserved. The source-row and distinct-price-ID denominators are explicit.
+- Both new tools returned schema-valid structured output identical to JSON text. fal's selected **0.03/image**, **0.04/image**, and **0.07/video-second** rates matched the three independent own-page checks. Crazyrouter's three exact GPT aliases were **35% lower on both input/output legs** versus OpenRouter and the available dated OpenAI references.
+- Authenticated full Crazyrouter comparison retained all 146 rows, including unpriced and unmatched rows, and identified 24 exact comparable input/output pairs among 580 OpenRouter source rows. The GPT-5 mini landing-page price discrepancy remains explicit.
+- Synthetic stdio harness passed its twelve diagnostic calls while discovering fourteen tools. New tool behavior is separately proven through authenticated compiled stdio and dedicated unit/MCP tests.
+- Supplemental reviews fixed duplicate-price accounting, prototype-inherited unit contracts, reflected credentials, lost WaveSpeed catalogue prices after optional detail failures, incomplete/malformed Crazyrouter price responses and undefined vendor-ID joins. Observed RED-to-GREEN tests cover these cases. They do not replace Dispatch's required different-family review.
+
+See [provider-addendum-evidence.md](provider-addendum-evidence.md) for exact native operands, source URLs, dates, denominators, three-model tables, absence semantics and limitations. Final artifact and companion-site checks are recorded on the PR and release report after the immutable source pin is made.
+
+## Earlier original-scope measurements, 2026-09-08
 
 - Clean starting package suite: **224 passed**. Initial integration suite: **271 passed**. Review follow-up suite: **279 passed, zero failures/cancellations/skips** in the built local checkout; ten compiled provider tests are additionally discovered there. Build and harness TypeScript checks passed. Current-head clean CI results are recorded on the PR.
 - First Linux Node 22 CI run exposed an unreferenced request timeout: the hung-fetch test and its remaining file tests were cancelled when the event loop exited. The deadline now remains referenced until the existing `finally` clears it. The observed failing CI is the regression evidence; final CI status is recorded on the PR.

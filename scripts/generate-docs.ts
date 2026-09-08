@@ -9,6 +9,7 @@ const root = resolve(import.meta.dirname, "..");
 const markdown = (value: unknown) => String(value).replaceAll("|", "&#124;").replaceAll("\n", " ").replaceAll("<", "&lt;");
 const publication = { always: "All collected models", partial: "Some collected models", never: "Not published in this connector", unknown: "Not established" };
 const billing = { api: "Billing API", no_billing_api: "No billing API", unknown: "Not established" };
+const providerKind = { aggregator: "Multi-provider aggregator", media: "Media generation platform", model_provider: "Model provider" };
 
 /** Source-of-truth export shared by README generation and the companion site's release manifest. */
 export async function exportPackageFacts() {
@@ -42,7 +43,7 @@ function researchLabel(research: PackageFacts["providers"][number]["pitchResearc
 
 export function readmeBlocks(facts: PackageFacts): Record<string, string> {
   const numberWords = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
-  const providerRows = facts.providers.map(p => `| <span data-provider-id="${p.id}">${markdown(p.displayName)}</span> | [Catalogue](${p.catalogueUrl}) · [Documentation](${p.citationUrl}) | ${["pricing", "contextLength", "outputModalities", "lifecycle", "discounts"].map(field => publication[p.publishes[field as keyof typeof p.publishes]]).join(" | ")} | ${billing[p.spendVisibility]} |`).join("\n");
+  const providerRows = facts.providers.map(p => `| <span data-provider-id="${p.id}">${markdown(p.displayName)}</span>${p.providerKind ? `<br>${providerKind[p.providerKind]}` : ""} | [Catalogue](${p.catalogueUrl}) · [Documentation](${p.citationUrl}) | ${["pricing", "contextLength", "outputModalities", "lifecycle", "discounts"].map(field => publication[p.publishes[field as keyof typeof p.publishes]]).join(" | ")} | ${billing[p.spendVisibility]} |`).join("\n");
   const providerEvidence = facts.providers.map(p => `**${markdown(p.displayName)}**\n\n${p.pitch ? `> “${markdown(p.pitch.text)}” — [${markdown(p.pitch.attribution)}](${p.pitch.sourceUrl}), observed ${p.pitch.observedAt}.` : `Pitch: ${researchLabel(p.pitchResearch)}`}\n\n${p.caveats?.length ? p.caveats.map(c => `- **${markdown(c.kind)}: ${c.value} ${markdown(c.unit)}.** ${markdown(c.scope)} [Provider source](${c.sourceUrl}), observed ${c.observedAt}; basis: \`${c.basis}\`.`).join("\n") : `Caveats: ${researchLabel(p.caveatResearch)}`}`).join("\n\n");
   return {
     summary: `Read-only MCP access to public model and GitHub evidence, covering **${facts.providers.map(p => markdown(p.displayName)).join(", ")}**. Version **${facts.version}** registers **${facts.providers.length} providers** and exposes ${numberWords[facts.tools.length] ?? facts.tools.length} bounded tools over stdio. Results use the same machine-readable value in \`structuredContent\` and JSON text content.`,

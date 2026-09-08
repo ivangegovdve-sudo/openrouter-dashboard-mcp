@@ -223,3 +223,26 @@ test("WaveSpeed request timeout and application-level auth error stop the detail
     assert.doesNotMatch(JSON.stringify(result), /not reflected/);
   }
 });
+
+test("WaveSpeed preserves a verified catalogue price when optional details fail or cannot establish an updated price", async () => {
+  const list = { total: 1, items: [{ model_uuid: waveDefaultId, type: "text-to-video", base_price: "300000", input: '{"properties":{"duration":{"default":5}}}', formula: '{"total_price": base_price * duration / 5}' }] };
+  const detailCases = [
+    () => new Response("missing", { status: 404 }),
+    () => Response.json({ code: 200, data: { model_uuid: waveDefaultId, base_price: "400000", input: list.items[0]!.input, formula: "unsupported_pricing_formula" } }),
+    () => Response.json({ code: 200, data: { model_uuid: waveDefaultId } }),
+  ];
+  for (const response of detailCases) {
+    const result = await collectMediaCatalogue({ providers: ["wavespeed"], fetchImpl: async input => String(input).startsWith("https://wavespeed.ai/api/models?") ? Response.json(list) : response() });
+    const row = result.models[0]!;
+    assert.equal(row.pricing.status, "available");
+    assert.equal(row.pricing.prices[0]?.value, "0.06");
+    assert.equal(row.provenance.sourceUrl, "https://wavespeed.ai/api/models?page=1&page_size=200");
+    assert.equal(row.pricing.prices[0]?.sourceUrl, row.provenance.sourceUrl);
+    assert.equal(result.providers[0]?.status, "partial");
+    assert.equal(result.population.completeness, "full");
+    const observations = result.providers[0]?.requestParameters.detailPriceObservations as Array<Record<string, unknown>>;
+    assert.equal(observations[0]?.retainedPriceSourceUrl, row.provenance.sourceUrl);
+    assert.equal(observations[0]?.sourceUrl, `https://api.wavespeed.ai/center/default/api/v1/model_product/detail/${waveDefaultId}`);
+    assert.notEqual(observations[0]?.status, "available");
+  }
+});

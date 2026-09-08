@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import type { DashboardClient } from "../dashboard/client.js";
 import { collectDashboardCatalogue } from "../dashboard/catalogue.js";
 import { collectMediaCatalogue } from "../catalogue/index.js";
+import { collectCrazyrouterCatalogue } from "../catalogue/crazyrouter.js";
 import { catalogueModelSchema, catalogueProviderSchema, mediaCatalogueProviderIdSchema, mediaKindSchema, type MediaCatalogue } from "../catalogue/schemas.js";
 import { PROVIDER_IDS, describeProvider, providerDescriptorSchema } from "../providers/registry.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -33,13 +34,14 @@ export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeo
 export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
   const ids = [...new Set(input.providers ?? PROVIDER_IDS)];
   const direct = ids.filter(id => mediaCatalogueProviderIdSchema.safeParse(id).success) as z.infer<typeof mediaCatalogueProviderIdSchema>[];
-  const legacy = ids.filter(id => !direct.includes(id as typeof direct[number]));
+  const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]));
   const results: MediaCatalogue[] = [];
   // Bounded serial source groups avoid a fan-out across every provider on one call.
   if (legacy.length) results.push(await collectDashboardCatalogue({ client: dependencies.client, providers: legacy, ...(dependencies.now ? { now: dependencies.now } : {}) }));
   if (direct.length) results.push(await collectMediaCatalogue({ providers: direct, ...(input.modelIds ? { enrichIds: input.modelIds } : {}), ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}), ...(dependencies.now ? { now: dependencies.now } : {}) }));
-  const providers = results.flatMap(result => result.providers);
-  const all = results.flatMap(result => result.models).sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
+  const aggregator = ids.includes("crazyrouter") ? await collectCrazyrouterCatalogue({ ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}), ...(dependencies.now ? { now: dependencies.now } : {}) }) : undefined;
+  const providers = [...results.flatMap(result => result.providers), ...(aggregator ? [aggregator.provider] : [])];
+  const all = [...results.flatMap(result => result.models), ...(aggregator?.models ?? [])].sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
   const mediaMatched = all.filter(row => input.mediaKind === undefined || row.mediaKind === input.mediaKind || row.outputModalities?.includes(input.mediaKind));
   const matched = mediaMatched.filter(row => input.modelIds === undefined || input.modelIds.includes(row.id));
   const models = matched.slice(input.offset, input.offset + input.limit);

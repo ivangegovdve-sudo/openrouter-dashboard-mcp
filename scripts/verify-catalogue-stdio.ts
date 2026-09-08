@@ -12,7 +12,7 @@ const startedAt = new Date().toISOString();
 try {
   await client.connect(transport);
   const list = await client.listTools();
-  assert.equal(list.tools.length, 13);
+  assert.equal(list.tools.length, 14);
   assert.ok(list.tools.find(tool => tool.name === "dashboard_catalogue"));
   const version = JSON.parse(await readFile("package.json", "utf8")).version;
   assert.equal(client.getServerVersion()?.version, version);

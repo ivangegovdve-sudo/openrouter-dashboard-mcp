@@ -2,7 +2,7 @@
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal**. Version **0.9.0** registers **11 providers** and exposes thirteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **0.9.0** registers **12 providers** and exposes fourteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -90,11 +90,11 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **11 providers** in **open-dashboard-mcp 0.9.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **12 providers** in **open-dashboard-mcp 0.9.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
-| <span data-provider-id="openrouter">OpenRouter</span> | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
+| <span data-provider-id="openrouter">OpenRouter</span><br>Multi-provider aggregator | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
 | <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
@@ -103,8 +103,9 @@ Generated from the package registry: **11 providers** in **open-dashboard-mcp 0.
 | <span data-provider-id="novita">Novita</span> | [Catalogue](https://api.novita.ai/v3/openai/models) · [Documentation](https://novita.ai/docs/api-reference/model-apis-llm-list-models) | Some collected models | All collected models | All collected models | Not published in this connector | Some collected models | No billing API |
 | <span data-provider-id="sambanova">SambaNova</span> | [Catalogue](https://api.sambanova.ai/v1/models) · [Documentation](https://docs.sambanova.ai/cloud/api-reference/endpoints/models) | All collected models | All collected models | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="chutes">Chutes</span> | [Catalogue](https://llm.chutes.ai/v1/models) · [Documentation](https://chutes.ai/app/api) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="wavespeed">WaveSpeedAI</span> | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
-| <span data-provider-id="fal">fal</span> | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="wavespeed">WaveSpeedAI</span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="fal">fal</span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="crazyrouter">Crazyrouter</span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
 
 ### Provider pitches and structured caveats
 
@@ -176,6 +177,12 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://fal.ai/docs/documentation); checked 2026-09-08.
 
+**Crazyrouter**
+
+> “Same OpenAI-style workflow. More models. Lower pricing. Easier experimentation.” — [Crazyrouter](https://crazyrouter.com/tools/), observed 2026-09-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://crazyrouter.com/tools/); checked 2026-09-08.
+
 <!-- providers:end -->
 
 DeepInfra, Novita, SambaNova and Chutes publish their collected catalogues without a credential. QwenCloud requires the collector's region-bound international key. Both paths produce public dashboard data that this MCP reads without credentials. Mistral, xAI, Together, Fireworks, Nebius, Hyperbolic and Parasail returned 401 in the earlier catalogue probes; that observation describes those endpoints, not what the providers publish elsewhere.
@@ -217,7 +224,7 @@ The summary, provider declarations, pitches, caveats and tool table are generate
 
 <!-- tools:begin generated-do-not-edit -->
 
-**13 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**14 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
@@ -230,6 +237,7 @@ The summary, provider declarations, pitches, caveats and tool table are generate
 | `dashboard_matrix` | Dashboard app-model matrix |
 | `dashboard_model_economics` | Open Dashboard model economics |
 | `dashboard_model_status` | Dashboard model status |
+| `dashboard_price_comparison` | Shared-model aggregator price comparison |
 | `dashboard_resolve_model` | Dashboard resolve model |
 | `dashboard_source_health` | Dashboard source health |
 | `dashboard_usage_leaders` | Dashboard public ecosystem usage leaders |
@@ -243,7 +251,7 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 ## Full catalogue and comparable media prices
 
-`dashboard_catalogue` keeps acquired model identities even when no comparable price is available. It reads public native catalogues for DeepInfra, WaveSpeedAI, fal and Chutes, and the dashboard's archived catalogue for the other registered providers. It never generates media or makes a paid inference request.
+`dashboard_catalogue` keeps acquired model identities even when no comparable price is available. DeepInfra, WaveSpeedAI and Chutes use public native sources. fal uses authenticated model/pricing sources when `FAL_API_KEY` is supplied, and public catalogue/summary pricing otherwise. Crazyrouter uses key-visible identities when `CRAZYROUTER_API_KEY` is supplied, and public pricing identities otherwise. Other providers retain their dashboard archive. All requests are read-only metadata requests.
 
 For example, request WaveSpeed video detail with:
 
@@ -277,7 +285,21 @@ Each model's `pricing.status` is `available` or `price_not_available`. Unavailab
 
 Token prices retain token units; compute rental, character, voice and other unsupported billing axes remain native data rather than being relabelled as image or video generation prices. Structured provider pitches and scoped caveats accompany the response in `providerMetadata`.
 
-Coverage has specific limits. The dashboard's legacy archive does not expose every native population denominator. WaveSpeed enriches its default four video IDs plus up to 20 requested IDs; list-only prices whose formula or output quantity is unknown remain unavailable. Isolated detail failures are recorded and do not prevent later requested model lookups; shared service or access failures stop the batch. fal pricing coverage comes from its public summary pricing table, not all individual model pages. A failed pricing-source read produces `pricing_source_unavailable` and partial provider/tool status, rather than claiming the provider publishes no price; complete identity counts remain intact. Chutes compute rental prices are not generation prices. Read each provider's acquisition status, price coverage rule and pagination counters before treating a result as complete.
+Coverage has specific limits. The dashboard's legacy archive does not expose every native population denominator. WaveSpeed enriches its default four video IDs plus up to 20 requested IDs; list-only prices whose formula or output quantity is unknown remain unavailable. Isolated detail failures are recorded and do not prevent later requested model lookups; shared service or access failures stop the batch. Authenticated fal pricing is requested in batches of 50 under a fixed request/time budget; a 429 stops the batch without retry. Native price units can describe compute time, so generic seconds do not become output-video seconds without explicit evidence. Its public fallback checks only the summary pricing table. Crazyrouter preserves its native billing formulas; unsupported tiered or media formulas stay unpriced for comparison. A failed source read is distinct from a successfully checked missing row, and neither means provider-wide nonpublication. Complete identity counts remain intact when price coverage is partial. Chutes compute rental prices are not generation prices.
+
+## Shared-model price comparison
+
+`dashboard_price_comparison` joins Crazyrouter aliases to OpenRouter using exact IDs and explicit native author evidence. It retains unmatched and unpriced Crazyrouter identities, records each source's population, and reports filters and pagination separately. Optional `modelIds` selects up to 20 exact Crazyrouter IDs; `offset` defaults to 0 and `limit` to 50 (maximum 500).
+
+```json
+{"modelIds":["gpt-4o","gpt-4o-mini","gpt-4.1"],"limit":20}
+```
+
+The response presents input/output quotes side by side and computes savings with exact decimal fractions. Crazyrouter quotes are its public default pricing group; the caller's billing group and settled charges are unverified. OpenRouter quotes are collected during the call. Available direct-provider references are explicitly dated published-price observations, not live account prices. Exact API aliases do not establish that two services resolve to the same immutable model snapshot.
+
+Crazyrouter's dated claim is attributed and checked only where a comparable direct-provider reference exists. A quote outside the claimed range is reported as a discrepancy; absent direct prices remain unknown. A few compared aliases do not prove a statement about most models. The tool makes no inference request and measures no latency or model quality.
+
+Supply optional `FAL_API_KEY` and `CRAZYROUTER_API_KEY` through the host's environment. Startup and tool discovery remain credential-free. This package does not read Secret Manager itself, write keys, or modify an account. Account spend remains unread by these collectors.
 
 Install-time selection of tools and providers belongs to 1.0. These request filters select catalogue output; they do not remove tools from MCP discovery.
 
