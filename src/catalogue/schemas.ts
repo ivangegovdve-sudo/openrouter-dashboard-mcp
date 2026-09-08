@@ -12,6 +12,7 @@ export const exactPriceSchema = z.object({
   conversion: z.object({ operation: z.literal("multiply_then_divide"), multiplier: z.string(), divisor: z.string(), formula: z.string() }).strict(),
   conditions: z.record(z.string(), z.unknown()),
   sourceUrl: z.string().url(),
+  provenance: z.object({ basis: z.literal("derived"), derivedFrom: z.string().url(), observedMultiplier: z.string().regex(/^\d+(?:\.\d+)?$/), observedAt: z.string().date() }).strict().optional(),
 }).strict();
 export type ExactPrice = z.infer<typeof exactPriceSchema>;
 export const cataloguePricingSchema = z.object({

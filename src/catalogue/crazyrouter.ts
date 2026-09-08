@@ -7,6 +7,16 @@ export const CRAZYROUTER_MODELS_URL = "https://api.crazyrouter.com/v1/models";
 export const CRAZYROUTER_PRICING_URL = "https://crazyrouter.com/api/pricing";
 /** Provider-owned code linked by /pricing, inspected 2026-09-08; not an inferred upstream-provider price. */
 export const CRAZYROUTER_FORMULA_SOURCE = "https://crazyrouter.com/assets/mtrgex7b/pricingHelpers-Dhu58xYK.js";
+const DERIVED_OPENAI_PRICES: Record<string, { sourceUrl: string; input: string; output: string }> = {
+  "gpt-4o": { sourceUrl: "https://developers.openai.com/api/docs/models/gpt-4o", input: "2.5", output: "10" },
+  "gpt-4o-mini": { sourceUrl: "https://developers.openai.com/api/docs/models/gpt-4o-mini", input: "0.15", output: "0.6" },
+  "gpt-4.1": { sourceUrl: "https://developers.openai.com/api/docs/models/gpt-4.1", input: "2", output: "8" },
+};
+const derivedPriceProvenance = (modelId: string, group: string, leg: "input" | "output", quotedUsdPerMillion: string): ExactPrice["provenance"] => {
+  const reference = DERIVED_OPENAI_PRICES[modelId];
+  if (!reference || group !== "default" || exactDecimalRatio(quotedUsdPerMillion, "1", reference[leg]).value !== "0.65") return undefined;
+  return { basis: "derived", derivedFrom: reference.sourceUrl, observedMultiplier: "0.65", observedAt: "2026-09-08" };
+};
 export interface CollectCrazyrouterOptions {
   apiKey?: string | null;
   fetchImpl?: typeof fetch;
@@ -76,13 +86,14 @@ function normalizeModel(args: {
         const ratio = decimal(row.model_ratio), completion = decimal(row.completion_ratio), discount = decimal(row.discount), groupRatio = decimal(args.groupRatios[args.group]);
         for (const [leg, coefficient, unit] of [["input", "1", "usd_per_input_token"], ["output", completion, "usd_per_output_token"]] as const) {
           const gross = multiply(ratio, "2", coefficient, groupRatio), net = multiply(gross, discount);
+          const provenance = derivedPriceProvenance(args.id, args.group, leg, net);
           prices.push(normalizeExactPrice({ value: ratio, nativeUnit: "crazyrouter_model_ratio", sourceField: `data[${args.priceIndex}].model_ratio`,
             unit, sourceUrl: CRAZYROUTER_PRICING_URL, multiplier: multiply("2", coefficient, groupRatio, discount), divisor: "1000000",
             conditions: { currency: "USD", leg, basis: "public_group_quote_not_account_settlement", group: args.group, groupRatio,
               modelRatio: ratio, completionRatio: completion, discount, accountGroupVerified: false, grossUsdPerMillionTokens: gross,
               netUsdPerMillionTokens: net, formula: `model_ratio * 2 * ${leg === "output" ? "completion_ratio * " : ""}group_ratio * discount / 1000000`,
               formulaSourceUrl: CRAZYROUTER_FORMULA_SOURCE, formulaObservedAt: "2026-09-08", priceObservedAt: args.observedAt,
-              excludes: ["cache token categories", "tool or search fees", "account-specific billing adjustments"] } }));
+              excludes: ["cache token categories", "tool or search fees", "account-specific billing adjustments"] }, ...(provenance ? { provenance } : {}) }));
         }
       } catch { prices.length = 0; }
     }

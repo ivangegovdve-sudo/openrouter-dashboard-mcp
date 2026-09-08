@@ -196,9 +196,9 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     catalogueUrl: "https://api.sailresearch.com/v1/models",
     citationUrl: "https://docs.sailresearch.com/pricing.md",
     publishes: {
-      // Public documents publish both; the current MCP quotes only pinned prices.
+      // Public documents publish both, but this connector only reads pinned prices.
       pricing: "partial",
-      contextLength: "partial",
+      contextLength: "never",
       outputModalities: "never",
       reasoningEfforts: "never",
       activeFlag: "never",
@@ -243,8 +243,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     catalogueUrl: "https://api.deepinfra.com/models/list",
     citationUrl: "https://deepinfra.com/models",
     publishes: {
-      // Measured 2026-09-08: 371 models on 8 different pricing axes. Only the
-      // 218 with pricing.type="tokens" are collected here; the other 153 bill
+      // Measured 2026-09-08: 372 models on 8 different pricing axes. Only the
+      // 219 with pricing.type="tokens" are collected here; the other 153 bill
       // per second, per image, per character or per frame and cannot share a
       // per-token column. Every one of the 218 carries a price.
       pricing: "always",
@@ -269,7 +269,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "DeepInfra's legacy token connector observed 218 token-priced models out of 371 on 2026-09-08, with 114 carrying a retirement date and 153 further models using second, image, character or frame billing. Its publication flags describe that token connector. The media catalogue separately reads the public model list, retains other billing axes and reports its own acquired population and price coverage. Native prices and conversion conditions accompany comparable rates; catalogue presence alone does not establish that a model is current or its price comparable.",
+      "DeepInfra's legacy token connector observed 219 token-priced models out of 372 on 2026-09-08, with 114 carrying a retirement date and 153 further models using second, image, character or frame billing. Its publication flags describe that token connector. The media catalogue separately reads the public model list, retains other billing axes and reports its own acquired population and price coverage. Native prices and conversion conditions accompany comparable rates; catalogue presence alone does not establish that a model is current or its price comparable.",
   },
   novita: {
     id: "novita",
@@ -386,7 +386,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
+      "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. The exact GPT-4o, GPT-4o mini and GPT-4.1 default-group figures that equal 0.65x OpenAI list prices are marked derived with their source and observed multiplier, and are excluded from competition claims. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected independently comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
   },
 };
 

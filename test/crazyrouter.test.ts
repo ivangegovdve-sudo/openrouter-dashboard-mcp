@@ -52,6 +52,18 @@ test("Crazyrouter retains every key-visible identity even when price metadata is
   assert.equal(prices[0]!.conditions.netUsdPerMillionTokens, "1.625");
 });
 
+test("Crazyrouter marks the exact OpenAI-rate aliases as derived prices", async () => {
+  const collect = await collector();
+  const result = await collect({ apiKey: "synthetic-key", now,
+    fetchImpl: source(list(["gpt-4o", "other"]), pricing([tokenRow("gpt-4o"), tokenRow("other")])) });
+  const derived = result.models[0]!.pricing.prices;
+  assert.deepEqual(derived.map(price => price.provenance), [
+    { basis: "derived", derivedFrom: "https://developers.openai.com/api/docs/models/gpt-4o", observedMultiplier: "0.65", observedAt: "2026-09-08" },
+    { basis: "derived", derivedFrom: "https://developers.openai.com/api/docs/models/gpt-4o", observedMultiplier: "0.65", observedAt: "2026-09-08" },
+  ]);
+  assert.equal(result.models[1]!.pricing.prices[0]!.provenance, undefined);
+});
+
 test("Crazyrouter preserves source decimal digits rather than rounding JSON numbers", async () => {
   const collect = await collector();
   const native = '{"success":true,"group_ratio":{"default":1},"data":[{"model_name":"exact","quota_type":0,"model_ratio":0.123456789012345678901,"completion_ratio":3,"discount":1,"enable_groups":["default"]}]}';

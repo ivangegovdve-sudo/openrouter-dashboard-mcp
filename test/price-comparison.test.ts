@@ -20,19 +20,37 @@ function sources(args: { ids?: string[]; rows?: unknown[]; openrouter?: unknown[
 const crazy = (id: string, overrides: Record<string, unknown> = {}) => ({ model_name: id, quota_type: 0, model_ratio: 1.25, completion_ratio: 4, discount: 0.65, enable_groups: ["default"], vendor_id: 4, ...overrides });
 const or = (id: string, prompt = "0.0000025", completion = "0.00001") => ({ id, canonical_slug: `${id}-snapshot`, pricing: { prompt, completion } });
 
-test("price comparison calculates exact input/output savings and labels direct prices as dated references", async () => {
+test("price comparison calculates exact input/output savings for an independently quoted alias", async () => {
   const { runPriceComparison, priceComparisonOutputSchema } = await module();
-  const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources() });
+  const result = await runPriceComparison({}, { apiKey: "synthetic-key", now,
+    fetchImpl: sources({ ids: ["gpt-5-mini"], rows: [crazy("gpt-5-mini", { model_ratio: 0.125, completion_ratio: 8 })], openrouter: [or("openai/gpt-5-mini", "0.00000025", "0.000002")] }) });
   priceComparisonOutputSchema.parse(result);
   assert.equal(result.status, "ok");
-  assert.equal(result.rows[0]?.openrouter?.canonicalSlug, "openai/gpt-4o-snapshot");
+  assert.equal(result.rows[0]?.openrouter?.canonicalSlug, "openai/gpt-5-mini-snapshot");
   assert.equal(result.rows[0]?.identity.snapshotEquivalence, "not_established");
   assert.equal(result.rows[0]?.comparisons.input.direction, "cheaper");
   assert.deepEqual(result.rows[0]?.comparisons.input.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
   assert.deepEqual(result.rows[0]?.comparisons.output.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
-  assert.equal(result.rows[0]?.directProvider?.basis, "dated_published_reference_not_live");
-  assert.equal(result.rows[0]?.claimAssessment.status, "within_range_for_this_model");
+  assert.equal(result.rows[0]?.directProvider, null);
+  assert.equal(result.rows[0]?.claimAssessment.status, "not_comparable");
   assert.equal(result.vendorClaim.globalAssessment, "not_established");
+});
+
+test("price comparison excludes Crazyrouter prices derived from OpenAI list prices", async () => {
+  const { runPriceComparison, priceComparisonOutputSchema } = await module();
+  const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources() });
+  priceComparisonOutputSchema.parse(result);
+  const row = result.rows[0]!;
+  assert.equal(row.status, "price_derived_not_comparable");
+  assert.equal(row.comparisons.input.status, "not_comparable");
+  assert.equal(row.comparisons.input.reason, "crazyrouter_price_derived_from_direct_provider_reference");
+  assert.equal(row.comparisons.input.baselinePrice, null);
+  assert.equal(row.comparisons.output.status, "not_comparable");
+  assert.equal(row.claimAssessment.status, "not_comparable");
+  assert.equal(row.crazyrouter?.prices[0]?.provenance?.basis, "derived");
+  assert.equal(row.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
+  assert.equal(result.population.comparableBeforePagination, 0);
+  assert.doesNotMatch(JSON.stringify(result), /35% lower|savingsPercent/);
 });
 
 test("price comparison reports a scoped contradiction without converting most-models marketing into a universal guarantee", async () => {
@@ -49,7 +67,7 @@ test("price comparison retains unpriced and unmatched rows including suffix near
   const ids = ["gpt-4o", "unpriced", "near-match", "gpt-4o:free"];
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ ids, rows: [crazy("gpt-4o"), crazy("near-match"), crazy("gpt-4o:free")], openrouter: [or("openai/gpt-4o"), or("openai/unpriced"), or("openai/near_match")] }) });
   assert.deepEqual(result.rows.map(row => row.id), ids);
-  assert.deepEqual(result.rows.map(row => row.status), ["comparable", "price_not_available", "openrouter_model_not_found", "openrouter_model_not_found"]);
+  assert.deepEqual(result.rows.map(row => row.status), ["price_derived_not_comparable", "price_not_available", "openrouter_model_not_found", "openrouter_model_not_found"]);
   assert.equal(result.population.acquiredCrazyrouterRows, 4);
   assert.equal(result.population.beforePagination, 4);
 });

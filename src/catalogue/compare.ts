@@ -17,7 +17,7 @@ const legSchema = z.object({ status: z.enum(["comparable", "not_comparable"]),
   crazyrouterPrice: exactPriceSchema.nullable(), baselinePrice: exactPriceSchema.nullable(),
 }).strict();
 const identitySchema = z.object({ exactModelAlias: z.string(), authorNamespace: z.string().optional(), nativeVendorName: z.string().nullable(), nativeOwner: z.string().nullable(), basis: z.string(), snapshotEquivalence: z.literal("not_established") }).strict();
-const rowSchema = z.object({ id: z.string(), status: z.enum(["comparable", "price_not_available", "openrouter_model_not_found", "identity_not_established", "source_unavailable", "crazyrouter_model_not_observed"]), reason: z.string().optional(),
+const rowSchema = z.object({ id: z.string(), status: z.enum(["comparable", "price_not_available", "price_derived_not_comparable", "openrouter_model_not_found", "identity_not_established", "source_unavailable", "crazyrouter_model_not_observed"]), reason: z.string().optional(),
   identity: identitySchema,
   crazyrouter: z.object({ id: z.string(), pricingStatus: z.enum(["available", "price_not_available"]), reason: z.string().optional(), prices: z.array(exactPriceSchema), sourceUrl: z.string().url(), observedAt: z.string().datetime({ offset: true }), sourceIndex: z.number().int().nonnegative() }).strict().nullable(),
   openrouter: z.object({ id: z.string(), canonicalSlug: z.string().nullable(), prices: z.array(exactPriceSchema), sourceUrl: z.string().url(), observedAt: z.string().datetime({ offset: true }) }).strict().nullable(),
@@ -74,7 +74,10 @@ async function openrouterSource(fetchImpl: typeof fetch, timeout: number, observ
 function priceLeg(prices: ExactPrice[], unit: ExactPrice["unit"]): ExactPrice | null {
   const matches = prices.filter(price => price.unit === unit); return matches.length === 1 ? matches[0]! : null;
 }
+const DERIVED_PRICE_REASON = "crazyrouter_price_derived_from_direct_provider_reference";
+const isDerivedPrice = (price: ExactPrice | null): boolean => price?.provenance?.basis === "derived";
 function comparison(price: ExactPrice | null, baseline: ExactPrice | null): ComparisonLeg {
+  if (isDerivedPrice(price)) return { status: "not_comparable", reason: DERIVED_PRICE_REASON, crazyrouterPrice: price, baselinePrice: null };
   if (!price || !baseline) return { status: "not_comparable", reason: "price_not_available", crazyrouterPrice: price, baselinePrice: baseline };
   const n = BigInt(price.exact.numerator), d = BigInt(price.exact.denominator), bn = BigInt(baseline.exact.numerator), bd = BigInt(baseline.exact.denominator);
   if (bn === 0n) return { status: "not_comparable", reason: "zero_baseline", crazyrouterPrice: price, baselinePrice: baseline };
@@ -116,6 +119,7 @@ function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<strin
   else if (!model) status = "crazyrouter_model_not_observed";
   else if (!identity.authorNamespace || matches.length > 1 || duplicateCrazy) { status = "identity_not_established"; reason = matches.length > 1 || duplicateCrazy ? "ambiguous_native_identity" : identity.basis; }
   else if (!matched) status = "openrouter_model_not_found";
+  else if (isDerivedPrice(inputPrice) || isDerivedPrice(outputPrice)) { status = "price_derived_not_comparable"; reason = DERIVED_PRICE_REASON; }
   else if (comparisons.input.status !== "comparable" || comparisons.output.status !== "comparable") status = "price_not_available";
   const directProvider = duplicateCrazy ? null : directReference(identity);
   const claimInput = comparison(inputPrice, directProvider?.input ?? null), claimOutput = comparison(outputPrice, directProvider?.output ?? null);
@@ -151,7 +155,7 @@ export async function runPriceComparison(rawInput: PriceComparisonInput, depende
     }
   }
   return priceComparisonOutputSchema.parse({ status: crazy.provider.status === "unavailable" && openrouter.source.status === "unavailable" ? "error" : crazy.provider.status !== "available" || crazy.provider.population.completeness !== "full" || openrouter.source.status !== "available" ? "partial" : "ok",
-    summary: `${comparable} of ${rows.length} retained comparison rows have both input and output prices; ${paged.length} rows returned. Public quotes do not establish account charges or identical model snapshots.`, observedAt,
+    summary: `${comparable} of ${rows.length} retained comparison rows are independently comparable; ${paged.length} rows returned. Derived Crazyrouter prices are excluded from side-by-side competition claims. Public quotes do not establish account charges or identical model snapshots.`, observedAt,
     sources: { crazyrouter: crazy.provider, openrouter: openrouter.source }, rows: paged,
     population: { acquiredCrazyrouterRows: crazy.provider.population.received, retainedCrazyrouterRows: crazy.provider.population.retained, openrouterReceivedRows: openrouter.source.received,
       excludedByUserFilter: crazy.models.length - selectedModels.length, missingRequestedIds, beforePagination: rows.length, returned: paged.length, comparableBeforePagination: comparable,

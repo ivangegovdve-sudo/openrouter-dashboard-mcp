@@ -29,6 +29,7 @@ export function exactDecimalRatio(value: string, multiplier = "1", divisor = "1"
 export function normalizeExactPrice(args: {
   value: string; nativeUnit: string; sourceField: string; unit: ExactPrice["unit"];
   sourceUrl: string; multiplier?: string; divisor?: string; conditions?: Record<string, unknown>;
+  provenance?: ExactPrice["provenance"];
 }): ExactPrice {
   const multiplier = args.multiplier ?? "1", divisor = args.divisor ?? "1";
   const { value, ...exact } = exactDecimalRatio(args.value, multiplier, divisor);
@@ -36,6 +37,6 @@ export function normalizeExactPrice(args: {
     unit: args.unit, ...(value === undefined ? {} : { value }), exact,
     native: { value: args.value, unit: args.nativeUnit, sourceField: args.sourceField },
     conversion: { operation: "multiply_then_divide", multiplier, divisor, formula: `${args.value} * ${multiplier} / ${divisor}` },
-    conditions: args.conditions ?? {}, sourceUrl: args.sourceUrl,
+    conditions: args.conditions ?? {}, sourceUrl: args.sourceUrl, ...(args.provenance ? { provenance: args.provenance } : {}),
   };
 }

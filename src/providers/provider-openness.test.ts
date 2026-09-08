@@ -142,7 +142,7 @@ test("Cerebras publication claims are scoped to the current connector", () => {
 test("Sail acknowledges document metadata and its documented but unread billing route", () => {
   const sail = describeProvider("sail");
   assert.equal(sail.publishes.pricing, "partial");
-  assert.equal(sail.publishes.contextLength, "partial");
+  assert.equal(sail.publishes.contextLength, "never");
   assert.equal(sail.spendVisibility, "unknown");
   assert.match(sail.comparabilityNote, /usage-endpoints\.md/);
   assert.match(sail.comparabilityNote, /not probed or read/);

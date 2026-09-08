@@ -62,10 +62,14 @@ try {
   for (const id of sharedIds) {
     const row = comparison.rows.find(row => row.id === id);
     assert.ok(row, "Required shared identity was not retained");
-    assert.equal(row.status, "comparable");
-    assert.equal(row.comparisons.input.savingsPercent?.value, "35");
-    assert.equal(row.comparisons.output.savingsPercent?.value, "35");
-    assert.equal(row.claimAssessment.status, "within_range_for_this_model");
+    assert.equal(row.status, "price_derived_not_comparable");
+    assert.equal(row.comparisons.input.status, "not_comparable");
+    assert.equal(row.comparisons.output.status, "not_comparable");
+    assert.equal(row.comparisons.input.savingsPercent, undefined);
+    assert.equal(row.comparisons.output.savingsPercent, undefined);
+    assert.equal(row.claimAssessment.status, "not_comparable");
+    assert.equal(row.crazyrouter?.prices[0]?.provenance?.basis, "derived");
+    assert.equal(row.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
   }
   console.log(JSON.stringify({ version: evidence.version, tools: tools.length, catalogueProviders: catalogue.providers.map(p => ({ provider: p.provider, status: p.status, population: p.population, pricePopulation: p.requestParameters.pricePopulation })), priceChecks, sharedModels: comparison.rows.map(row => ({ id: row.id, status: row.status, inputSavingsPercent: row.comparisons.input.savingsPercent, outputSavingsPercent: row.comparisons.output.savingsPercent, claimAssessment: row.claimAssessment.status })), comparisonPopulation: comparison.population }));
 } finally { await client.close(); }

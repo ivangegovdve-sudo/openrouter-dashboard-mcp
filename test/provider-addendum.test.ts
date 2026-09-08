@@ -37,8 +37,12 @@ test("comparison tool returns the same validated JSON in both MCP content surfac
     const text = result.content.find(item => item.type === "text");
     assert.ok(text && text.type === "text");
     assert.deepEqual(JSON.parse(text.text), output);
-    assert.equal(output.rows[0]?.comparisons.input.savingsPercent?.value, "35");
-    assert.equal(output.rows[0]?.claimAssessment.status, "within_range_for_this_model");
+    assert.equal(output.rows[0]?.status, "price_derived_not_comparable");
+    assert.equal(output.rows[0]?.comparisons.input.status, "not_comparable");
+    assert.equal(output.rows[0]?.comparisons.input.savingsPercent, undefined);
+    assert.equal(output.rows[0]?.claimAssessment.status, "not_comparable");
+    assert.equal(output.rows[0]?.crazyrouter?.prices[0]?.provenance?.basis, "derived");
+    assert.equal(output.rows[0]?.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
     assert.equal(fetches, 2);
   } finally { await client.close(); await server.close(); }
 });

@@ -75,6 +75,15 @@ test("distinguishes integrated spend from Sail's documented but unread API", () 
   assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "unknown");
 });
 
+test("does not advertise Sail context values the connector does not collect", () => {
+  assert.equal(PROVIDER_REGISTRY.sail.publishes.contextLength, "never");
+  assert.match(PROVIDER_REGISTRY.sail.comparabilityNote, /does not yet collect.*context/i);
+});
+
+test("keeps DeepInfra's published denominator consistent with its media evidence", () => {
+  assert.match(PROVIDER_REGISTRY.deepinfra.comparabilityNote, /219.*372|372.*219/);
+});
+
 test("phrases an unpriced model as a collection gap and never as free", () => {
   assert.match(unpricedReason("cerebras"), /current Cerebras catalogue connector/);
   assert.match(unpricedReason("groq"), /No comparable token price in the collected data/);
