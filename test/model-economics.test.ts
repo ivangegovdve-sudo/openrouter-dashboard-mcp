@@ -69,6 +69,10 @@ function liveModel(overrides: LiveOverrides) {
       : prompt !== null && completion !== null
         ? false
         : null;
+  const pricePoints = [
+    ...(prompt === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_in`, amount: prompt, unit: "token_in", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
+    ...(completion === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_out`, amount: completion, unit: "token_out", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
+  ];
   return {
     provider: overrides.provider,
     id: overrides.id,
@@ -76,7 +80,8 @@ function liveModel(overrides: LiveOverrides) {
     ownedBy: "vendor",
     contextLength:
       overrides.contextLength === undefined ? "128000" : overrides.contextLength,
-    pricing: { promptUsdPerToken: prompt, completionUsdPerToken: completion },
+    pricePoints,
+    pricingState: pricePoints.length > 0 ? "published" : "unknown",
     isFree,
     freeKind,
     providerActive: null,
@@ -330,7 +335,7 @@ test("ranks across all three providers cheapest first", async () => {
     output.models.map((entry) => `${entry.provider}:${entry.id}`),
     ["groq:groq/cheap", "openrouter:or/mid", "openrouter:or/pricey"],
   );
-  assert.equal(output.models[0]?.pricing.promptUsdPerMillionTokens, "0.03");
+  assert.equal(output.models[0]?.pricePoints.find((point) => point.unit === "token_in")?.amount, "0.0000000300");
   modelEconomicsOutputSchema.parse(output);
 });
 
@@ -364,7 +369,7 @@ test("ranks QwenCloud's unambiguous token rate while retaining requested banded 
   const priced = output.models.find((model) => model.id === "qwen/unambiguous");
   assert.ok(priced);
   assert.equal(priced.priceComparable, true);
-  assert.equal(priced.pricing.promptUsdPerMillionTokens, "0.05");
+  assert.equal(priced.pricePoints.find((point) => point.unit === "token_in")?.amount, "0.00000005");
   assert.equal(priced.emitsText, true);
   assert.deepEqual(priced.reasoningEfforts, []);
   for (const id of ["qwen/banded", "qwen/image"]) {
@@ -805,7 +810,9 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
 
   try {
     const output = await runModelEconomics({ providers: ["sail"] }, { client, now: NOW });
-    assert.equal(output.status, "ok");
+    // Some verified Sail models have only one comparable token direction in the
+    // fixture. The partial status keeps that incompleteness visible.
+    assert.equal(output.status, "partial");
     
     // The fixture has ASAP input $1.40 and output $4.40
     // promptUsdPerToken = 0.0000014000
@@ -813,22 +820,22 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
     
     const sailModel = (output as any).models.find((m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3");
     assert.ok(sailModel, "Sail model should be injected");
-    assert.equal(sailModel.pricing.promptUsdPerToken, "0.0000014000");
+    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_in" && point.condition?.name === "ASAP")?.amount, "0.0000014");
     // The verified document's price, NOT the catalogue's 0.0000099999.
-    assert.notEqual(sailModel.pricing.promptUsdPerToken, "0.0000099999");
+    assert.notEqual(sailModel.pricePoints.find((point: any) => point.unit === "token_in")?.amount, "0.0000099999");
     // Exactly one Sail row for this id -- the catalogue copy must be gone, not
     // sitting beside the verified one.
     assert.equal(
       (output as any).models.filter(
         (m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3").length,
       1, "the catalogue row must be replaced, not duplicated");
-    assert.equal(sailModel.pricing.completionUsdPerToken, "0.0000044000");
+    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_out" && point.condition?.name === "ASAP")?.amount, "0.0000044");
     assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
     // The window the price belongs to must travel WITH the price. Selection can
     // fall back to a faster window than requested, so two rows that look
     // identical may require different Sail settings to obtain -- a caller
     // omitting the setting would be charged the ASAP rate.
-    assert.equal(sailModel.pricingWindow, "asap",
+    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_in")?.condition?.name, "ASAP",
       "the price must name the completion window it came from");
   } finally {
     globalThis.fetch = originalFetch;

@@ -40,7 +40,7 @@ test("preserves exact integer, decimal, and opaque cursor strings", () => {
   const parsed = liveModelsResponseSchema.parse(liveModelsFixture);
 
   assert.equal(parsed.data[0]?.contextLength, "90071992547409930001");
-  assert.equal(parsed.data[0]?.pricing.promptUsdPerToken, "0.0000001250");
+  assert.equal(parsed.data[0]?.pricePoints.find((point) => point.unit === "token_in")?.amount, "0.0000001250");
   assert.equal(parsed.data[0]?.performance?.throughputTps, "123.4500");
   assert.equal(parsed.cursor, opaqueCursor);
   assert.equal(exactIntegerStringSchema.safeParse("01").success, false);

@@ -36,10 +36,7 @@ const freeLiveModel = {
   provider: "openrouter",
   id: "openrouter/free-text",
   displayName: "Free Text",
-  pricing: {
-    promptUsdPerToken: "0",
-    completionUsdPerToken: "0",
-  },
+  pricePoints: liveModelFixture.pricePoints.map((point) => ({ ...point, amount: "0" })),
   isFree: true,
   freeKind: "concrete_free",
   outputModalities: ["text"],
@@ -242,28 +239,18 @@ test("keeps only upstream-free candidates with published prices and the requeste
     ...freeLiveModel,
     id: "cerebras/unknown-price",
     provider: "cerebras",
-    pricing: {
-      promptUsdPerToken: null,
-      completionUsdPerToken: null,
-    },
+    pricePoints: [],
     isFree: null,
     freeKind: "paid_or_unknown",
   } as const;
   const inconsistentNullPrice = {
     ...freeLiveModel,
     id: "openrouter/inconsistent-null-price",
-    pricing: {
-      promptUsdPerToken: "0",
-      completionUsdPerToken: null,
-    },
+    pricePoints: [freeLiveModel.pricePoints[0]!],
   } as const;
   const perImagePriced = {
     ...freeLiveModel,
     id: "openrouter/per-image-priced",
-    pricing: {
-      promptUsdPerToken: "0",
-      completionUsdPerToken: "0",
-    },
     isFree: false,
     freeKind: "paid_or_unknown",
   } as const;
@@ -316,10 +303,10 @@ test("keeps only upstream-free candidates with published prices and the requeste
     ["openrouter/free-text"],
   );
   assert.equal(output.liveCandidates.data[0]?.isFree, true);
-  assert.deepEqual(output.liveCandidates.data[0]?.pricing, {
-    promptUsdPerToken: "0",
-    completionUsdPerToken: "0",
-  });
+  assert.deepEqual(
+    output.liveCandidates.data[0]?.pricePoints.map((point) => point.amount),
+    ["0", "0"],
+  );
   assert.deepEqual(output.liveCandidates.cap, {
     requestedLimit: 50,
     examinedCount: 6,
@@ -337,10 +324,10 @@ test("free-model tool excludes contradictory live freeness while preserving the 
   const contradictory = {
     ...freeLiveModel,
     id: "openrouter/contradictory-free",
-    pricing: {
-      promptUsdPerToken: "0.000001",
-      completionUsdPerToken: "0",
-    },
+    pricePoints: [
+      { ...freeLiveModel.pricePoints[0]!, amount: "0.000001" },
+      freeLiveModel.pricePoints[1]!,
+    ],
     isFree: true,
     freeKind: "paid_or_unknown" as const,
   };

@@ -29,10 +29,11 @@ export const catalogueOutputSchema = z.object({
 }).strict();
 export type CatalogueInput = z.infer<typeof catalogueInputSchema>;
 export type CatalogueOutput = z.infer<typeof catalogueOutputSchema>;
-export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date };
+export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[] };
 
 export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
-  const ids = [...new Set(input.providers ?? PROVIDER_IDS)];
+  const allowed = dependencies.allowedProviders === undefined ? undefined : new Set(dependencies.allowedProviders);
+  const ids = [...new Set((input.providers ?? dependencies.allowedProviders ?? PROVIDER_IDS).filter((id) => allowed === undefined || allowed.has(id)))];
   const direct = ids.filter(id => mediaCatalogueProviderIdSchema.safeParse(id).success) as z.infer<typeof mediaCatalogueProviderIdSchema>[];
   const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]));
   const results: MediaCatalogue[] = [];

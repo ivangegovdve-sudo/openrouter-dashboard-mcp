@@ -174,9 +174,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     catalogueUrl: "https://api.cerebras.ai/v1/models",
     citationUrl: "https://inference-docs.cerebras.ai/api-reference/models",
     publishes: {
-      // These values describe the current /v1/models connector only.
-      // A richer public native source was found on 2026-09-08; integration is pending.
-      pricing: "never",
+      // The model API has no prices; the public pricing page is the source.
+      pricing: "partial",
       contextLength: "never",
       outputModalities: "never",
       reasoningEfforts: "never",
@@ -187,7 +186,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "Cerebras's current /v1/models connector supplies only a model id and owner, so those collected rows cannot be ranked on cost or filtered on capability. This is a connector limitation: a separate public native source returned richer metadata for 3 of 3 models on 2026-09-08. Its collector integration is pending; those values are not yet available here.",
+      "Cerebras's /v1/models connector supplies only model identity and owner; pricing is read separately from the JS-rendered public pricing page. That source publishes prices for the listed developer-tier models, while a model absent from the table remains not_published. Context and modality are still not published by this connector.",
   },
   sail: {
     id: "sail",
@@ -443,6 +442,9 @@ export function unpricedReason(id: string): string {
     case "never":
       return `The current ${descriptor.displayName} catalogue connector supplies no prices, so cost is unknown — not free.`;
     case "partial":
+      if (id === "cerebras") {
+        return `The current Cerebras catalogue connector supplies model ids but no price fields; cost is unknown — not free. The separate pricing-page read did not establish a price for this model.`;
+      }
       return `No comparable token price in the collected data for this ${descriptor.displayName} model, so cost is unknown — not free. A published price may require a different unit, token range or time band.`;
     case "always":
       return `${descriptor.displayName} normally publishes a price for every model; its absence here is a gap in the upstream record.`;
