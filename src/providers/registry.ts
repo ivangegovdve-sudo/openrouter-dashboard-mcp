@@ -232,7 +232,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     id: "sail",
     ...providerEvidence("sail"),
     displayName: "Sail",
-    catalogueUrl: "https://api.sailresearch.com/v1/models",
+    catalogueUrl: "https://docs.sailresearch.com/pricing.md",
     citationUrl: "https://docs.sailresearch.com/pricing.md",
     catalogueEvidence: {
       sources: [{
