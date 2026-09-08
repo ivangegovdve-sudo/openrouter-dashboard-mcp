@@ -33,6 +33,18 @@ import {
 const NOW = () => new Date("2026-08-27T00:00:00.000Z");
 const STAMP = "2026-08-26T06:00:00.000Z";
 
+test("economics exposes filterable provider caveats and attributed pitches", async () => {
+  const result = await runModelEconomics({ providers: ["groq"], discountEnrichment: 0 }, {
+    client: stubClient({ live: [liveModel({ provider: "groq", id: "example" })] }), now: NOW,
+  });
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  const provider = result.providers[0]!;
+  assert.equal(provider.pitchResearch.status, "published");
+  assert.equal(provider.pitch?.attribution, "Groq");
+  assert.equal(provider.caveats?.find(caveat => caveat.value === "8000")?.unit, "tokens/minute");
+});
+
 type LiveOverrides = {
   provider: "openrouter" | "groq" | "cerebras" | "qwencloud";
   id: string;

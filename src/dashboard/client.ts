@@ -8,6 +8,8 @@ import { withCache, type CachingClientOptions } from "./cache.js";
 import { DashboardRequestError } from "./errors.js";
 
 export interface DashboardClient {
+  /** Actual configured read origin for consumers that emit source citations. */
+  sourceUrl?(path: string): string;
   get<T>(
     path: string,
     query: URLSearchParams,
@@ -159,6 +161,7 @@ function createDirectDashboardClient(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   return {
+    sourceUrl: (path: string) => requestUrl(path, new URLSearchParams(), options.baseUrl).href,
     async get<T>(
       path: string,
       query: URLSearchParams,

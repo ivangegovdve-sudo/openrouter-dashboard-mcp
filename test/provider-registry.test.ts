@@ -10,8 +10,8 @@ import {
 } from "../src/providers/registry.js";
 
 test("covers every provider this build normalises", () => {
-  // Nine as of 2026-09-08: the original four plus the five live-price
-  // catalogues. Asserted as a set with a stated reason rather than a bare
+  // The token catalogue providers plus WaveSpeed and fal media catalogues.
+  // Asserted as a set with a stated reason rather than a bare
   // literal, because the previous literal said "three" while listing four --
   // the name had already drifted from the assertion below it.
   assert.deepEqual(
@@ -20,12 +20,14 @@ test("covers every provider this build normalises", () => {
       "cerebras",
       "chutes",
       "deepinfra",
+      "fal",
       "groq",
       "novita",
       "openrouter",
       "qwencloud",
       "sail",
       "sambanova",
+      "wavespeed",
     ],
   );
 });

@@ -14,6 +14,7 @@ import {
 } from "../src/tools/free-models.js";
 import { benchmarksOutputSchema } from "../src/tools/benchmarks.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
 import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
 import { matrixOutputSchema } from "../src/tools/matrix.js";
@@ -71,9 +72,12 @@ type VerificationEvidence = {
 
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_benchmarks",
+  "dashboard_catalogue",
   "dashboard_free_models",
   "dashboard_github_movers",
+  "dashboard_github_trending",
   "dashboard_key_inventory",
+  "dashboard_matrix",
   "dashboard_model_economics",
   "dashboard_model_status",
   "dashboard_resolve_model",
@@ -214,6 +218,7 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_usage_leaders", usageLeadersOutputSchema],
   ["dashboard_source_health", sourceHealthOutputSchema],
   ["dashboard_github_movers", githubMoversOutputSchema],
+  ["dashboard_github_trending", githubTrendingOutputSchema],
   ["dashboard_model_economics", modelEconomicsOutputSchema],
   ["dashboard_key_inventory", keyInventoryOutputSchema],
   ["dashboard_matrix", matrixOutputSchema],
