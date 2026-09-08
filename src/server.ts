@@ -20,6 +20,7 @@ import { registerSourceHealth } from "./tools/source-health.js";
 import { registerUsageLeaders } from "./tools/usage-leaders.js";
 import { registerWhatsChanged } from "./tools/whats-changed.js";
 import { SERVER_VERSION } from "./version.js";
+import { registerCatalogue } from "./tools/catalogue.js";
 
 export type CreateServerOptions = DashboardClientOptions;
 
@@ -45,5 +46,6 @@ export function createServer(
   registerMatrix(server, { client });
   registerGithubMovers(server, { client });
   registerKeyInventory(server);
+  registerCatalogue(server, { client, ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   return server;
 }

@@ -14,6 +14,7 @@ import {
 } from "../src/tools/free-models.js";
 import { benchmarksOutputSchema } from "../src/tools/benchmarks.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
 import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
 import { matrixOutputSchema } from "../src/tools/matrix.js";
@@ -71,9 +72,12 @@ type VerificationEvidence = {
 
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_benchmarks",
+  "dashboard_catalogue",
   "dashboard_free_models",
   "dashboard_github_movers",
+  "dashboard_github_trending",
   "dashboard_key_inventory",
+  "dashboard_matrix",
   "dashboard_model_economics",
   "dashboard_model_status",
   "dashboard_resolve_model",
@@ -214,6 +218,7 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_usage_leaders", usageLeadersOutputSchema],
   ["dashboard_source_health", sourceHealthOutputSchema],
   ["dashboard_github_movers", githubMoversOutputSchema],
+  ["dashboard_github_trending", githubTrendingOutputSchema],
   ["dashboard_model_economics", modelEconomicsOutputSchema],
   ["dashboard_key_inventory", keyInventoryOutputSchema],
   ["dashboard_matrix", matrixOutputSchema],
@@ -540,8 +545,8 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics claimed tool support Groq does not publish");
     }
 
-    // Cerebras publishes nothing, so it must be kept and explained, never dropped
-    // and never allowed to read as free.
+    // This fixture represents the current Cerebras connector's unpriced rows:
+    // keep and explain them, without treating them as free.
     const cerebras = byId.get("fixture-cerebras/bare");
     if (cerebras === undefined) {
       throw new Error("fixture economics dropped the unpriced Cerebras model");
@@ -550,7 +555,7 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics treated an unpriced model as rankable or free");
     }
     if (cerebras.emitsText !== null) {
-      throw new Error("fixture economics invented a modality Cerebras does not publish");
+      throw new Error("fixture economics invented a modality absent from the Cerebras fixture");
     }
     if (typeof cerebras.unrankableReason !== "string" || cerebras.unrankableReason === "") {
       throw new Error("fixture economics left an unpriced model unexplained");
