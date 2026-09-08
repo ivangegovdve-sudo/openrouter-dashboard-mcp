@@ -12,6 +12,7 @@ This is an unmerged release candidate. Different-family review and the companion
 ## Measured 2026-09-08
 
 - Clean starting package suite: **224 passed**. Final package suite: **271 passed, zero failures/skips**. Build and harness TypeScript checks passed.
+- First Linux Node 22 CI run exposed an unreferenced request timeout: the hung-fetch test and its remaining file tests were cancelled when the event loop exited. The deadline now remains referenced until the existing `finally` clears it. The observed failing CI is the regression evidence; final CI status is recorded on the PR.
 - Live compiled stdio session, 15:21:15–15:21:31 UTC: handshake **0.9.0**, **13 tools**, **11 provider reports**. It acquired **4,422 identities**, returned the requested first **500**, and reported **3,922 omitted by pagination**, with next offset 500. A second real `tools/call` selected and verified prices from DeepInfra, WaveSpeed and fal.
 - Four native sources: **3,375 listed/received/retained, zero excluded**. DeepInfra 372; WaveSpeed 1,015; fal 1,493; Chutes 495. There were **813 models with canonical prices**, including **74 with media prices**. See [the detailed source and arithmetic evidence](media-price-evidence.md).
 - Independent provider-page comparison script: **6/6 comparisons across 3 providers**. DeepInfra FLUX 1.1 Pro **0.04 USD/image**; WaveSpeed Wan 2.2 **0.06 USD/video-second** (two variants) and **0.02** (two ultra-fast variants); fal Seedream V4 **0.03 USD/image**.
