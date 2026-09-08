@@ -22,6 +22,7 @@ test("Cerebras native pricing evidence is attached to exact catalogue identities
     {
       modelId: "gpt-oss-120b",
       status: "priced",
+      precision: "approximate",
       promptUsdPerMillion: "0.35",
       completionUsdPerMillion: "0.75",
       sourceUrl: "https://www.cerebras.ai/pricing",
@@ -31,6 +32,7 @@ test("Cerebras native pricing evidence is attached to exact catalogue identities
     {
       modelId: "qwen-3.8-27b",
       status: "priced",
+      precision: "approximate",
       promptUsdPerMillion: "0.99",
       completionUsdPerMillion: "1.49",
       sourceUrl: "https://www.cerebras.ai/pricing",
