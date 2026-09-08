@@ -23,11 +23,29 @@ import { z } from "zod";
  * A null price then reads as "Cerebras publishes no prices" rather than as a
  * mystery or, far worse, as free.
  *
- * Adding a fourth provider is a new entry in PROVIDER_REGISTRY plus its id in
+ * Adding a provider is a new entry in PROVIDER_REGISTRY plus its id in
  * providerIdSchema. Nothing else in this server enumerates providers.
+ *
+ * ⚠ THIS LIST IS NOT THE SERVER'S CONTRACT WITH THE API. The dashboard can add
+ * a provider at any time, and on 2026-09-08 it did: five arrived at once and
+ * every live-model response stopped parsing, because the RESPONSE schema was a
+ * closed enum too. A client that fails closed on an unrecognised provider
+ * breaks the moment the server it talks to gets newer than it. So the response
+ * schema accepts any provider id, and this registry describes the ones it
+ * knows -- see `describeProvider`, which answers honestly for the rest.
  */
 
-export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras", "sail"]);
+export const providerIdSchema = z.enum([
+  "openrouter",
+  "groq",
+  "cerebras",
+  "sail",
+  "qwencloud",
+  "deepinfra",
+  "novita",
+  "sambanova",
+  "chutes",
+]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
 export const publicationSchema = z.enum([
@@ -37,9 +55,22 @@ export const publicationSchema = z.enum([
   "partial",
   /** The provider never publishes this. A null here is the provider's silence. */
   "never",
+  /**
+   * THIS BUILD DOES NOT KNOW. Only ever produced for a provider the dashboard
+   * reports and this package has never heard of.
+   *
+   * Distinct from "never" on purpose, and the distinction was got wrong first:
+   * the unknown-provider fallback originally returned "never" for everything,
+   * which made `unpricedReason` assert "X publishes no prices for any model"
+   * about a provider that may well publish them. Silence we have observed and
+   * silence we have not looked for are different claims.
+   */
+  "unknown",
 ]);
 
 export const spendVisibilitySchema = z.enum([
+  /** This build does not know; only for an unrecognised provider. */
+  "unknown",
   /** A documented API returns this key's usage and ceiling. */
   "api",
   /**
@@ -166,6 +197,128 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     comparabilityNote:
       "Sail models expose no programmatic price endpoint and are parsed periodically from a markdown document. Prices are strictly per-completion window; an optional availability source is absent.",
   },
+  qwencloud: {
+    id: "qwencloud",
+    displayName: "QwenCloud",
+    catalogueUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
+    citationUrl:
+      "https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope",
+    publishes: {
+      // Measured 2026-09-08: 165 models, every one carrying only
+      // {id, object, created, owned_by}. Nothing else at all.
+      pricing: "never",
+      contextLength: "never",
+      outputModalities: "never",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "QwenCloud is a front end onto Alibaba Model Studio's DashScope international plane, and its catalogue lists 165 models with nothing but an id and an owner — no price, no context length, no modality. Cheap Qwen figures quoted elsewhere come from OpenRouter's catalogue, and a relayed price is a fact about the relay, so they are not reported here as QwenCloud prices. Its value is that it lists models OpenRouter does not relay at all.",
+  },
+  deepinfra: {
+    id: "deepinfra",
+    displayName: "DeepInfra",
+    catalogueUrl: "https://api.deepinfra.com/models/list",
+    citationUrl: "https://deepinfra.com/models",
+    publishes: {
+      // Measured 2026-09-08: 371 models on 8 different pricing axes. Only the
+      // 218 with pricing.type="tokens" are collected here; the other 153 bill
+      // per second, per image, per character or per frame and cannot share a
+      // per-token column. Every one of the 218 carries a price.
+      pricing: "always",
+      // 217 of 218 carry max_tokens.
+      contextLength: "partial",
+      outputModalities: "never",
+      reasoningEfforts: "never",
+      // `deprecated` is a UNIX TIMESTAMP, not a flag: 114 of 218 carry a
+      // retirement date and 104 carry null, which is silence rather than health.
+      activeFlag: "partial",
+      // The pricing object carries `discount` and `discount_ends_at` fields,
+      // and BOTH WERE NULL ON ALL 218 MODELS when measured 2026-09-08. The
+      // field existing is not the provider publishing a discount, so this is
+      // "never" -- the honest reading of what was observed. Written as
+      // "partial" first, on the strength of the field's existence rather than
+      // any value in it; a test caught the difference.
+      discounts: "never",
+      discountExpiry: "never",
+      // The only provider here with a real retirement signal: a deprecation
+      // date AND a `replaced_by` naming the successor model.
+      lifecycle: "partial",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "DeepInfra publishes prices with no credential, in cents per token, and is the only provider here that says when a model retires and what replaces it. Two cautions: more than half its token-priced catalogue (114 of 218) already carries a retirement date, so a cheap price is often a price on a model being withdrawn; and 153 further models are billed per second, image, character or frame and are deliberately absent from per-token comparisons rather than converted.",
+  },
+  novita: {
+    id: "novita",
+    displayName: "Novita",
+    catalogueUrl: "https://api.novita.ai/v3/openai/models",
+    citationUrl: "https://novita.ai/docs/api-reference/model-apis-llm-list-models",
+    publishes: {
+      // Measured 2026-09-08: 156 chat models, 143 carrying a pricing object.
+      // The other 13 carry no pricing object while reporting a flat zero, which
+      // is an absent fact and is never read as free.
+      pricing: "partial",
+      contextLength: "always",
+      outputModalities: "always",
+      reasoningEfforts: "never",
+      // `status` is an undocumented integer: 115 models report 1 and 41 report
+      // 4. Only 1 is treated as live; anything else is unknown, not retired.
+      activeFlag: "partial",
+      // Prices carry both an origin price and a discounted effective price.
+      discounts: "partial",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "Novita publishes prices, context length and modalities with no credential. Its flat price field is NOT a reliable single rate: five models are tiered, and the flat value is the cheapest band on one model and the dearest on another, while two tiered models publish no flat price at all. Prices reported here are the first tier — what a normal-length call costs — with the full bands retained, so a long-context call can be priced honestly rather than understated.",
+  },
+  sambanova: {
+    id: "sambanova",
+    displayName: "SambaNova",
+    catalogueUrl: "https://api.sambanova.ai/v1/models",
+    citationUrl: "https://docs.sambanova.ai/cloud/api-reference/endpoints/models",
+    publishes: {
+      // Measured 2026-09-08: 7 models, all priced, all with context length.
+      pricing: "always",
+      contextLength: "always",
+      outputModalities: "never",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "SambaNova lists a very small catalogue — 7 models — and publishes USD-per-token prices in exactly the encoding this server already uses, so nothing is rescaled or inferred. It publishes no modality, no active flag and no retirement signal, so a model vanishing from the list is the only notice there is.",
+  },
+  chutes: {
+    id: "chutes",
+    displayName: "Chutes",
+    catalogueUrl: "https://llm.chutes.ai/v1/models",
+    citationUrl: "https://chutes.ai/app/api",
+    publishes: {
+      // Measured 2026-09-08: 14 models on the LLM endpoint, all priced, all
+      // with context length and output modalities.
+      pricing: "always",
+      contextLength: "always",
+      outputModalities: "always",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "Chutes publishes prices in USD per MILLION tokens as bare numbers, which look identical in shape to this server's per-token strings and are a million times larger; they are rescaled once at ingest. It also quotes every price in Bittensor's TAO alongside USD — that figure is deliberately ignored here, because it floats against the dollar and would turn a price comparison into a currency bet. Its broader catalogue reports 495 entries including image and video models; only the 14 chat models are collected today.",
+  },
 };
 
 export const PROVIDER_IDS = Object.keys(PROVIDER_REGISTRY) as ProviderId[];
@@ -174,12 +327,48 @@ export function providerDescriptor(id: ProviderId): ProviderDescriptor {
   return PROVIDER_REGISTRY[id];
 }
 
+/** Is this a provider this build knows how to describe? */
+export function isKnownProvider(id: string): id is ProviderId {
+  return Object.hasOwn(PROVIDER_REGISTRY, id);
+}
+
+/**
+ * A descriptor for ANY provider the API reports, including one this build has
+ * never heard of.
+ *
+ * An unknown provider is a fact about THIS CLIENT being older than the server,
+ * and saying so is more useful than either crashing or silently dropping the
+ * rows. Everything it publishes is reported as unknown, because that is the
+ * truthful answer: nothing is known about it.
+ */
+export function describeProvider(id: string): ProviderDescriptor {
+  if (isKnownProvider(id)) return PROVIDER_REGISTRY[id];
+  return {
+    id: id as ProviderId,
+    displayName: id,
+    catalogueUrl: "",
+    citationUrl: "",
+    publishes: {
+      pricing: "unknown",
+      contextLength: "unknown",
+      outputModalities: "unknown",
+      reasoningEfforts: "unknown",
+      activeFlag: "unknown",
+      discounts: "unknown",
+      discountExpiry: "unknown",
+      lifecycle: "unknown",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote: `The dashboard reported a provider this build does not know about (${id}). Its rows are passed through unchanged, and nothing is claimed about what it publishes -- not that it publishes nothing, which would be a different and unearned claim. Upgrade open-dashboard-mcp to describe it.`,
+  };
+}
+
 /**
  * Why a model could not be ranked on price, phrased as a fact about the provider
  * rather than as a missing value.
  */
-export function unpricedReason(id: ProviderId): string {
-  const descriptor = PROVIDER_REGISTRY[id];
+export function unpricedReason(id: string): string {
+  const descriptor = describeProvider(id);
   switch (descriptor.publishes.pricing) {
     case "never":
       return `${descriptor.displayName} publishes no prices for any model, so cost is unknown — not free.`;
@@ -187,6 +376,8 @@ export function unpricedReason(id: ProviderId): string {
       return `${descriptor.displayName} publishes prices for only part of its catalogue and omits them for this model, so cost is unknown — not free.`;
     case "always":
       return `${descriptor.displayName} normally publishes a price for every model; its absence here is a gap in the upstream record.`;
+    case "unknown":
+      return `${descriptor.displayName} is not a provider this build of open-dashboard-mcp knows, so whether it publishes prices is unknown. The price is absent here; that is all that can be said.`;
   }
 }
 

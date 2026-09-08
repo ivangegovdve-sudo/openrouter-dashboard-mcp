@@ -3,8 +3,10 @@ import { z } from "zod";
 
 import {
   classifyProviderBlock,
+  describeProvider,
   PROVIDER_REGISTRY,
   providerIdSchema,
+  spendVisibilitySchema,
   type ProviderId,
 } from "../providers/registry.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -166,8 +168,17 @@ export function isPlausibleSecretName(value: string): boolean {
 
 export const OMITTED_SECRET_NAME = "[omitted: not a valid secret name]";
 
-/** Where each provider answers "is this key alive, and what has it spent". */
-const KEY_PROBE: Record<ProviderId, { url: string; readsSpend: boolean }> = {
+/**
+ * Where each provider answers "is this key alive, and what has it spent".
+ *
+ * PARTIAL ON PURPOSE. Several catalogues this server reads are public and need
+ * no key at all -- DeepInfra, Novita, SambaNova and Chutes are collected
+ * anonymously, and QwenCloud's key is held by the collector rather than here --
+ * so there is no key to probe and no spend to read. An entry absent from this
+ * map means "no key probe exists", which is different from "the probe failed",
+ * and the caller is told which.
+ */
+const KEY_PROBE: Partial<Record<ProviderId, { url: string; readsSpend: boolean }>> = {
   openrouter: { url: "https://openrouter.ai/api/v1/key", readsSpend: true },
   groq: { url: "https://api.groq.com/openai/v1/models", readsSpend: false },
   cerebras: { url: "https://api.cerebras.ai/v1/models", readsSpend: false },
@@ -338,7 +349,10 @@ const keyInventoryReportedSchema = z
           displayName: z.string(),
           keysConfigured: z.number().int().min(0),
           keysAlive: z.number().int().min(0),
-          spendVisibility: z.enum(["api", "no_billing_api"]),
+          // The shared schema, not a copy of it. A repeated enum here is how
+    // "unknown" -- a state added for providers this build does not
+    // recognise -- failed to reach the output the first time.
+    spendVisibility: spendVisibilitySchema,
           note: z.string(),
         })
         .strict(),
@@ -385,7 +399,9 @@ export type KeyInventoryDependencies = {
 type KeyReport = z.infer<typeof keyReportSchema>;
 
 function baseReport(source: KeySource): KeyReport {
-  const readsSpend = KEY_PROBE[source.provider].readsSpend;
+  // No probe entry means this provider has no key to check here at all --
+  // a different state from a probe that ran and failed.
+  const readsSpend = KEY_PROBE[source.provider]?.readsSpend ?? false;
   return {
     provider: source.provider,
     secretName: source.secretName,
@@ -422,6 +438,16 @@ async function readKey(
   }
 
   const probe = KEY_PROBE[source.provider];
+  if (!probe) {
+    // No probe exists for this provider -- its catalogue is public and needs no
+    // key. That is a fact about the provider, not a failed check, and it must
+    // not read as "the key is dead".
+    return {
+      ...report,
+      alive: null,
+      note: `${describeProvider(source.provider).displayName} needs no credential for the data this server reads, so there is no key to probe. Unknown, not dead.`,
+    };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), KEY_REQUEST_TIMEOUT_MS);
   try {
