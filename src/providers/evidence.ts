@@ -64,6 +64,7 @@ export const catalogueModelEvidenceSchema = z.discriminatedUnion("status", [
   z.object({
     modelId: z.string().min(1),
     status: z.literal("priced"),
+    precision: z.literal("approximate"),
     promptUsdPerMillion: decimalStringSchema,
     completionUsdPerMillion: decimalStringSchema,
     sourceUrl: httpsUrlSchema,
