@@ -12,7 +12,7 @@ const envelope = (data: unknown[], cursor: string | null = null) => ({
   completeness: publicCompleteness, stale: false, rank: null, provenance: publicProvenance,
 });
 const rows = [liveModelFixture, {
-  ...liveModelFixture, id: "unpriced", pricing: { promptUsdPerToken: null, completionUsdPerToken: null },
+  ...liveModelFixture, id: "unpriced", pricePoints: [], pricingState: "unknown" as const,
   freeKind: "paid_or_unknown", isFree: null,
 }];
 const dependencies = () => ({
@@ -26,10 +26,10 @@ test("catalogue retains unpriced identities and reports unknown native denominat
   catalogueOutputSchema.parse(result);
   assert.equal(result.models.length, 2);
   const unpriced = result.models.find(row => row.id === "unpriced")!;
-  assert.equal(unpriced.pricing.status, "price_not_available");
-  assert.equal(unpriced.pricing.prices.length, 0);
+  assert.equal(unpriced.pricePoints.length, 0);
+  assert.equal(unpriced.pricingState, "unknown");
   const priced = result.models.find(row => row.id === liveModelFixture.id)!;
-  assert.equal(priced.pricing.prices[0]?.value, "0.000000125");
+  assert.equal(priced.pricePoints[0]?.amount, "0.0000001250");
   assert.equal(result.providers[0]?.population.listed, null);
   assert.equal(result.providers[0]?.population.received, 2);
   assert.equal(result.providers[0]?.population.excluded, null);
@@ -43,16 +43,17 @@ test("pagination counts retain the denominator and never filter by price", async
   assert.equal(result.population.acquired, 2);
   assert.equal(result.population.matched, 2);
   assert.equal(result.population.omittedByPagination, 1);
-  assert.equal(result.models[0]?.pricing.status, "price_not_available");
+  assert.equal(result.models[0]?.pricingState, "unknown");
 });
 
 test("preserves source origin, price window and legal offset timestamps", async () => {
   const client = createDashboardClient({ baseUrl: "https://custom.test/", cache: false,
-    fetchImpl: async () => new Response(JSON.stringify(envelope([{ ...liveModelFixture, pricingWindow: "flex", lastConfirmedAt: "2026-09-08T10:00:00+02:00" }])), { headers: { "content-type": "application/json" } }),
+    fetchImpl: async () => new Response(JSON.stringify(envelope([{ ...liveModelFixture, pricePoints: liveModelFixture.pricePoints.map((point) => ({ ...point, condition: { kind: "latency_window", name: "Flex" } })), isFree: null, lastConfirmedAt: "2026-09-08T10:00:00+02:00" }])), { headers: { "content-type": "application/json" } }),
   });
   const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), { client });
   assert.equal(result.models[0]?.provenance.sourceUrl, "https://custom.test/api/public/v2/live-models");
-  assert.equal(result.models[0]?.pricing.prices[0]?.conditions.pricingWindow, "flex");
+  assert.equal(result.models[0]?.pricePoints[0]?.condition?.kind, "latency_window");
+  assert.equal(result.models[0]?.pricePoints[0]?.condition?.name, "Flex");
   assert.equal(result.models[0]?.provenance.observedAt, "2026-09-08T10:00:00+02:00");
 });
 
