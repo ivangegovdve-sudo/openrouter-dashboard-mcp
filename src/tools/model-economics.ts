@@ -13,6 +13,7 @@ import {
   PROVIDER_REGISTRY,
   describeProvider,
   providerIdSchema,
+  spendVisibilitySchema,
   unpricedReason,
   type ProviderId,
 } from "../providers/registry.js";
@@ -301,7 +302,10 @@ const providerReportSchema = z
     modelsPriceComparable: z.number().int().min(0),
     /** Most recent confirmation across this provider's rows. */
     lastConfirmedAt: z.string().nullable(),
-    spendVisibility: z.enum(["api", "no_billing_api"]),
+    // The shared schema, not a copy of it. A repeated enum here is how
+    // "unknown" -- a state added for providers this build does not
+    // recognise -- failed to reach the output the first time.
+    spendVisibility: spendVisibilitySchema,
     publishes: z.record(z.string(), z.string()),
     comparabilityNote: z.string(),
   })

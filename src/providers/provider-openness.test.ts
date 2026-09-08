@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { liveModelSchema, providerIdSchema } from "../dashboard/schemas/live-models.js";
-import { PROVIDER_IDS, describeProvider, isKnownProvider } from "./registry.js";
+import {
+  PROVIDER_IDS,
+  describeProvider,
+  isKnownProvider,
+  unpricedReason,
+} from "./registry.js";
 
 /**
  * A read-only client must not reject a response because the SERVER learned
@@ -67,10 +72,27 @@ test("an unknown provider is described honestly rather than guessed at", () => {
   const unknown = describeProvider("some-provider-shipped-next-year");
   assert.equal(unknown.displayName, "some-provider-shipped-next-year");
   assert.match(unknown.comparabilityNote, /does not know about/);
-  // Nothing is claimed about what it publishes, because nothing is known.
+
+  // "unknown", NOT "never". This was written as "never" first and review
+  // caught it: "never" is a claim that the provider publishes nothing, and for
+  // a provider we have never looked at, we have not earned that claim. The
+  // difference is visible downstream -- with "never", unpricedReason asserted
+  // "X publishes no prices for any model" about a provider that may well
+  // publish them.
   for (const value of Object.values(unknown.publishes)) {
-    assert.equal(value, "never");
+    assert.equal(value, "unknown");
   }
+  assert.equal(unknown.spendVisibility, "unknown");
+});
+
+test("an unknown provider's price absence is not blamed on the provider", () => {
+  const claim = unpricedReason("some-provider-shipped-next-year");
+  assert.match(claim, /unknown/);
+  // The false claim this must never make again.
+  assert.doesNotMatch(claim, /publishes no prices for any model/);
+
+  // A provider we HAVE looked at still gets the definite answer.
+  assert.match(unpricedReason("qwencloud"), /publishes no prices for any model/);
 });
 
 test("the five providers added on 2026-09-08 are described, not merely accepted", () => {

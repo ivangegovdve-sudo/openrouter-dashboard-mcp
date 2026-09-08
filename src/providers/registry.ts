@@ -55,9 +55,22 @@ export const publicationSchema = z.enum([
   "partial",
   /** The provider never publishes this. A null here is the provider's silence. */
   "never",
+  /**
+   * THIS BUILD DOES NOT KNOW. Only ever produced for a provider the dashboard
+   * reports and this package has never heard of.
+   *
+   * Distinct from "never" on purpose, and the distinction was got wrong first:
+   * the unknown-provider fallback originally returned "never" for everything,
+   * which made `unpricedReason` assert "X publishes no prices for any model"
+   * about a provider that may well publish them. Silence we have observed and
+   * silence we have not looked for are different claims.
+   */
+  "unknown",
 ]);
 
 export const spendVisibilitySchema = z.enum([
+  /** This build does not know; only for an unrecognised provider. */
+  "unknown",
   /** A documented API returns this key's usage and ceiling. */
   "api",
   /**
@@ -336,17 +349,17 @@ export function describeProvider(id: string): ProviderDescriptor {
     catalogueUrl: "",
     citationUrl: "",
     publishes: {
-      pricing: "never",
-      contextLength: "never",
-      outputModalities: "never",
-      reasoningEfforts: "never",
-      activeFlag: "never",
-      discounts: "never",
-      discountExpiry: "never",
-      lifecycle: "never",
+      pricing: "unknown",
+      contextLength: "unknown",
+      outputModalities: "unknown",
+      reasoningEfforts: "unknown",
+      activeFlag: "unknown",
+      discounts: "unknown",
+      discountExpiry: "unknown",
+      lifecycle: "unknown",
     },
-    spendVisibility: "no_billing_api",
-    comparabilityNote: `The dashboard reported a provider this build does not know about (${id}). Its rows are passed through unchanged, but nothing is claimed about what it publishes. Upgrade open-dashboard-mcp to describe it.`,
+    spendVisibility: "unknown",
+    comparabilityNote: `The dashboard reported a provider this build does not know about (${id}). Its rows are passed through unchanged, and nothing is claimed about what it publishes -- not that it publishes nothing, which would be a different and unearned claim. Upgrade open-dashboard-mcp to describe it.`,
   };
 }
 
@@ -363,6 +376,8 @@ export function unpricedReason(id: string): string {
       return `${descriptor.displayName} publishes prices for only part of its catalogue and omits them for this model, so cost is unknown — not free.`;
     case "always":
       return `${descriptor.displayName} normally publishes a price for every model; its absence here is a gap in the upstream record.`;
+    case "unknown":
+      return `${descriptor.displayName} is not a provider this build of open-dashboard-mcp knows, so whether it publishes prices is unknown. The price is absent here; that is all that can be said.`;
   }
 }
 

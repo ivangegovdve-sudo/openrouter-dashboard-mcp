@@ -6,6 +6,7 @@ import {
   describeProvider,
   PROVIDER_REGISTRY,
   providerIdSchema,
+  spendVisibilitySchema,
   type ProviderId,
 } from "../providers/registry.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -348,7 +349,10 @@ const keyInventoryReportedSchema = z
           displayName: z.string(),
           keysConfigured: z.number().int().min(0),
           keysAlive: z.number().int().min(0),
-          spendVisibility: z.enum(["api", "no_billing_api"]),
+          // The shared schema, not a copy of it. A repeated enum here is how
+    // "unknown" -- a state added for providers this build does not
+    // recognise -- failed to reach the output the first time.
+    spendVisibility: spendVisibilitySchema,
           note: z.string(),
         })
         .strict(),
