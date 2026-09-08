@@ -28,12 +28,12 @@ test("authenticated fal prices every catalogue identity in bounded 50-ID batches
   assert.deepEqual(requested.flat(), ids);
   assert.equal(result.population.retained, 101); assert.equal(result.population.excluded, 0);
   assert.equal(result.providers[0]?.status, "available");
-  assert.equal(result.models.find(row => row.id === seedream)?.pricing.prices[0]?.value, "0.03");
-  assert.equal(result.models.find(row => row.id === kontext)?.pricing.prices[0]?.value, "0.04");
-  const video = result.models.find(row => row.id === kling)?.pricing.prices[0];
-  assert.equal(video?.value, "0.07"); assert.equal(video?.unit, "usd_per_video_second");
-  assert.equal(video?.conditions.priceScope, "authenticated_account");
-  assert.equal(result.models.at(-1)?.pricing.reason, "price_not_returned_by_authenticated_source");
+  assert.equal(result.models.find(row => row.id === seedream)?.pricePoints[0]?.amount, "0.03");
+  assert.equal(result.models.find(row => row.id === kontext)?.pricePoints[0]?.amount, "0.04");
+  const video = result.models.find(row => row.id === kling)?.pricePoints[0];
+  assert.equal(video?.amount, "0.07"); assert.equal(video?.unit, "video_second");
+  assert.equal(result.models.find(row => row.id === kling)?.nativePricing?.[0]?.unit, "seconds");
+  assert.equal(result.models.at(-1)?.pricingNote, "price_not_returned_by_authenticated_source");
   assert.deepEqual(result.providers[0]?.requestParameters.pricePopulation, { listed: 101, requested: 101, observed: 101, receivedPriceRows: 100, withNativePrice: 100, withoutNativePrice: 1, unobserved: 0, normalized: 100, uncomparable: 0 });
   assert.equal(result.providers[0]?.requestParameters.priceBatchLimit, 40);
   assert.equal(result.providers[0]?.requestParameters.priceBatchesFetched, 3);
@@ -45,15 +45,17 @@ test("authenticated fal retains exact native unknown units, currencies and quant
   const native = [price("vendor/exact", "images", "7.5e-8"), price("vendor/compute", "gpu_seconds", "0.4"), price("vendor/whole-video", "videos", "0.4"), price("vendor/foreign", "images", "1", "EUR"), price("vendor/mp", "megapixels", "0.075"), price("vendor/invalid", "images", "-1")];
   const result = await collectMediaCatalogue({ providers: ["fal"], falApiKey: apiKey, fetchImpl: async input => Response.json(String(input).includes("/pricing?") ? pricesBody(native) : modelsBody(rows)) });
   assert.equal(result.models.length, 6);
-  assert.equal(result.models[0]?.pricing.prices[0]?.value, "0.000000075");
-  assert.equal(result.models[0]?.pricing.prices[0]?.native.value, "7.5e-8");
-  assert.equal(result.models[1]?.pricing.reason, "compute_billing_unit_not_output_quantity");
-  assert.equal(result.models[2]?.pricing.reason, "video_unit_requires_verified_output_duration");
-  assert.equal(result.models[3]?.pricing.reason, "native_currency_not_usd");
-  assert.equal(result.models[4]?.pricing.prices[0]?.value, "0.075");
-  assert.equal(result.models[4]?.pricing.prices[0]?.conditions.outputMegapixels, "1");
-  assert.equal(result.models[5]?.pricing.reason, "invalid_native_decimal");
-  assert.deepEqual(result.models[1]?.pricing.native, [native[1]]);
+  assert.equal(result.models[0]?.pricePoints[0]?.amount, "0.000000075");
+  assert.equal(result.models.find(row => row.id === "vendor/whole-video")?.pricingState, "published");
+  assert.equal(result.models.find(row => row.id === "vendor/whole-video")?.pricePoints[0]?.unit, "video");
+  assert.equal(result.models[0]?.nativePricing?.[0]?.unit_price, "7.5e-8");
+  assert.equal(result.models[1]?.pricingNote, "native_billing_unit_not_comparable");
+  assert.equal(result.models[2]?.pricingNote, "native_billing_unit_not_comparable");
+  assert.equal(result.models[3]?.pricingNote, "native_currency_not_usd");
+  assert.equal(result.models[4]?.pricePoints[0]?.amount, "0.075");
+  assert.equal(result.models[4]?.pricePoints[0]?.unit, "megapixel");
+  assert.equal(result.models[5]?.pricingNote, "invalid_native_decimal");
+  assert.deepEqual(result.models[1]?.nativePricing, [native[1]]);
 });
 
 test("authenticated fal preserves completed price batches and distinguishes failed from never observed batches", async () => {
@@ -66,9 +68,9 @@ test("authenticated fal preserves completed price batches and distinguishes fail
   } });
   assert.equal(batches, 2); assert.equal(result.providers[0]?.status, "partial");
   assert.equal(result.population.completeness, "full"); assert.equal(result.models.length, 101);
-  assert.equal(result.models[0]?.pricing.status, "available");
-  assert.equal(result.models[50]?.pricing.reason, "pricing_source_unavailable");
-  assert.equal(result.models[100]?.pricing.reason, "pricing_not_observed_after_source_failure");
+  assert.equal(result.models[0]?.pricingState, "published");
+  assert.equal(result.models[50]?.pricingNote, "pricing_source_unavailable");
+  assert.equal(result.models[100]?.pricingNote, "pricing_not_observed_after_source_failure");
   assert.equal(result.providers[0]?.requestParameters.pricingError, "HTTP_429");
   assert.doesNotMatch(JSON.stringify(result), /test-only-fal-key/);
 });
@@ -80,7 +82,7 @@ test("authenticated fal price budget keeps all identities and reports unobserved
     batches++; return Response.json(pricesBody(url.searchParams.getAll("endpoint_id").map(id => price(id))));
   } });
   assert.equal(batches, 1); assert.equal(result.models.length, 51); assert.equal(result.providers[0]?.status, "partial");
-  assert.equal(result.models[50]?.pricing.reason, "pricing_not_observed_price_batch_budget");
+  assert.equal(result.models[50]?.pricingNote, "pricing_not_observed_price_batch_budget");
   assert.equal(result.providers[0]?.requestParameters.pricingError, "PRICE_BATCH_BUDGET_EXHAUSTED");
 });
 
@@ -91,7 +93,7 @@ test("authenticated fal refuses unexpected identity and unsupported pricing pagi
       if (!String(input).includes("/pricing?")) return Response.json(modelsBody([model(seedream)]));
       priceCalls++; return Response.json(body);
     } });
-    assert.equal(priceCalls, 1); assert.equal(result.models[0]?.pricing.status, "price_not_available");
+    assert.equal(priceCalls, 1); assert.equal(result.models[0]?.pricingState, "unknown");
     assert.equal(result.providers[0]?.status, "partial"); assert.equal(result.population.completeness, "full");
   }
 });
@@ -102,7 +104,7 @@ test("an explicit empty fal key selects the public fallback without sending cred
     const url = String(input); urls.push(url); assert.equal(new Headers(init?.headers).get("Authorization"), null);
     return url === "https://fal.ai/pricing" ? new Response(`<table><tr><td><a href="/models/${seedream}">Model</a></td><td>image</td><td>$0.03</td></tr></table>`) : Response.json(modelsBody([model(seedream)]));
   } });
-  assert.equal(result.models[0]?.pricing.prices[0]?.value, "0.03");
+  assert.equal(result.models[0]?.pricePoints[0]?.amount, "0.03");
   assert.equal(result.providers[0]?.requestParameters.pricingAuthentication, "none");
   assert.deepEqual(urls, ["https://api.fal.ai/v1/models?limit=1000", "https://fal.ai/pricing"]);
 });
@@ -121,9 +123,9 @@ test("inherited object keys cannot masquerade as fal output-second contracts", a
   const result = await collectMediaCatalogue({ providers: ["fal"], falApiKey: apiKey, fetchImpl: async input => Response.json(String(input).includes("/pricing?") ? pricesBody(ids.map(id => price(id, "seconds", "0.07"))) : modelsBody(ids.map(id => model(id, "text-to-video")))) });
   assert.equal(result.models.length, 3);
   for (const row of result.models) {
-    assert.equal(row.pricing.status, "price_not_available");
-    assert.equal(row.pricing.reason, "second_unit_not_established_as_video_output");
-    assert.equal(row.pricing.prices.length, 0);
+    assert.equal(row.pricingState, "unknown");
+    assert.equal(row.pricingNote, "second_unit_not_established_as_video_output");
+    assert.equal(row.pricePoints.length, 0);
   }
 });
 
@@ -147,8 +149,8 @@ test("authenticated fal rejects credentials reflected in successful catalogue or
       assert.equal(result.providers[0]?.status, "partial");
       assert.equal(result.providers[0]?.requestParameters.pricingError, "SOURCE_CREDENTIAL_REFLECTION");
       assert.equal(result.population.completeness, "full");
-      assert.equal(result.models[0]?.pricing.reason, "pricing_source_unavailable");
-      assert.equal(result.models[0]?.pricing.native, null);
+      assert.equal(result.models[0]?.pricingNote, "pricing_source_unavailable");
+      assert.equal(result.models[0]?.nativePricing, null);
     }
   }
 });

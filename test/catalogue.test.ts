@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { collectMediaCatalogue, DEFAULT_WAVESPEED_ENRICH_IDS, parseNativeJson } from "../src/catalogue/index.js";
-import { exactDecimalRatio, normalizeExactPrice } from "../src/catalogue/decimal.js";
+import { exactDecimalRatio } from "../src/catalogue/decimal.js";
 import { normalizeDeepInfra, normalizeWaveSpeed, normalizeFal, normalizeChutes, parseFalPricingPage } from "../src/catalogue/normalize.js";
 import { cataloguePricingSchema } from "../src/catalogue/schemas.js";
 import { runCatalogue } from "../src/tools/catalogue.js";
+import { normalizePricePoint } from "../src/catalogue/price-set.js";
 
 const observedAt = "2026-09-08T15:00:00Z", sourceUrl = "https://example.test/catalogue";
 const deep = (pricing: unknown, type = "text-to-image") => normalizeDeepInfra({ model_name: "vendor/model", reported_type: type, pricing }, sourceUrl, observedAt, 0);
@@ -27,11 +28,11 @@ test("native JSON parsing preserves numeric lexemes and does not alter quoted co
 });
 test("DeepInfra cents convert to reference image and video output units, with defaults retained", () => {
   const image = deep({ type: "image_units", cents_per_image_unit: "4", default_width: "0", default_height: "0", default_iterations: "0" });
-  assert.equal(image.pricing.prices[0]?.value, "0.04");
+  assert.equal(image.pricePoints[0]?.amount, "0.04");
   const video = deep({ type: "output_length", cents_per_output_sec: "40" }, "text-to-video");
-  assert.equal(video.pricing.prices[0]?.value, "0.4");
-  assert.equal(video.pricing.prices[0]?.unit, "usd_per_video_second");
-  assert.equal(deep({ type: "image_units", cents_per_image_unit: "1", default_width: "1024", default_height: "1024", default_iterations: "28" }).pricing.prices[0]?.value, "0.01");
+  assert.equal(video.pricePoints[0]?.amount, "0.4");
+  assert.equal(video.pricePoints[0]?.unit, "video_second");
+  assert.equal(deep({ type: "image_units", cents_per_image_unit: "1", default_width: "1024", default_height: "1024", default_iterations: "28" }).pricePoints[0]?.amount, "0.01");
 });
 test("compute time, frame units, absent prices, and video image-units keep identity without false prices", () => {
   for (const [pricing, type, reason] of [
@@ -42,44 +43,46 @@ test("compute time, frame units, absent prices, and video image-units keep ident
     [null, "text-to-image", "price_absent"],
   ] as const) {
     const m = deep(pricing, type);
-    assert.equal(m.id, "vendor/model"); assert.equal(m.pricing.status, "price_not_available"); assert.deepEqual(m.pricing.prices, []); assert.match(m.pricing.reason!, new RegExp(reason));
+    assert.equal(m.id, "vendor/model"); assert.equal(m.pricingState, "not_published"); assert.deepEqual(m.pricePoints, []); assert.match(m.pricingNote!, new RegExp(reason));
   }
 });
 test("WaveSpeed microUSD/base-duration conversion gives exact 0.075/output second", () => {
-  const price = wave({}).pricing.prices[0]!;
-  assert.equal(price.value, "0.075"); assert.equal(price.native.value, "375000");
-  assert.equal(price.conversion.multiplier, "0.000001"); assert.equal(price.conversion.divisor, "5");
-  assert.equal(price.conditions.discountApplied, false);
+  const price = wave({}).pricePoints[0]!;
+  assert.equal(price.amount, "0.075"); assert.equal(wave({}).nativePricing?.base_price, "375000");
+  assert.equal(price.unit, "video_second");
+  assert.equal(price.source.url, sourceUrl);
 });
 test("WaveSpeed native detail input is a JSON encoded string and still normalizes", () => {
-  assert.equal(wave({ input: '{"properties":{"duration":{"default":5},"size":{"default":"1280*720"}}}' }).pricing.prices[0]?.value, "0.075");
+  assert.equal(wave({ input: '{"properties":{"duration":{"default":5},"size":{"default":"1280*720"}}}' }).pricePoints[0]?.amount, "0.075");
 });
 test("WaveSpeed rejects unknown quantity, mismatched base duration, and dynamic or executable formulas", () => {
   for (const extra of [{ input: {} }, { formula: undefined }, { formula: '{"total_price": base_price * duration / 10}' }, { formula: '{"total_price": base_price * (resolution == "1080p" ? 2 : 1)}' }, { formula: 'process.exit()' }, { base_price: "-1" }]) {
-    assert.equal(wave(extra).pricing.status, "price_not_available");
+    assert.equal(wave(extra).pricingState, "not_published");
   }
 });
 test("WaveSpeed flat image pricing requires an explicit supported output count", () => {
   const row = { type: "text-to-image", formula: '{"total_price": base_price}', input: { properties: { batch_size: { default: "4" } } } };
-  assert.equal(wave(row).pricing.status, "price_not_available");
-  assert.equal(wave({ ...row, input: { properties: { num_images: { default: "4" } } } }).pricing.prices[0]?.value, "0.09375");
+  assert.equal(wave(row).pricingState, "not_published");
+  assert.equal(wave({ ...row, input: { properties: { num_images: { default: "4" } } } }).pricePoints[0]?.amount, "0.09375");
 });
-test("Fal unit cells drive conversions; whole-video prices cannot assume average duration", () => {
+test("Fal unit cells drive conversions; whole-video prices retain their video unit", () => {
   const html = '<table><tr><td><a href="/models/fal-ai/image">Image</a></td><td>image</td><td>$<!-- -->0.03</td></tr><tr><td><a href="/models/fal-ai/video">Video</a></td><td>video</td><td>$0.2</td></tr><tr><td><a href="/models/fal-ai/mp">MP</a></td><td>megapixel</td><td>$0.02</td></tr></table>';
   const prices = parseFalPricingPage(html);
   assert.equal(prices.size, 3);
   const img = normalizeFal({ endpoint_id: "fal-ai/image", metadata: { category: "text-to-image" } }, sourceUrl, observedAt, 0, prices.get("fal-ai/image"));
-  assert.equal(img.pricing.prices[0]?.value, "0.03"); assert.equal(img.pricing.prices[0]?.conditions.outputMegapixels, "1");
-  assert.equal(normalizeFal({ endpoint_id: "fal-ai/video", metadata: { category: "text-to-video" } }, sourceUrl, observedAt, 1, prices.get("fal-ai/video")).pricing.status, "price_not_available");
+  assert.equal(img.pricePoints[0]?.amount, "0.03"); assert.equal(img.pricePoints[0]?.unit, "image");
+  const video = normalizeFal({ endpoint_id: "fal-ai/video", metadata: { category: "text-to-video" } }, sourceUrl, observedAt, 1, prices.get("fal-ai/video"));
+  assert.equal(video.pricingState, "published");
+  assert.deepEqual(video.pricePoints.map(point => [point.unit, point.amount]), [["video", "0.2"]]);
 });
 test("Chutes identity is chute_id and infrastructure prices never become generated image prices", () => {
   const model = normalizeChutes({ chute_id: "abc", name: "image-name", standard_template: null, current_estimated_price: { usd: { second: "0.0005" } } }, sourceUrl, observedAt, 0);
-  assert.equal(model.id, "abc"); assert.equal(model.mediaKind, "unknown"); assert.equal(model.pricing.status, "price_not_available");
+  assert.equal(model.id, "abc"); assert.equal(model.mediaKind, "unknown"); assert.equal(model.pricingState, "not_published");
 });
 test("Chutes explicit USD per-million token rates coexist with compute prices", () => {
   const model = normalizeChutes({ chute_id: "abc", name: "model", standard_template: "vllm", current_estimated_price: { usd: { second: "0.0005" }, per_million_tokens: { input: { usd: "0.12" }, output: { usd: "0.37" } } } }, sourceUrl, observedAt, 0);
-  assert.equal(model.pricing.status, "available");
-  assert.deepEqual(model.pricing.prices.map(p => [p.unit, p.value]), [["usd_per_input_token", "0.00000012"], ["usd_per_output_token", "0.00000037"]]);
+  assert.equal(model.pricingState, "published");
+  assert.deepEqual(model.pricePoints.map(p => [p.unit, p.amount]), [["token_in", "0.00000012"], ["token_out", "0.00000037"]]);
 });
 test("full native catalogue retains unpriced, media, and text rows with population denominator", async () => {
   const result = await collectMediaCatalogue({ providers: ["deepinfra"], fetchImpl: mockFetch(() => [
@@ -89,7 +92,7 @@ test("full native catalogue retains unpriced, media, and text rows with populati
   ]) });
   assert.deepEqual(result.models.map(m => m.id), ["image", "unpriced", "text"]);
   assert.deepEqual(result.population, { listed: 3, received: 3, retained: 3, excluded: 0, exclusionRules: [], completeness: "full" });
-  assert.equal(result.models[2]?.pricing.prices[0]?.value, "0.000000075");
+  assert.equal(result.models[2]?.pricePoints[0]?.amount, "0.000000075");
 });
 test("HTTP failure is unavailable with null counts and never leaks response body", async () => {
   let calls = 0;
@@ -112,13 +115,13 @@ test("WaveSpeed follows all pages, records no model exclusions, and does not fet
   const calls: string[] = [];
   const result = await collectMediaCatalogue({ providers: ["wavespeed"], enrichIds: ["not-listed"], fetchImpl: mockFetch(url => { calls.push(url.href); return { total: 2, items: [{ model_uuid: `image-${url.searchParams.get("page")}`, type: "text-to-image", base_price: "1000" }] }; }) });
   assert.equal(calls.length, 2); assert.equal(result.models.length, 2); assert.equal(result.population.listed, 2); assert.equal(result.population.excluded, 0); assert.equal(result.population.completeness, "full");
-  assert.ok(result.models.every(m => m.pricing.status === "price_not_available"));
+  assert.ok(result.models.every(m => m.pricingState === "not_published"));
 });
 test("pricing schema forbids fabricated available empty prices and unexplained absence", () => {
-  assert.equal(cataloguePricingSchema.safeParse({ status: "available", prices: [], native: null }).success, false);
-  assert.equal(cataloguePricingSchema.safeParse({ status: "price_not_available", prices: [], native: null }).success, false);
-  const price = normalizeExactPrice({ value: "0", nativeUnit: "usd_per_image", sourceField: "price", unit: "usd_per_image", sourceUrl });
-  assert.equal(cataloguePricingSchema.safeParse({ status: "available", prices: [price], native: "0" }).success, true);
+  assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [] }).success, false);
+  assert.equal(cataloguePricingSchema.safeParse({ state: "not_published", pricePoints: [] }).success, true);
+  const price = normalizePricePoint({ id: "test:image", value: "0", unit: "image", sourceUrl, readAt: observedAt });
+  assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [price] }).success, true);
 });
 
 const falModelsResponse = { models: [{ endpoint_id: "fal-ai/image", metadata: { category: "text-to-image" } }], has_more: false, next_cursor: null };
@@ -136,8 +139,8 @@ test("Fal pricing HTTP failure preserves full identity population but reports un
   assert.equal(provider.requestParameters.priceSource, "https://fal.ai/pricing");
   assert.equal(provider.requestParameters.pricingError, "HTTP_503");
   assert.equal(provider.requestParameters.publishedPricingRows, undefined);
-  assert.equal(result.models[0]?.pricing.reason, "pricing_source_unavailable");
-  assert.deepEqual(result.models[0]?.pricing.prices, []);
+  assert.equal(result.models[0]?.pricingNote, "pricing_source_unavailable");
+  assert.deepEqual(result.models[0]?.pricePoints, []);
   assert.equal(calls.filter(url => url === "https://fal.ai/pricing").length, 1);
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ERROR_BODY|price_not_in_public_pricing_table/);
 });
@@ -149,7 +152,7 @@ test("Fal malformed pricing table is a failed observation, while a successfully 
     const result = await collectMediaCatalogue({ providers: ["fal"], fetchImpl: async input => String(input) === "https://fal.ai/pricing" ? new Response(html) : Response.json(falModelsResponse) });
     assert.equal(result.providers[0]?.status, expectedStatus);
     assert.equal(result.providers[0]?.population.completeness, "full");
-    assert.equal(result.models[0]?.pricing.reason, expectedReason);
+    assert.equal(result.models[0]?.pricingNote, expectedReason);
     assert.equal(result.providers[0]?.requestParameters.pricingAcquisitionStatus, expectedStatus === "partial" ? "unavailable" : "available");
   }
 });
@@ -171,8 +174,8 @@ test("WaveSpeed isolated default detail failures do not prevent later caller pri
       if (url.endsWith(waveDefaultId)) return failure();
       assert.ok(url.endsWith(waveCallerId)); return Response.json(waveCallerDetail);
     } });
-    assert.equal(result.models.find(model => model.id === waveCallerId)?.pricing.prices[0]?.value, "0.06", expectedError);
-    assert.equal(result.models.find(model => model.id === waveDefaultId)?.pricing.reason, "pricing_source_unavailable");
+    assert.equal(result.models.find(model => model.id === waveCallerId)?.pricePoints[0]?.amount, "0.06", expectedError);
+    assert.equal(result.models.find(model => model.id === waveDefaultId)?.pricingNote, "pricing_source_unavailable");
     assert.equal(result.providers[0]?.status, "partial");
     assert.equal(result.providers[0]?.population.completeness, "full");
     assert.deepEqual(result.providers[0]?.requestParameters.enrichedIds, [waveCallerId]);
@@ -234,10 +237,10 @@ test("WaveSpeed preserves a verified catalogue price when optional details fail 
   for (const response of detailCases) {
     const result = await collectMediaCatalogue({ providers: ["wavespeed"], fetchImpl: async input => String(input).startsWith("https://wavespeed.ai/api/models?") ? Response.json(list) : response() });
     const row = result.models[0]!;
-    assert.equal(row.pricing.status, "available");
-    assert.equal(row.pricing.prices[0]?.value, "0.06");
+    assert.equal(row.pricingState, "published");
+    assert.equal(row.pricePoints[0]?.amount, "0.06");
     assert.equal(row.provenance.sourceUrl, "https://wavespeed.ai/api/models?page=1&page_size=200");
-    assert.equal(row.pricing.prices[0]?.sourceUrl, row.provenance.sourceUrl);
+    assert.equal(row.pricePoints[0]?.source.url, row.provenance.sourceUrl);
     assert.equal(result.providers[0]?.status, "partial");
     assert.equal(result.population.completeness, "full");
     const observations = result.providers[0]?.requestParameters.detailPriceObservations as Array<Record<string, unknown>>;

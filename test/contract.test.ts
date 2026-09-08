@@ -49,7 +49,7 @@ test("the 1.0 envelope carries a self-notice for the old scalar shape", () => {
   assert.equal(envelope.schema_version, "1.0");
   assert.equal(envelope.package_version, "1.0.0");
   assert.ok(envelope.deprecations.some((notice) =>
-    notice.field === "pricing.prices" &&
+    notice.field === "catalogueModel.pricing.prices" &&
     notice.removed_in === "1.0.0" &&
     notice.replaced_by === "pricePoints" &&
     notice.since === "2026-09-08",

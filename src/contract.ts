@@ -75,6 +75,7 @@ export const pricePointSchema = z
       "parsed_from_prose",
       "unknown",
     ]),
+    derivedFrom: z.string().url().optional(),
     sourceText: z.string().min(1).optional(),
   })
   .strict();
@@ -93,7 +94,7 @@ export type NormalizedFigure = z.infer<typeof normalizedFigureSchema>;
 export const deprecationNoticeSchema = z
   .object({
     field: z.string().min(1),
-    removed_in: z.string().regex(/^\d+\.\d+\.\d+$/),
+    removed_in: z.union([z.string().regex(/^\d+\.\d+\.\d+$/), z.literal("unknown")]),
     replaced_by: z.string().min(1).nullable(),
     reason: z.string().min(1).nullable(),
     since: z.string().date(),
@@ -121,14 +122,13 @@ export const contractEnvelopeSchema = z
 export type ContractEnvelope = z.infer<typeof contractEnvelopeSchema>;
 
 const DEPRECATIONS: DeprecationNotice[] = [
-  {
-    field: "pricing.prices",
-    removed_in: "1.0.0",
-    replaced_by: "pricePoints",
-    reason: null,
-    since: "2026-09-08",
-    state: "published",
-  },
+  { field: "catalogueModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  { field: "catalogueModel.pricing.prices", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  { field: "liveModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  { field: "liveModel.pricingWindow", removed_in: "1.0.0", replaced_by: "pricePoints[].condition", reason: null, since: "2026-09-08", state: "published" },
+  { field: "modelEconomicsModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  { field: "freeModels.liveCandidates[].pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  { field: "modelStatus.model.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
 ];
 
 export function contractEnvelope(): ContractEnvelope {

@@ -37,12 +37,11 @@ test("comparison tool returns the same validated JSON in both MCP content surfac
     const text = result.content.find(item => item.type === "text");
     assert.ok(text && text.type === "text");
     assert.deepEqual(JSON.parse(text.text), output);
-    assert.equal(output.rows[0]?.status, "price_derived_not_comparable");
-    assert.equal(output.rows[0]?.comparisons.input.status, "not_comparable");
-    assert.equal(output.rows[0]?.comparisons.input.savingsPercent, undefined);
-    assert.equal(output.rows[0]?.claimAssessment.status, "not_comparable");
-    assert.equal(output.rows[0]?.crazyrouter?.prices[0]?.provenance?.basis, "derived");
-    assert.equal(output.rows[0]?.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
+    assert.equal(output.rows[0]?.status, "comparable");
+    assert.equal(output.rows[0]?.comparisons.input.status, "comparable");
+    assert.equal(output.rows[0]?.comparisons.input.pairs[0]?.savingsPercent.value, "35");
+    assert.equal(output.rows[0]?.crazyrouter?.pricePoints[0]?.provenance, "derived");
+    assert.equal(output.rows[0]?.crazyrouter?.pricePoints[0]?.sourceText, "Crazyrouter model discount badge: 0.65");
     assert.equal(fetches, 2);
   } finally { await client.close(); await server.close(); }
 });
@@ -58,7 +57,7 @@ test("catalogue routes Crazyrouter to its own source and preserves unpriced iden
   });
   assert.deepEqual(urls, ["https://crazyrouter.com/api/pricing"]);
   assert.equal(result.models[0]?.id, "no-price");
-  assert.equal(result.models[0]?.pricing.status, "price_not_available");
+  assert.equal(result.models[0]?.pricingState, "not_published");
   assert.equal(result.providers[0]?.population.received, 1);
   assert.equal(result.providers[0]?.population.retained, 1);
   assert.equal(result.providers[0]?.population.excluded, 0);

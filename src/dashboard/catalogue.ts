@@ -3,7 +3,6 @@ import { liveModelsResponseSchema, type liveModelSchema } from "./schemas/live-m
 import { safeDashboardError } from "../tools/shared.js";
 import type { z } from "zod";
 import type { CatalogueModel, CatalogueProvider, MediaCatalogue } from "../catalogue/schemas.js";
-import { normalizeExactPrice } from "../catalogue/decimal.js";
 import { dashboardBaseUrl } from "../config.js";
 import { freshnessOf } from "./cache.js";
 
@@ -52,20 +51,15 @@ export async function collectDashboardCatalogue({ client, providers, now = () =>
   } catch (error) { failure = safeDashboardError(error).message; }
 
   const models: CatalogueModel[] = [...rows.values()].map((row, sourceIndex) => {
-    const native = row.pricing;
-    const prices = (Object.entries(native) as Array<[keyof typeof native, string | null]>).flatMap(([field, value]) => {
-      if (value === null) return [];
-      return [normalizeExactPrice({ value, unit: field === "promptUsdPerToken" ? "usd_per_input_token" : "usd_per_output_token", nativeUnit: "USD/token", sourceField: `pricing.${field}`, sourceUrl, conditions: { leg: field === "promptUsdPerToken" ? "input" : "output", ...(row.pricingWindow ? { pricingWindow: row.pricingWindow } : {}) } })];
-    });
     const modality = row.outputModalities?.[0];
     const mediaKind = ["text", "image", "video", "audio"].includes(modality ?? "") ? modality as "text" | "image" | "video" | "audio" : "unknown";
     return {
       provider: row.provider, id: row.id, displayName: row.displayName ?? row.id,
       mediaKind, nativeType: row.outputModalities?.join(",") ?? null,
       ...(row.outputModalities ? { outputModalities: row.outputModalities } : {}),
-      pricing: { status: prices.length ? "available" : "price_not_available", prices, native,
-        ...(!prices.length ? { reason: "price_not_available: the collected dashboard record contains no usable price; this does not establish provider-wide non-publication." } : {}),
-      },
+      pricePoints: row.pricePoints,
+      pricingState: row.pricingState,
+      ...(row.pricingNote ? { pricingNote: row.pricingNote } : {}),
       provenance: { sourceUrl, observedAt: row.lastConfirmedAt, sourceIndex },
     };
   });
