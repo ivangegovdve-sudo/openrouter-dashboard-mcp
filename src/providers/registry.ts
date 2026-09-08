@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { providerEvidence, providerEvidenceShape } from "./evidence.js";
+import { catalogueEvidenceSchema, providerEvidence, providerEvidenceShape } from "./evidence.js";
 
 /**
  * The provider layer of the Open Dashboard.
@@ -95,6 +95,8 @@ export const providerDescriptorSchema = z
     /** Where the dashboard's catalogue for this provider comes from. */
     catalogueUrl: z.string(),
     citationUrl: z.string(),
+    /** Additional native source evidence beyond the connector response. */
+    catalogueEvidence: catalogueEvidenceSchema.optional(),
     publishes: z
       .object({
         pricing: publicationSchema,
@@ -173,6 +175,41 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     displayName: "Cerebras",
     catalogueUrl: "https://api.cerebras.ai/v1/models",
     citationUrl: "https://inference-docs.cerebras.ai/api-reference/models",
+    catalogueEvidence: {
+      sources: [
+        { kind: "api", url: "https://api.cerebras.ai/v1/models", observedAt: "2026-09-08", sha256: null },
+        { kind: "pricing_page", url: "https://www.cerebras.ai/pricing", observedAt: "2026-09-08", sha256: null },
+      ],
+      models: [
+        {
+          modelId: "gemma-4-31b",
+          status: "not_published",
+          promptUsdPerMillion: null,
+          completionUsdPerMillion: null,
+          sourceUrl: "https://www.cerebras.ai/pricing",
+          observedAt: "2026-09-08",
+          reason: "Preview models are intended for evaluation purposes only.",
+        },
+        {
+          modelId: "gpt-oss-120b",
+          status: "priced",
+          promptUsdPerMillion: "0.35",
+          completionUsdPerMillion: "0.75",
+          sourceUrl: "https://www.cerebras.ai/pricing",
+          observedAt: "2026-09-08",
+          reason: null,
+        },
+        {
+          modelId: "qwen-3.8-27b",
+          status: "priced",
+          promptUsdPerMillion: "0.99",
+          completionUsdPerMillion: "1.49",
+          sourceUrl: "https://www.cerebras.ai/pricing",
+          observedAt: "2026-09-08",
+          reason: null,
+        },
+      ],
+    },
     publishes: {
       // These values describe the current /v1/models connector only.
       // A richer public native source was found on 2026-09-08; integration is pending.
@@ -195,6 +232,14 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     displayName: "Sail",
     catalogueUrl: "https://api.sailresearch.com/v1/models",
     citationUrl: "https://docs.sailresearch.com/pricing.md",
+    catalogueEvidence: {
+      sources: [{
+        kind: "pinned_document",
+        url: "https://docs.sailresearch.com/pricing.md",
+        observedAt: "2026-09-08",
+        sha256: "32447697c3305a5bc8c5c40c9923e1b81aaefbc5ab8092ee59fb94dfdfd017e6",
+      }],
+    },
     publishes: {
       // Public documents publish both; the current MCP quotes only pinned prices.
       pricing: "partial",
