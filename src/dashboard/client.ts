@@ -172,7 +172,8 @@ function createDirectDashboardClient(
       const maxResponseBytes = responseByteLimit(options.maxResponseBytes);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      timer.unref?.();
+      // Keep the deadline alive until this read settles. An unreferenced timer
+      // lets Node exit with a pending request when the transport owns no handle.
       let response: Response | undefined;
 
       try {
