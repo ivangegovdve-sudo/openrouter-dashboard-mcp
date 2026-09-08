@@ -1,5 +1,7 @@
 # Native catalogue and media price evidence — 2026-09-08
 
+This section preserves the original public-source measurements. The subsequent authenticated fal collector and Crazyrouter comparison, including three fal own-page checks, are documented in [provider-addendum-evidence.md](provider-addendum-evidence.md).
+
 Measured by `npx tsx scripts/verify-media-prices.ts` at **2026-09-08T15:20:39.411Z**. The script exited 0 after asserting full population retention and **6 of 6 price comparisons across 3 providers**. These are public catalogue and published-price observations, not paid inference measurements. No credentials, generation requests, retries, or account discounts were used.
 
 ## Population and price coverage

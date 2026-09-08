@@ -19,6 +19,7 @@ test("covers every provider this build normalises", () => {
     [
       "cerebras",
       "chutes",
+      "crazyrouter",
       "deepinfra",
       "fal",
       "groq",
@@ -48,7 +49,7 @@ test("every provider declares each capability, so a null always has a stated cau
     const descriptor = providerDescriptor(id);
     for (const capability of required) {
       assert.ok(
-        ["always", "partial", "never"].includes(descriptor.publishes[capability]),
+        ["always", "partial", "never", "unknown"].includes(descriptor.publishes[capability]),
         `${id} must declare ${capability}`,
       );
     }
@@ -57,14 +58,14 @@ test("every provider declares each capability, so a null always has a stated cau
   }
 });
 
-test("records that no provider publishes a discount expiry", () => {
+test("does not assert a discount expiry where none has been established", () => {
   for (const id of PROVIDER_IDS) {
-    assert.equal(
-      PROVIDER_REGISTRY[id].publishes.discountExpiry,
-      "never",
-      `${id} must not claim an expiry that upstream does not publish`,
+    assert.ok(
+      ["never", "unknown"].includes(PROVIDER_REGISTRY[id].publishes.discountExpiry),
+      `${id} must distinguish observed absence from an unresearched expiry`,
     );
   }
+  assert.equal(PROVIDER_REGISTRY.crazyrouter.publishes.discountExpiry, "unknown");
 });
 
 test("distinguishes integrated spend from Sail's documented but unread API", () => {

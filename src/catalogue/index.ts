@@ -1,5 +1,5 @@
 import { mediaCatalogueSchema, type CatalogueModel, type CatalogueProvider, type MediaCatalogue, type MediaCatalogueProviderId } from "./schemas.js";
-import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
+import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeFalAuthenticated, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
 import { parseNativeJson } from "./json.js";
 export * from "./schemas.js";
 export * from "./decimal.js";
@@ -24,6 +24,10 @@ export interface CollectMediaCatalogueOptions {
   now?: () => Date;
   timeoutMs?: number;
   maxPages?: number;
+  /** Omit to use FAL_API_KEY; an explicit empty string selects public sources. */
+  falApiKey?: string;
+  /** Maximum authenticated fal batches (50 model ids each), default 40, cap 64. */
+  maxFalPriceBatches?: number;
   /** Additional WaveSpeed ids to resolve pricing for; all identities still collected. */
   enrichIds?: string[];
 }
@@ -36,11 +40,11 @@ function safeError(error: unknown): string {
   // Never reflect remote response bodies, URLs, credentials, or exception messages.
   return error instanceof CatalogueFetchError ? error.message : "SOURCE_FETCH_OR_SHAPE_FAILED";
 }
-async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: number): Promise<string> {
+async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: number, authorization?: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json,text/html", "User-Agent": "open-dashboard-mcp catalogue/0.9" }, signal: controller.signal, redirect: "error" });
+    const response = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json,text/html", "User-Agent": "open-dashboard-mcp catalogue/0.9", ...(authorization ? { Authorization: authorization } : {}) }, signal: controller.signal, redirect: "error" });
     if (!response.ok) throw new CatalogueFetchError(`HTTP_${response.status}`);
     if (Number(response.headers.get("content-length")) > 12 * 1024 * 1024) throw new CatalogueFetchError("RESPONSE_SIZE_LIMIT");
     if (!response.body) throw new CatalogueFetchError("EMPTY_RESPONSE_BODY");
@@ -64,10 +68,17 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
   const sourceUrl = MEDIA_CATALOGUE_SOURCES[provider], observedAt = (options.now ?? (() => new Date()))().toISOString();
   const fetchImpl = options.fetchImpl ?? fetch, timeout = Math.min(Math.max(options.timeoutMs ?? 10000, 1), 30000), maxPages = Math.min(Math.max(options.maxPages ?? 32, 1), 64);
   const deadline = Date.now() + 60000;
+  const falApiKey = provider === "fal" ? (options.falApiKey ?? process.env.FAL_API_KEY)?.trim() : undefined;
   const request = async (url: string) => {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new CatalogueFetchError("PROVIDER_TIME_BUDGET");
-    return readSource(fetchImpl, url, Math.min(timeout, remaining));
+    const target = new URL(url);
+    const authorization = falApiKey && target.origin === "https://api.fal.ai" && ["/v1/models", "/v1/models/pricing"].includes(target.pathname) ? `Key ${falApiKey}` : undefined;
+    const text = await readSource(fetchImpl, url, Math.min(timeout, remaining), authorization);
+    // Authenticated metadata is still untrusted: reject a reflected credential
+    // before parsing or retaining any successful response fields.
+    if (authorization && falApiKey && text.includes(falApiKey)) throw new CatalogueFetchError("SOURCE_CREDENTIAL_REFLECTION");
+    return text;
   };
   const rows: NativeRecord[] = [], rowUrls: string[] = [];
   let listed: number | null = null, complete = false, pricingFailed = false, error: string | undefined, pageCount = 0, received = false;
@@ -120,7 +131,64 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
       identities.add(model.id); models.push(model);
     } catch { exclusions.push(`row ${index}: missing stable native model identity`); complete = false; error = "INVALID_MODEL_IDENTITY"; }
   }
-  if (provider === "fal" && models.length) {
+  if (provider === "fal") requestParameters.pricingAuthentication = falApiKey ? "api_key" : "none";
+  if (provider === "fal" && models.length && falApiKey) {
+    const priceIds = [...new Set(models.map(model => model.id))], checked = new Set<string>(), requested = new Set<string>();
+    const priceById = new Map<string, NativeRecord[]>();
+    const failedIds = new Set<string>();
+    const batchLimit = Math.min(Math.max(Math.floor(options.maxFalPriceBatches ?? 40), 1), 64);
+    let batchesFetched = 0, receivedPriceRows = 0, priceError: string | undefined;
+    requestParameters.priceSource = "https://api.fal.ai/v1/models/pricing";
+    requestParameters.priceScope = "authenticated_account";
+    requestParameters.priceBatchSize = 50; requestParameters.priceBatchLimit = batchLimit;
+    requestParameters.priceCoverageRule = "Request every collected identity in batches of at most 50. No identity is excluded by price. Native billing units and account prices are retained; unsupported currencies, output quantities, ambiguous units and multiple entries are not converted. Pricing cursor traversal is not documented: a nonterminal batch is a failed price observation.";
+    for (let offset = 0; offset < priceIds.length; offset += 50) {
+      if (batchesFetched >= batchLimit) { priceError = "PRICE_BATCH_BUDGET_EXHAUSTED"; break; }
+      const batch = priceIds.slice(offset, offset + 50), batchSet = new Set(batch);
+      const url = new URL("https://api.fal.ai/v1/models/pricing");
+      for (const id of batch) { url.searchParams.append("endpoint_id", id); requested.add(id); }
+      try {
+        const body = record(parseNativeJson(await request(url.href)));
+        if (!Array.isArray(body.prices)) throw new CatalogueFetchError("PRICING_RESPONSE_SHAPE_CHANGED");
+        if (body.has_more !== false || body.next_cursor !== null) throw new CatalogueFetchError("PRICING_PAGINATION_UNSUPPORTED");
+        const nativeRows = body.prices.map(record);
+        if (nativeRows.some(row => typeof row.endpoint_id !== "string" || !batchSet.has(row.endpoint_id))) throw new CatalogueFetchError("PRICING_IDENTITY_MISMATCH");
+        if (nativeRows.some(row => typeof row.unit !== "string" || typeof row.currency !== "string" || scalar(row.unit_price) === undefined)) throw new CatalogueFetchError("PRICING_ROW_SHAPE_CHANGED");
+        for (const row of nativeRows) {
+          const id = row.endpoint_id as string;
+          const entries = priceById.get(id) ?? []; entries.push(row); priceById.set(id, entries);
+        }
+        for (const id of batch) checked.add(id);
+        receivedPriceRows += nativeRows.length; batchesFetched++;
+      } catch (cause) {
+        priceError = safeError(cause);
+        for (const id of batch) failedIds.add(id);
+        break; // Never retry auth, quota, shape or resource failures.
+      }
+    }
+    for (let index = 0; index < models.length; index++) {
+      const model = models[index]!;
+      if (checked.has(model.id)) models[index] = normalizeFalAuthenticated(rows[model.provenance.sourceIndex]!, model.provenance.sourceUrl, observedAt, model.provenance.sourceIndex, priceById.get(model.id) ?? []);
+      else model.pricing = { status: "price_not_available", prices: [], native: null, reason: failedIds.has(model.id) ? "pricing_source_unavailable" : priceError === "PRICE_BATCH_BUDGET_EXHAUSTED" ? "pricing_not_observed_price_batch_budget" : "pricing_not_observed_after_source_failure" };
+    }
+    // Pricing requests are deduplicated by endpoint id, unlike retained source
+    // rows. Keep every price denominator on that same identity basis even if
+    // upstream pagination repeats a model (the catalogue stays partial).
+    const normalized = new Set(models.filter(model => model.pricing.status === "available").map(model => model.id)).size;
+    const priceExclusionReasons: Record<string, number> = {};
+    const reasonIds = new Map<string, Set<string>>();
+    for (const model of models) if (model.pricing.reason) {
+      const ids = reasonIds.get(model.pricing.reason) ?? new Set<string>(); ids.add(model.id); reasonIds.set(model.pricing.reason, ids);
+    }
+    for (const [reason, ids] of reasonIds) priceExclusionReasons[reason] = ids.size;
+    requestParameters.pricePopulationBasis = "Unique endpoint ids; catalogue received and retained counts remain source-row counts. Reason counts are distinct ids per reason.";
+    requestParameters.pricePopulation = { listed: priceIds.length, requested: requested.size, observed: checked.size, receivedPriceRows, withNativePrice: priceById.size, withoutNativePrice: checked.size - priceById.size, unobserved: priceIds.length - checked.size, normalized, uncomparable: priceById.size - normalized };
+    requestParameters.priceExclusionReasons = priceExclusionReasons;
+    requestParameters.priceBatchesFetched = batchesFetched;
+    requestParameters.pricingAcquisitionStatus = priceError ? checked.size ? "partial" : "unavailable" : "available";
+    if (priceError) { pricingFailed = true; requestParameters.pricingError = priceError; }
+  }
+  if (provider === "fal" && models.length && !falApiKey) {
     requestParameters.priceSource = "https://fal.ai/pricing";
     try {
       const published = parseFalPricingPage(await request("https://fal.ai/pricing"));
@@ -147,6 +215,7 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
   if (provider === "wavespeed" && models.length) {
     const ids = [...new Set([...DEFAULT_WAVESPEED_ENRICH_IDS, ...(options.enrichIds ?? []).slice(0, 20)])];
     const observed: string[] = [], failures: Array<{ id: string; error: string }> = [];
+    const detailPriceObservations: Array<Record<string, unknown>> = [];
     for (const id of ids) {
       const index = models.findIndex(model => model.id === id);
       if (index < 0) continue;
@@ -163,13 +232,26 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
         }
         if (detail.model_uuid !== id) throw new CatalogueFetchError("DETAIL_IDENTITY_MISMATCH");
         const original = models[index]!;
-        models[index] = normalizeWaveSpeed({ ...rows[original.provenance.sourceIndex], ...detail }, detailUrl, observedAt, original.provenance.sourceIndex);
+        const candidate = normalizeWaveSpeed({ ...rows[original.provenance.sourceIndex], ...detail }, detailUrl, observedAt, original.provenance.sourceIndex);
+        // A supplementary read must establish its own replacement price before
+        // superseding an already verified catalogue price and source. Merely
+        // inheriting old price fields would invent detail-source provenance.
+        const independentDetail = normalizeWaveSpeed({ type: original.nativeType, ...detail }, detailUrl, observedAt, original.provenance.sourceIndex);
+        if (original.pricing.status === "available" && independentDetail.pricing.status !== "available") {
+          const detailError = "DETAIL_PRICE_NOT_ESTABLISHED";
+          failures.push({ id, error: detailError });
+          detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "price_not_comparable", error: detailError, reason: independentDetail.pricing.reason, retainedPriceSourceUrl: original.provenance.sourceUrl });
+          continue;
+        }
+        models[index] = candidate;
+        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: candidate.pricing.status === "available" ? "available" : "price_not_comparable", ...(candidate.pricing.reason ? { reason: candidate.pricing.reason } : {}) });
         observed.push(id);
       } catch (cause) {
         const detailError = safeError(cause);
         failures.push({ id, error: detailError });
         const model = models[index]!;
-        model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
+        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "unavailable", error: detailError, ...(model.pricing.status === "available" ? { retainedPriceSourceUrl: model.provenance.sourceUrl } : {}) });
+        if (model.pricing.status !== "available") model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
         // A missing or malformed individual model does not invalidate another
         // model's read. Shared auth, resource, network and deadline failures
         // stop the bounded batch; neither kind is retried.
@@ -183,6 +265,7 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     requestParameters.pricingAcquisitionStatus = failures.length ? observed.length ? "partial" : "unavailable" : observed.length ? "available" : "not_attempted";
     requestParameters.priceCoverageRule = "All base prices retained; canonical prices only for observed simple formulas with established output quantity. No account discount applied. Other dynamic formulas require parameter selection.";
     requestParameters.detailBudget = 24; requestParameters.enrichedIds = observed; requestParameters.detailFailures = failures;
+    requestParameters.detailPriceObservations = detailPriceObservations;
   }
   if (provider === "chutes") requestParameters.priceCoverageRule = "Public deployments retained by chute_id, including custom deployments; explicit USD per-million token legs converted per token. Compute rental rates retained natively and never labelled output prices. Null template means modality unknown.";
   return { models, provider: {
@@ -195,7 +278,8 @@ export async function collectMediaCatalogue(options: CollectMediaCatalogueOption
   const ids = [...new Set(options.providers ?? MEDIA_CATALOGUE_PROVIDER_IDS)];
   if (ids.some(id => !MEDIA_CATALOGUE_PROVIDER_IDS.includes(id))) throw new Error("Unsupported native catalogue provider");
   const collections: Collection[] = [];
-  // At most two public providers are in flight, with no retries or credentials.
+  // At most two providers are in flight, with no retries. Only fal can receive
+  // a caller-supplied key, scoped to its fixed read-only API routes above.
   for (let index = 0; index < ids.length; index += 2) collections.push(...await Promise.all(ids.slice(index, index + 2).map(provider => collectProvider(provider, options))));
   const providers = collections.map(c => c.provider), models = collections.flatMap(c => c.models);
   const total = (key: "listed" | "received" | "retained" | "excluded") => providers.every(p => p.population[key] !== null) ? providers.reduce((sum, p) => sum + p.population[key]!, 0) : null;

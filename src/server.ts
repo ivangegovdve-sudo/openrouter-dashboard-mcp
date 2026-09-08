@@ -21,6 +21,7 @@ import { registerUsageLeaders } from "./tools/usage-leaders.js";
 import { registerWhatsChanged } from "./tools/whats-changed.js";
 import { SERVER_VERSION } from "./version.js";
 import { registerCatalogue } from "./tools/catalogue.js";
+import { registerPriceComparison } from "./tools/price-comparison.js";
 
 export type CreateServerOptions = DashboardClientOptions;
 
@@ -47,5 +48,6 @@ export function createServer(
   registerGithubMovers(server, { client });
   registerKeyInventory(server);
   registerCatalogue(server, { client, ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   return server;
 }
