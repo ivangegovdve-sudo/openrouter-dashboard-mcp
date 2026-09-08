@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { DashboardClient } from "../dashboard/client.js";
 import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
+import { providerEvidenceShape } from "../providers/evidence.js";
 import {
   providerListResponseSchema,
   publicModelsResponseSchema,
@@ -293,6 +294,7 @@ const economicsModelSchema = z
 
 const providerReportSchema = z
   .object({
+    ...providerEvidenceShape,
     // A provider id the dashboard reported. Not an enum: a client that
     // refuses an unfamiliar provider breaks when the server adds one.
     provider: z.string().min(1),
@@ -926,13 +928,17 @@ export async function runModelEconomics(
         Object.entries(descriptor.publishes).map(([key, value]) => [key, value]),
       ),
       comparabilityNote: descriptor.comparabilityNote,
+      caveatResearch: descriptor.caveatResearch,
+      pitchResearch: descriptor.pitchResearch,
+      ...(descriptor.caveats ? { caveats: descriptor.caveats } : {}),
+      ...(descriptor.pitch ? { pitch: descriptor.pitch } : {}),
     };
   });
 
   for (const report of providerReports) {
     if (report.modelsInCatalogue === 0) {
       warnings.push(
-        `${report.displayName} contributed no models to this answer; its catalogue is empty upstream.`,
+        `${report.displayName} contributed no models to this token comparison; this does not establish an empty provider catalogue. Use dashboard_catalogue for media identities and source population coverage.`,
       );
     }
   }

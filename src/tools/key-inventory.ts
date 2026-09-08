@@ -12,11 +12,10 @@ import {
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
 
 /**
- * Key inventory is the only tool in this server that touches a credential, and it
- * is opt-in.
+ * Key inventory is opt-in. Native fal and Crazyrouter collectors separately use
+ * optional provider environment keys; no tool requires a key at startup.
  *
- * Everything else reads the zero-credential public dashboard, which is what lets
- * the server ship inside a distributed desktop app. Requiring a key at startup
+ * The public dashboard tools work without credentials. Requiring a key at startup
  * would destroy that property for every other tool, so this one stays dormant
  * unless a host explicitly configures it. An unconfigured inventory is a normal
  * outcome, not an error.
@@ -442,13 +441,12 @@ async function readKey(
 
   const probe = KEY_PROBE[source.provider];
   if (!probe) {
-    // No probe exists for this provider -- its catalogue is public and needs no
-    // key. That is a fact about the provider, not a failed check, and it must
-    // not read as "the key is dead".
+    // A missing inventory probe is an integration gap, not evidence that the
+    // provider requires no credential or that the configured key is dead.
     return {
       ...report,
       alive: null,
-      note: `${describeProvider(source.provider).displayName} needs no credential for the data this server reads, so there is no key to probe. Unknown, not dead.`,
+      note: `This inventory does not implement a key probe for ${describeProvider(source.provider).displayName}. Its credential state and spend are unknown here.`,
     };
   }
   const controller = new AbortController();

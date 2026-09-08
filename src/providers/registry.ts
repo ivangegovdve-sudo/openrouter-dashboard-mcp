@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { providerEvidence, providerEvidenceShape } from "./evidence.js";
 
 /**
  * The provider layer of the Open Dashboard.
@@ -45,6 +46,9 @@ export const providerIdSchema = z.enum([
   "novita",
   "sambanova",
   "chutes",
+  "wavespeed",
+  "fal",
+  "crazyrouter",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -81,10 +85,13 @@ export const spendVisibilitySchema = z.enum([
   "no_billing_api",
 ]);
 
-const providerDescriptorSchema = z
+export const providerDescriptorSchema = z
   .object({
     id: providerIdSchema,
+    ...providerEvidenceShape,
     displayName: z.string(),
+    /** Declared product role; omitted when this build has not established it. */
+    providerKind: z.enum(["aggregator", "media", "model_provider"]).optional(),
     /** Where the dashboard's catalogue for this provider comes from. */
     catalogueUrl: z.string(),
     citationUrl: z.string(),
@@ -117,7 +124,9 @@ export type ProviderDescriptor = z.infer<typeof providerDescriptorSchema>;
 export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   openrouter: {
     id: "openrouter",
+    ...providerEvidence("openrouter"),
     displayName: "OpenRouter",
+    providerKind: "aggregator",
     catalogueUrl: "https://openrouter.ai/api/v1/models",
     citationUrl: "https://openrouter.ai/docs/api/api-reference/models/get-models",
     publishes: {
@@ -139,6 +148,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   groq: {
     id: "groq",
+    ...providerEvidence("groq"),
     displayName: "Groq",
     catalogueUrl: "https://api.groq.com/openai/v1/models",
     citationUrl: "https://console.groq.com/docs/api-reference#models-list",
@@ -159,6 +169,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   cerebras: {
     id: "cerebras",
+    ...providerEvidence("cerebras"),
     displayName: "Cerebras",
     catalogueUrl: "https://api.cerebras.ai/v1/models",
     citationUrl: "https://inference-docs.cerebras.ai/api-reference/models",
@@ -180,13 +191,14 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   sail: {
     id: "sail",
+    ...providerEvidence("sail"),
     displayName: "Sail",
     catalogueUrl: "https://api.sailresearch.com/v1/models",
     citationUrl: "https://docs.sailresearch.com/pricing.md",
     publishes: {
-      // Public documents publish both; the current MCP quotes only pinned prices.
+      // Public documents publish both, but this connector only reads pinned prices.
       pricing: "partial",
-      contextLength: "partial",
+      contextLength: "never",
       outputModalities: "never",
       reasoningEfforts: "never",
       activeFlag: "never",
@@ -200,6 +212,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   qwencloud: {
     id: "qwencloud",
+    ...providerEvidence("qwencloud"),
     displayName: "QwenCloud",
     catalogueUrl: "https://dashscope-intl.aliyuncs.com/api/v1/models",
     citationUrl:
@@ -225,12 +238,13 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   deepinfra: {
     id: "deepinfra",
+    ...providerEvidence("deepinfra"),
     displayName: "DeepInfra",
     catalogueUrl: "https://api.deepinfra.com/models/list",
     citationUrl: "https://deepinfra.com/models",
     publishes: {
-      // Measured 2026-09-08: 371 models on 8 different pricing axes. Only the
-      // 218 with pricing.type="tokens" are collected here; the other 153 bill
+      // Measured 2026-09-08: 372 models on 8 different pricing axes. Only the
+      // 219 with pricing.type="tokens" are collected here; the other 153 bill
       // per second, per image, per character or per frame and cannot share a
       // per-token column. Every one of the 218 carries a price.
       pricing: "always",
@@ -255,10 +269,11 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "DeepInfra publishes prices with no credential, in cents per token, and is the only provider here that says when a model retires and what replaces it. Two cautions: more than half its token-priced catalogue (114 of 218) already carries a retirement date, so a cheap price is often a price on a model being withdrawn; and 153 further models are billed per second, image, character or frame and are deliberately absent from per-token comparisons rather than converted.",
+      "DeepInfra's legacy token connector observed 219 token-priced models out of 372 on 2026-09-08, with 114 carrying a retirement date and 153 further models using second, image, character or frame billing. Its publication flags describe that token connector. The media catalogue separately reads the public model list, retains other billing axes and reports its own acquired population and price coverage. Native prices and conversion conditions accompany comparable rates; catalogue presence alone does not establish that a model is current or its price comparable.",
   },
   novita: {
     id: "novita",
+    ...providerEvidence("novita"),
     displayName: "Novita",
     catalogueUrl: "https://api.novita.ai/v3/openai/models",
     citationUrl: "https://novita.ai/docs/api-reference/model-apis-llm-list-models",
@@ -284,6 +299,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   sambanova: {
     id: "sambanova",
+    ...providerEvidence("sambanova"),
     displayName: "SambaNova",
     catalogueUrl: "https://api.sambanova.ai/v1/models",
     citationUrl: "https://docs.sambanova.ai/cloud/api-reference/endpoints/models",
@@ -304,6 +320,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
   },
   chutes: {
     id: "chutes",
+    ...providerEvidence("chutes"),
     displayName: "Chutes",
     catalogueUrl: "https://llm.chutes.ai/v1/models",
     citationUrl: "https://chutes.ai/app/api",
@@ -321,7 +338,55 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "Chutes publishes prices in USD per MILLION tokens as bare numbers, which look identical in shape to this server's per-token strings and are a million times larger; they are rescaled once at ingest. It also quotes every price in Bittensor's TAO alongside USD — that figure is deliberately ignored here, because it floats against the dollar and would turn a price comparison into a currency bet. Its broader catalogue reports 495 entries including image and video models; only the 14 chat models are collected today.",
+      "Chutes's legacy LLM connector observed 14 models on 2026-09-08 and rescales USD-per-million-token prices once at ingest. Its publication flags describe those LLM rows. The media catalogue separately reads the broader public chute inventory, retains other model types and reports its own denominator. USD prices are used only where their output unit is established; TAO values and GPU-time prices are not converted into a guessed USD price per image or second of generated video.",
+  },
+  wavespeed: {
+    id: "wavespeed",
+    ...providerEvidence("wavespeed"),
+    displayName: "WaveSpeedAI",
+    providerKind: "media",
+    catalogueUrl: "https://wavespeed.ai/api/models",
+    citationUrl: "https://wavespeed.ai/",
+    publishes: {
+      pricing: "partial", contextLength: "never", outputModalities: "partial",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "never",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "WaveSpeedAI's public catalogue includes media models and native prices. The media collector retains every listed model, converts only prices with explicit supported units and required parameters, and records native values and arithmetic. Other rates are reported as unavailable for comparison; missing prices are not evidence that a model is free. Account spend is not read by this integration.",
+  },
+  fal: {
+    id: "fal",
+    ...providerEvidence("fal"),
+    displayName: "fal",
+    providerKind: "media",
+    catalogueUrl: "https://api.fal.ai/v1/models",
+    citationUrl: "https://fal.ai/docs/documentation",
+    publishes: {
+      pricing: "partial", contextLength: "never", outputModalities: "partial",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "never",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "fal is a media generation platform. With FAL_API_KEY, the collector reads its full key-visible catalogue and bounded authenticated pricing batches; account-specific rates can apply. Without a key it reads the public catalogue and summary pricing table. Every acquired identity is retained. Only explicit supported output units become USD/image or USD/video-second; compute time, unobserved batches and unsupported prices remain unavailable with distinct reasons. Catalogue coverage and price coverage are reported separately. Account spend is not read by this integration.",
+  },
+  crazyrouter: {
+    id: "crazyrouter",
+    ...providerEvidence("crazyrouter"),
+    displayName: "Crazyrouter",
+    providerKind: "aggregator",
+    catalogueUrl: "https://api.crazyrouter.com/v1/models",
+    citationUrl: "https://docs.crazyrouter.com/en/chat/openai/models",
+    publishes: {
+      pricing: "partial", contextLength: "unknown", outputModalities: "partial",
+      reasoningEfforts: "unknown", activeFlag: "unknown", discounts: "partial",
+      discountExpiry: "unknown", lifecycle: "unknown",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. The exact GPT-4o, GPT-4o mini and GPT-4.1 default-group figures that equal 0.65x OpenAI list prices are marked derived with their source and observed multiplier, and are excluded from competition claims. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected independently comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
   },
 };
 
@@ -349,6 +414,7 @@ export function describeProvider(id: string): ProviderDescriptor {
   if (isKnownProvider(id)) return PROVIDER_REGISTRY[id];
   return {
     id: id as ProviderId,
+    ...providerEvidence(id),
     displayName: id,
     catalogueUrl: "",
     citationUrl: "",
