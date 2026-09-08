@@ -20,6 +20,14 @@ export const speedObservationSchema = z.object({
   retainedRuns: z.literal(3),
   ttft_ms: decimalMeasurement.nullable(),
   sustained_tps: decimalMeasurement.nullable(),
+  /**
+   * Which tokens sustained_tps counted. Required, never optional: an
+   * optional basis is omitted by exactly the producers who do not know it.
+   * visible_output counts only tokens that reached content; billed_total
+   * counts everything the provider charged for, including reasoning the
+   * caller never sees. For a reasoning model the two differ by multiples.
+   */
+  token_basis: z.enum(["visible_output", "billed_total", "unknown"]),
   attribution: z.string().nullable(),
   sourceUrl: z.string().url().nullable(),
   note: z.string().nullable(),
@@ -27,6 +35,10 @@ export const speedObservationSchema = z.object({
   if (value.state === "published" && value.attribution === null) context.addIssue({ code: "custom", message: "Published speed claims require attribution", path: ["attribution"] });
   if (value.state === "measured" && value.sourceUrl !== null) context.addIssue({ code: "custom", message: "Measured speed is ours and does not use a publisher source URL", path: ["sourceUrl"] });
   if (value.state === "unknown" && (value.ttft_ms !== null || value.sustained_tps !== null)) context.addIssue({ code: "custom", message: "Unknown speed cannot carry a numeric measurement", path: ["state"] });
+  // A vendor claim may honestly have an unstated basis; that is the disclosure.
+  // Our own measurement counted the tokens, so publishing the rate without
+  // saying which ones is the defect this field exists to close.
+  if (value.state === "measured" && value.sustained_tps !== null && value.token_basis === "unknown") context.addIssue({ code: "custom", message: "A measured rate must name the tokens it counted; we computed it, so the basis is known", path: ["token_basis"] });
 });
 
 export type SpeedObservation = z.infer<typeof speedObservationSchema>;
@@ -67,6 +79,7 @@ export async function probeSpeed(args: {
   return speedObservationSchema.parse({
     state: "measured", provider: args.provider, model: args.model, observedAt: args.observedAt,
     vantagePoint: args.vantagePoint, promptHash: promptHash(args.prompt), tokenCount: retained[1]!.outputTokens,
+    token_basis: "visible_output",
     requestedRuns: 4, discardedRuns: 1, retainedRuns: 3,
     ttft_ms: statistic(retained.map((run) => run.ttftMs)),
     sustained_tps: statistic(retained.map((run) => run.outputTokens * 1000 / run.elapsedMs)),
@@ -75,13 +88,13 @@ export async function probeSpeed(args: {
 }
 
 export function unknownSpeed(provider: string, model: string, observedAt: string, note: string): SpeedObservation {
-  return speedObservationSchema.parse({ state: "unknown", provider, model, observedAt, vantagePoint: "unknown", promptHash: null, tokenCount: null, requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: null, attribution: null, sourceUrl: null, note });
+  return speedObservationSchema.parse({ state: "unknown", provider, model, observedAt, vantagePoint: "unknown", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: null, attribution: null, sourceUrl: null, note });
 }
 
 export function publishedSpeed(args: {
   provider: string; model: string; sustainedTps: string; sourceUrl: string; observedAt: string; attribution: string; note: string;
 }): SpeedObservation {
-  return speedObservationSchema.parse({ state: "published", provider: args.provider, model: args.model, observedAt: args.observedAt, vantagePoint: "provider-published", promptHash: null, tokenCount: null, requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: { median: args.sustainedTps, min: args.sustainedTps, max: args.sustainedTps }, attribution: args.attribution, sourceUrl: args.sourceUrl, note: args.note });
+  return speedObservationSchema.parse({ state: "published", provider: args.provider, model: args.model, observedAt: args.observedAt, vantagePoint: "provider-published", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: { median: args.sustainedTps, min: args.sustainedTps, max: args.sustainedTps }, attribution: args.attribution, sourceUrl: args.sourceUrl, note: args.note });
 }
 
 /**
@@ -103,9 +116,14 @@ export function historicalMeasuredSpeed(): SpeedObservation {
     discardedRuns: 1,
     retainedRuns: 3,
     ttft_ms: null,
-    sustained_tps: { median: "1022", min: "867", max: "1108" },
+    // The record's three rates were 867 / 1022 / 1108, but which tokens they
+    // counted was never retained. A rate whose basis is unknown is not a
+    // publishable rate, so it is not offered as one; the figures stay in the
+    // note as history rather than being read as a measurement.
+    sustained_tps: null,
+    token_basis: "unknown",
     attribution: null,
     sourceUrl: null,
-    note: "Historical real-call evidence dated 2026-08-28; exact time, vantage point and prompt hash were not retained. Not a protocol-complete probe from this package.",
+    note: "Historical real-call evidence dated 2026-08-28 recorded 867 / 1022 / 1108 sustained tokens per second. Exact time, vantage point, prompt hash and token basis were not retained, so no rate is published: for a reasoning model a visible-output rate and a billed-total rate differ by multiples, and which was measured is unknown. Not a protocol-complete probe from this package.",
   });
 }
