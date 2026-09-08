@@ -9,8 +9,25 @@ import {
   unpricedReason,
 } from "../src/providers/registry.js";
 
-test("covers the three providers this build normalises", () => {
-  assert.deepEqual(PROVIDER_IDS.sort(), ["cerebras", "groq", "openrouter", "sail"]);
+test("covers every provider this build normalises", () => {
+  // Nine as of 2026-09-08: the original four plus the five live-price
+  // catalogues. Asserted as a set with a stated reason rather than a bare
+  // literal, because the previous literal said "three" while listing four --
+  // the name had already drifted from the assertion below it.
+  assert.deepEqual(
+    [...PROVIDER_IDS].sort(),
+    [
+      "cerebras",
+      "chutes",
+      "deepinfra",
+      "groq",
+      "novita",
+      "openrouter",
+      "qwencloud",
+      "sail",
+      "sambanova",
+    ],
+  );
 });
 
 test("every provider declares each capability, so a null always has a stated cause", () => {

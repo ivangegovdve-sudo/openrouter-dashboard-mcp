@@ -54,7 +54,7 @@ export const resolveModelConstraintsSchema = z
     minContext: minContextSchema.optional(),
     outputModality: z.string().min(1).max(80).optional(),
     reasoning: z.boolean().optional(),
-    providers: z.array(providerIdSchema).max(3).optional(),
+    providers: z.array(z.string().min(1)).max(3).optional(),
     requireProviderActive: z.literal(true).optional(),
   })
   .strict();
@@ -93,7 +93,7 @@ const exclusionReasonSchema = z.enum([
 
 const excludedModelSchema = z
   .object({
-    provider: providerIdSchema,
+    provider: z.string().min(1),
     id: z.string().min(1),
     reason: exclusionReasonSchema,
   })
@@ -101,7 +101,7 @@ const excludedModelSchema = z
 
 const resolvedModelSchema = z
   .object({
-    provider: providerIdSchema,
+    provider: z.string().min(1),
     id: z.string().min(1),
     rank: z.number().int().positive(),
     basis: z.enum([

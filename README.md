@@ -1,6 +1,6 @@
 # Open Dashboard MCP
 
-Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq, Cerebras and Sail** in one comparable shape, plus **GitHub trending repositories** dated by when they were collected. The server exposes twelve bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to the public Open Dashboard intelligence API, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova and Chutes** in one comparable shape, plus **GitHub trending repositories** dated by when they were collected. The server exposes twelve bounded tools over stdio and returns the same machine-readable value in `structuredContent` and JSON text content.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
@@ -33,7 +33,7 @@ Requires Node.js 20 or newer. No API key is needed for any tool except the optio
 
 ### Where the data comes from
 
-Every tool reads a **public, zero-credential HTTP API** that ingests OpenRouter, Groq, Cerebras and GitHub daily and republishes the result. Sail is not ingested there — the MCP reads Sail's pinned pricing document directly, which is why its coverage differs from the other three. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+Every tool reads a **public, zero-credential HTTP API** that ingests all nine provider catalogues and GitHub daily and republishes the result. Sail is not ingested there — the MCP reads Sail's pinned pricing document directly, which is why its coverage differs from the other three. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -90,8 +90,17 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 | Groq | 13 | some | yes | yes | **no** | no | **no** |
 | Cerebras | 2 | **no** | **no** | **no** | **no** | no | **no** |
 | Sail | 10 | **no** (see below) | **no** | **no** | **no** | no | **no** |
+| QwenCloud | 165 | **no** | **no** | **no** | **no** | no | **no** |
+| DeepInfra | 218 | yes | most | **no** | **yes** | no | **no** |
+| Novita | 156 | most | yes | yes | **no** | yes | **no** |
+| SambaNova | 7 | yes | yes | **no** | **no** | no | **no** |
+| Chutes | 14 | yes | yes | yes | **no** | no | **no** |
 
-Provider rows measured 2026-08-27; Sail measured 2026-09-04. The catalogues disagree about almost everything, and **normalising them is the work** — the API calls are the easy part.
+Provider rows measured 2026-08-27; Sail measured 2026-09-04; the five added in 0.8.0 measured 2026-09-08.
+
+The five new rows publish prices with **no credential at all**, which is the point of adding them: a price comparison that needs a key is one only the key-holder can reproduce. Mistral, xAI, Together, Fireworks, Nebius, Hyperbolic and Parasail were probed the same day and every one returned 401, so they are deliberately absent rather than transcribed from a documentation page.
+
+Two of them carry a trap worth naming. **DeepInfra** prices on eight different axes and only 218 of its 371 models are priced per token; the rest bill per second, image, character or frame and are excluded rather than converted. Its `deprecated` field is a *retirement date*, not a flag, and 114 of the 218 already carry one -- it is the only provider here that says when a model dies and what replaces it. **Novita**'s flat price field is not a consistent tier: it is the cheapest band on one model and the dearest on another, and two tiered models publish no flat price at all, so prices here are the first tier with the full bands retained. The catalogues disagree about almost everything, and **normalising them is the work** — the API calls are the easy part.
 
 Sail is the sharpest case. Its catalogue API publishes *nothing* beyond model ids, so every field above is a `never` in [`src/providers/registry.ts`](src/providers/registry.ts). Its prices exist only in a human-readable pricing document, which this server treats as evidence rather than as an API — see [Sail pricing](#sail-pricing-a-pinned-document-not-an-api).
 

@@ -6,7 +6,21 @@ import {
   publicCollectionSchema,
 } from "./common.js";
 
-export const providerIdSchema = z.enum(["openrouter", "groq", "cerebras", "sail"]);
+/**
+ * DELIBERATELY NOT AN ENUM.
+ *
+ * This was `z.enum(["openrouter","groq","cerebras","sail"])`. On 2026-09-08 the
+ * dashboard began serving five more providers and every live-model response
+ * failed validation -- 197 issues from one new fact -- in the PUBLISHED
+ * package, for everyone who had it installed.
+ *
+ * A read-only client must not reject a response because the server learned
+ * something. An unrecognised provider is passed through and described by
+ * `describeProvider`, which says plainly that this build does not know it.
+ * Validation still rejects a missing or empty provider, which would be a real
+ * defect rather than a newer server.
+ */
+export const providerIdSchema = z.string().min(1);
 export const availabilitySchema = z.enum(["available", "disappeared"]);
 export const freeKindSchema = z.enum([
   "concrete_free",

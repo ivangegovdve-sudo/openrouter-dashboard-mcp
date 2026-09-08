@@ -11,6 +11,7 @@ import {
 import {
   PROVIDER_IDS,
   PROVIDER_REGISTRY,
+  describeProvider,
   providerIdSchema,
   unpricedReason,
   type ProviderId,
@@ -137,7 +138,7 @@ export const retirementRiskSchema = z.enum([
 const RETIREMENT_ALERT_DAYS = 90;
 
 export function retirementRisk(
-  provider: ProviderId,
+  provider: string,
   lifecycleState: string | null,
   expirationDate: string | null,
   availability: "available" | "disappeared",
@@ -146,7 +147,7 @@ export function retirementRisk(
   // A model that has already vanished is the strongest possible signal, and it is
   // the only retirement signal Groq and Cerebras ever give.
   if (availability === "disappeared") return "imminent";
-  if (PROVIDER_REGISTRY[provider].publishes.lifecycle === "never") {
+  if (describeProvider(provider).publishes.lifecycle === "never") {
     return "not_published_by_provider";
   }
   // Switch exhaustively over the upstream lifecycle enum. An unrecognised value
@@ -209,7 +210,9 @@ const modelDiscountSchema = z
 
 const economicsModelSchema = z
   .object({
-    provider: providerIdSchema,
+    // A provider id the dashboard reported. Not an enum: a client that
+    // refuses an unfamiliar provider breaks when the server adds one.
+    provider: z.string().min(1),
     id: z.string(),
     displayName: z.string().nullable(),
     ownedBy: z.string().nullable(),
@@ -289,7 +292,9 @@ const economicsModelSchema = z
 
 const providerReportSchema = z
   .object({
-    provider: providerIdSchema,
+    // A provider id the dashboard reported. Not an enum: a client that
+    // refuses an unfamiliar provider breaks when the server adds one.
+    provider: z.string().min(1),
     displayName: z.string(),
     modelsInCatalogue: z.number().int().min(0),
     modelsMatched: z.number().int().min(0),
@@ -309,7 +314,7 @@ export const modelEconomicsInputSchema = z
      * of the tool — a single-provider answer is what OpenRouter's own MCP already
      * gives.
      */
-    providers: z.array(providerIdSchema).min(1).optional(),
+    providers: z.array(z.string().min(1)).min(1).optional(),
     /**
      * Restrict to these exact model ids. The "audit my pins" query: hand it the
      * slugs a config hardcodes and it reports what each now costs, whether it is
@@ -636,7 +641,7 @@ export async function runModelEconomics(
   // 3. Normalize every provider into one comparable row.
   const candidates = liveRows.map((row) => {
     const extra = openRouterExtras.get(row.id);
-    const descriptor = PROVIDER_REGISTRY[row.provider];
+    const descriptor = describeProvider(row.provider);
     const promptPrice = row.pricing.promptUsdPerToken;
     const completionPrice = row.pricing.completionUsdPerToken;
     // Both halves are required. A prompt-priced, completion-unpriced model has an
@@ -673,7 +678,7 @@ export async function runModelEconomics(
         : promptPrice !== null || completionPrice !== null
           ? // Half a price is not a price. Saying the provider "publishes none"
             // here would be false -- it published one of the two.
-            `${PROVIDER_REGISTRY[row.provider].displayName} published only the ${promptPrice !== null ? "prompt" : "completion"} price for this model, so its total cost is unknown — not free, and not comparable.`
+            `${describeProvider(row.provider).displayName} published only the ${promptPrice !== null ? "prompt" : "completion"} price for this model, so its total cost is unknown — not free, and not comparable.`
           : unpricedReason(row.provider),
       freeKind: row.freeKind,
       genuinelyFree: row.freeKind === "concrete_free",
@@ -791,7 +796,7 @@ export async function runModelEconomics(
   // counting it as both would make the buckets overlap and the warning lie.
   let modelsTruncated = 0;
   const enrichable = models.filter(
-    (model) => PROVIDER_REGISTRY[model.provider].publishes.discounts !== "never",
+    (model) => describeProvider(model.provider).publishes.discounts !== "never",
   );
   const enrichmentTargets = enrichable.slice(0, input.discountEnrichment);
   for (const model of enrichmentTargets) {
@@ -881,9 +886,19 @@ export async function runModelEconomics(
   }
 
   // 5. Per-provider reporting, so a null is read as a provider fact.
-  const activeProviders = (
-    input.providers ?? PROVIDER_IDS
-  ).filter((provider) => PROVIDER_IDS.includes(provider));
+  // THE UNION, and both halves are load-bearing.
+  //
+  // Every provider this build KNOWS is reported even when it contributed no
+  // models, because "Cerebras contributed nothing" is a finding and dropping
+  // the row would hide it. And every provider PRESENT IN THE DATA is reported
+  // even when this build does not know it, because a provider the dashboard
+  // started serving would otherwise vanish from a report that looks complete.
+  //
+  // Deriving from the data alone was tried first and broke the first half; a
+  // test that asserts an empty provider is still named caught it.
+  const observedProviders = candidates.map((model) => model.provider);
+  const activeProviders =
+    input.providers ?? [...new Set([...PROVIDER_IDS, ...observedProviders])].sort();
   const providerReports = activeProviders.map((provider) => {
     const inCatalogue = candidates.filter((model) => model.provider === provider);
     const matchedForProvider = matched.filter(
@@ -892,7 +907,7 @@ export async function runModelEconomics(
     const confirmations = inCatalogue
       .map((model) => model.lastConfirmedAt)
       .sort();
-    const descriptor = PROVIDER_REGISTRY[provider];
+    const descriptor = describeProvider(provider);
     return {
       provider,
       displayName: descriptor.displayName,
