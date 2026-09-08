@@ -43,6 +43,7 @@ test("Cerebras native pricing evidence is attached to exact catalogue identities
 });
 
 test("Sail identifies its pinned document instead of an invented catalogue API", () => {
+  assert.equal(PROVIDER_REGISTRY.sail.catalogueUrl, "https://docs.sailresearch.com/pricing.md");
   const evidence = PROVIDER_REGISTRY.sail.catalogueEvidence;
   assert.ok(evidence);
   assert.deepEqual(evidence.sources, [{
