@@ -65,16 +65,16 @@ test("records that no provider publishes a discount expiry", () => {
   }
 });
 
-test("records that only OpenRouter exposes a billing API", () => {
+test("distinguishes integrated spend from Sail's documented but unread API", () => {
   assert.equal(PROVIDER_REGISTRY.openrouter.spendVisibility, "api");
   assert.equal(PROVIDER_REGISTRY.groq.spendVisibility, "no_billing_api");
   assert.equal(PROVIDER_REGISTRY.cerebras.spendVisibility, "no_billing_api");
-  assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "no_billing_api");
+  assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "unknown");
 });
 
-test("phrases an unpriced model as a provider fact and never as free", () => {
-  assert.match(unpricedReason("cerebras"), /publishes no prices for any model/);
-  assert.match(unpricedReason("groq"), /only part of its catalogue/);
+test("phrases an unpriced model as a collection gap and never as free", () => {
+  assert.match(unpricedReason("cerebras"), /current Cerebras catalogue connector/);
+  assert.match(unpricedReason("groq"), /No comparable token price in the collected data/);
   for (const id of PROVIDER_IDS) {
     assert.match(
       unpricedReason(id),

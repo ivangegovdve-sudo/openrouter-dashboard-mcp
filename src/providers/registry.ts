@@ -20,8 +20,8 @@ import { z } from "zod";
  * A ranking that silently drops the unpriced rows answers a narrower question
  * than the caller asked. So every capability a provider does not publish is
  * declared here, once, and the tools cite this registry when they report a null.
- * A null price then reads as "Cerebras publishes no prices" rather than as a
- * mystery or, far worse, as free.
+ * A null price then identifies the limits of the collected source rather than
+ * implying that the provider publishes nothing elsewhere or that the model is free.
  *
  * Adding a provider is a new entry in PROVIDER_REGISTRY plus its id in
  * providerIdSchema. Nothing else in this server enumerates providers.
@@ -53,7 +53,7 @@ export const publicationSchema = z.enum([
   "always",
   /** The provider publishes this for some models and omits it for others. */
   "partial",
-  /** The provider never publishes this. A null here is the provider's silence. */
+  /** This metadata is absent from the source used by the current connector. */
   "never",
   /**
    * THIS BUILD DOES NOT KNOW. Only ever produced for a provider the dashboard
@@ -69,7 +69,7 @@ export const publicationSchema = z.enum([
 ]);
 
 export const spendVisibilitySchema = z.enum([
-  /** This build does not know; only for an unrecognised provider. */
+  /** Spend visibility has not been established by this build's integrations. */
   "unknown",
   /** A documented API returns this key's usage and ceiling. */
   "api",
@@ -163,8 +163,8 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     catalogueUrl: "https://api.cerebras.ai/v1/models",
     citationUrl: "https://inference-docs.cerebras.ai/api-reference/models",
     publishes: {
-      // Observed 2026-08-19 and unchanged 2026-08-27: the listing carries only
-      // {id, object, created, owned_by}. Everything else is absent.
+      // These values describe the current /v1/models connector only.
+      // A richer public native source was found on 2026-09-08; integration is pending.
       pricing: "never",
       contextLength: "never",
       outputModalities: "never",
@@ -176,7 +176,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "Cerebras publishes only a model id and owner — no price, no context length, no modality. Its models therefore cannot be ranked on cost or filtered on capability from catalogue data alone, and are reported as unrankable rather than dropped. It exposes no billing API, so per-key spend cannot be read.",
+      "Cerebras's current /v1/models connector supplies only a model id and owner, so those collected rows cannot be ranked on cost or filtered on capability. This is a connector limitation: a separate public native source returned richer metadata for 3 of 3 models on 2026-09-08. Its collector integration is pending; those values are not yet available here.",
   },
   sail: {
     id: "sail",
@@ -184,8 +184,9 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     catalogueUrl: "https://api.sailresearch.com/v1/models",
     citationUrl: "https://docs.sailresearch.com/pricing.md",
     publishes: {
-      pricing: "never",
-      contextLength: "never",
+      // Public documents publish both; the current MCP quotes only pinned prices.
+      pricing: "partial",
+      contextLength: "partial",
       outputModalities: "never",
       reasoningEfforts: "never",
       activeFlag: "never",
@@ -193,23 +194,26 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
       discountExpiry: "never",
       lifecycle: "never",
     },
-    spendVisibility: "no_billing_api",
+    spendVisibility: "unknown",
     comparabilityNote:
-      "Sail models expose no programmatic price endpoint and are parsed periodically from a markdown document. Prices are strictly per-completion window; an optional availability source is absent.",
+      "Sail publishes prices and context information in public documents. This MCP quotes prices only after checking its pinned pricing document and carries the chosen completion window; it does not yet collect the documented context values. The billing routes at https://docs.sailresearch.com/usage-endpoints.md are documented but not probed or read by this integration, so spend visibility is unknown here.",
   },
   qwencloud: {
     id: "qwencloud",
     displayName: "QwenCloud",
-    catalogueUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
+    catalogueUrl: "https://dashscope-intl.aliyuncs.com/api/v1/models",
     citationUrl:
-      "https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope",
+      "https://dashscope-intl.aliyuncs.com/api/v1/models",
     publishes: {
-      // Measured 2026-09-08: 165 models, every one carrying only
-      // {id, object, created, owned_by}. Nothing else at all.
-      pricing: "never",
-      contextLength: "never",
-      outputModalities: "never",
-      reasoningEfforts: "never",
+      // Measured 2026-09-08: 249 native models; 242 with price blocks (306 blocks).
+      // Six compatibility-only ids supplement these; 59 comparable price pairs,
+      // 134 usable context values and 247 nonempty response-modality lists.
+      pricing: "partial",
+      contextLength: "partial",
+      outputModalities: "partial",
+      // 72 explicit Reasoning capabilities become [] (support, no named efforts).
+      // Numeric reasoning limits stay in the raw archive, not invented effort labels.
+      reasoningEfforts: "partial",
       activeFlag: "never",
       discounts: "never",
       discountExpiry: "never",
@@ -217,7 +221,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "no_billing_api",
     comparabilityNote:
-      "QwenCloud is a front end onto Alibaba Model Studio's DashScope international plane, and its catalogue lists 165 models with nothing but an id and an owner — no price, no context length, no modality. Cheap Qwen figures quoted elsewhere come from OpenRouter's catalogue, and a relayed price is a fact about the relay, so they are not reported here as QwenCloud prices. Its value is that it lists models OpenRouter does not relay at all.",
+      "QwenCloud has price blocks on 242 of 249 native models: 306 outer price blocks contain 893 price entries (measured 2026-09-08). The archive retains 255 identities: 249 native plus 6 compatibility-only ids, preventing false disappearance when changing endpoints (159 of 165 compatibility ids overlap). Native metadata supplies 59 comparable prompt/completion pairs, 134 usable context values and 247 nonempty response-modality lists. The 893 entries include 738 token entries and 155 non-token price entries excluded from token comparisons: 94 per second, 38 per image, 20 per 10,000 characters and 3 per voice. All native prices, ranges and time bands remain in the raw archive; the current API does not publish bands. Flat rates requiring a selection are withheld on 39 models: 37 with multiple ranges and 2 with distinct peak/offpeak bands. Only unambiguous default general input/output rates are quoted. The 72 explicit Reasoning capabilities become empty effort lists without invented effort levels; numeric reasoning limits stay raw. Media-only models, the 7 native models without price blocks and the 6 identity-only supplements remain paid or unknown.",
   },
   deepinfra: {
     id: "deepinfra",
@@ -364,16 +368,16 @@ export function describeProvider(id: string): ProviderDescriptor {
 }
 
 /**
- * Why a model could not be ranked on price, phrased as a fact about the provider
- * rather than as a missing value.
+ * Why a model could not be ranked on price, without treating a connector gap
+ * or an excluded price axis as provider-wide silence.
  */
 export function unpricedReason(id: string): string {
   const descriptor = describeProvider(id);
   switch (descriptor.publishes.pricing) {
     case "never":
-      return `${descriptor.displayName} publishes no prices for any model, so cost is unknown — not free.`;
+      return `The current ${descriptor.displayName} catalogue connector supplies no prices, so cost is unknown — not free.`;
     case "partial":
-      return `${descriptor.displayName} publishes prices for only part of its catalogue and omits them for this model, so cost is unknown — not free.`;
+      return `No comparable token price in the collected data for this ${descriptor.displayName} model, so cost is unknown — not free. A published price may require a different unit, token range or time band.`;
     case "always":
       return `${descriptor.displayName} normally publishes a price for every model; its absence here is a gap in the upstream record.`;
     case "unknown":

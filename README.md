@@ -33,7 +33,7 @@ Requires Node.js 20 or newer. No API key is needed for any tool except the optio
 
 ### Where the data comes from
 
-Every tool reads a **public, zero-credential HTTP API** that ingests all nine provider catalogues and GitHub daily and republishes the result. Sail is not ingested there — the MCP reads Sail's pinned pricing document directly, which is why its coverage differs from the other three. By default that is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+Every tool reads a **public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result. QwenCloud's native catalogue requires a credential held by the collector; MCP users read the public archived result. The MCP also reads Sail's pinned pricing document directly. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -88,9 +88,9 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 |---|---|---|---|---|---|---|---|
 | OpenRouter | 560+ | most | yes | yes | yes | per endpoint | yes |
 | Groq | 13 | some | yes | yes | **no** | no | **no** |
-| Cerebras | 2 | **no** | **no** | **no** | **no** | no | **no** |
-| Sail | 10 | **no** (see below) | **no** | **no** | **no** | no | **no** |
-| QwenCloud | 165 | **no** | **no** | **no** | **no** | no | **no** |
+| Cerebras | 2 (current connector) | connector gap | connector gap | connector gap | **no** | no | **no** |
+| Sail | 10 (pinned source) | document, some | document, not collected | **no** | **no** | no | documented, unread |
+| QwenCloud | 255 (249 native + 6 compatibility-only) | 242 native models with prices; 59 comparable pairs | 134 usable | 247 nonempty | **no** | no | **no** |
 | DeepInfra | 218 | yes | most | **no** | **yes** | no | **no** |
 | Novita | 156 | most | yes | yes | **no** | yes | **no** |
 | SambaNova | 7 | yes | yes | **no** | **no** | no | **no** |
@@ -98,17 +98,23 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 
 Provider rows measured 2026-08-27; Sail measured 2026-09-04; the five added in 0.8.0 measured 2026-09-08.
 
-The five new rows publish prices with **no credential at all**, which is the point of adding them: a price comparison that needs a key is one only the key-holder can reproduce. Mistral, xAI, Together, Fireworks, Nebius, Hyperbolic and Parasail were probed the same day and every one returned 401, so they are deliberately absent rather than transcribed from a documentation page.
+DeepInfra, Novita, SambaNova and Chutes publish their collected catalogues without a credential. QwenCloud requires the collector's region-bound international key. Both paths produce public dashboard data that this MCP reads without credentials. Mistral, xAI, Together, Fireworks, Nebius, Hyperbolic and Parasail returned 401 in the earlier catalogue probes; that observation describes those endpoints, not what the providers publish elsewhere.
+
+**QwenCloud's native `/api/v1/models` catalogue is paginated.** The collection completed at 2026-09-08 13:47:21 UTC with **255 identities: 249 native and six compatibility-only supplements**. The old catalogue shares 159 of its 165 ids with the native source; retaining the other six prevents false disappearance when switching endpoints. Of the 249 native models, **242 have price blocks**: 306 outer blocks contain 893 inner price entries. Native metadata adds 59 comparable prompt/completion price pairs, 134 usable context values, 247 nonempty response-modality lists and 72 explicit reasoning capabilities. The 893 entries comprise 738 per-token entries and **155 non-token price entries**: 94 per second, 38 per image, 20 per 10,000 characters and 3 per voice. Those 155 entries are excluded from token comparisons and counted in collection metadata; no model identities are dropped for having media prices. Media-only models, the seven native models without price blocks and the six identity-only supplements remain `paid_or_unknown`.
+
+The raw archive preserves all native prices, token ranges and time bands; **the current API does not publish the bands**. Flat rates are deliberately withheld for 39 models: 37 with multiple ranges and two with distinct peak/offpeak bands. Entries contain 782 standard, 99 unset, six peak and six offpeak bands. Flat prompt/completion prices are exposed only for an unambiguous default general input/output rate requiring no range or band selection. Other rates remain null with a selection-required `missingFields` marker, rather than silently quoting one band. The 72 explicit Reasoning capabilities become `reasoningEfforts: []`, meaning support without named effort levels; numeric reasoning limits remain in the raw archive, and absent positive capability evidence stays null.
 
 Two of them carry a trap worth naming. **DeepInfra** prices on eight different axes and only 218 of its 371 models are priced per token; the rest bill per second, image, character or frame and are excluded rather than converted. Its `deprecated` field is a *retirement date*, not a flag, and 114 of the 218 already carry one -- it is the only provider here that says when a model dies and what replaces it. **Novita**'s flat price field is not a consistent tier: it is the cheapest band on one model and the dearest on another, and two tiered models publish no flat price at all, so prices here are the first tier with the full bands retained. The catalogues disagree about almost everything, and **normalising them is the work** — the API calls are the easy part.
 
-Sail is the sharpest case. Its catalogue API publishes *nothing* beyond model ids, so every field above is a `never` in [`src/providers/registry.ts`](src/providers/registry.ts). Its prices exist only in a human-readable pricing document, which this server treats as evidence rather than as an API — see [Sail pricing](#sail-pricing-a-pinned-document-not-an-api).
+**Cerebras's current `/v1/models` connector** supplies only ids and owners. A separate public native source returned richer metadata for three of three models on 2026-09-08; integrating it is pending, so those values are not yet returned here. The current connector's gaps do not establish provider-wide absence.
+
+**Sail publishes [prices](https://docs.sailresearch.com/pricing.md) and [model context information](https://docs.sailresearch.com/models).** This MCP quotes prices only after verifying its pinned document and does not collect the documented context values. Sail also documents [usage and billing routes](https://docs.sailresearch.com/usage-endpoints.md); this integration has not probed or read them, so its registry reports spend visibility as unknown. See [Sail pricing](#sail-pricing-a-pinned-document-not-an-api) for the existing document verification.
 
 Four rules follow from that table, and the tools enforce all four:
 
-- **An unpriced model is cost-unknown, never free.** Cerebras and Sail publish no prices in their catalogues at all; Groq publishes them for part of its. Those rows keep their place in the answer with `priceComparable: false` and a stated `unrankableReason`, listed after the ranked rows rather than dropped — otherwise "cheapest across everything" silently means "cheapest among the rows that happened to carry a number".
+- **An unpriced model is cost-unknown, never free.** A missing comparable token price can reflect a connector gap, absent upstream pricing, a media billing unit or a required range/band choice. Rows satisfying the requested capability filters keep their place with `priceComparable: false` and a stated `unrankableReason`, listed after the ranked rows rather than dropped.
 - **No lifecycle signal is not the same as no risk.** Only OpenRouter publishes deprecation. Groq, Cerebras and Sail models report `retirementRisk: "not_published_by_provider"`, because `"none"` would be a false reassurance. For those three, a model vanishing from the list is the only retirement notice there is — so `availability: "disappeared"` is treated as imminent.
-- **Every null cites the provider that withheld it.** [`src/providers/registry.ts`](src/providers/registry.ts) declares, per provider, what is published `always`, `partial` or `never`. Adding a fifth provider is a new entry there plus its id in `providerIdSchema`; nothing else in this server enumerates providers.
+- **Every null has source context.** [`src/providers/registry.ts`](src/providers/registry.ts) describes the known sources and connector limits with `always`, `partial` or `never`; an unfamiliar provider receives `unknown`. A null does not establish that a provider withheld information.
 - **A price read from a document is only as good as the document.** Sail's prices come from a pinned pricing page rather than an API, so the server verifies the document before quoting from it and declines rather than guessing when it has changed.
 
 ## Build and run
@@ -212,7 +218,7 @@ A free model does not announce itself when it starts charging. Its id does not c
 }
 ```
 
-The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means nothing was published.
+The comparison is the archive's own run chain, not a date you choose, so the answer is always "since the last collection" and cannot straddle a missed run and present a stale delta as fresh. Prices are compared as exact decimals — never floats — because a rounding error in a price comparison would invent or hide a change. Zero is recognised semantically, so `0`, `0.0` and `0.00000000000000000000` are all free; a **null price is not free**, it means no comparable price is available in that field.
 
 ### The window you asked for is not the window prices were compared over
 
@@ -292,7 +298,7 @@ OPEN_DASHBOARD_KEY_SOURCES=openrouter:my-openrouter-key=OPENROUTER_API_KEY,groq:
 
 Only the Secret Manager names are ever reported. Key values are never returned, logged, or written to evidence — a test asserts the serialized result contains no key material. The tool issues GET requests only and contains no code path that can mint, modify, or revoke a key. Keep provisioning with a separate, privileged key that this server never sees.
 
-**Spend is not uniformly readable, and the tool says so rather than leaving a blank.** OpenRouter exposes per-key usage and ceiling. Groq, Cerebras and Sail expose **no billing API at all**, so their keys report `spendReadability: "no_billing_api"` with `usdSpent: null` and a stated reason. A blank money field reads as zero, and zero is a different claim.
+**Spend is not uniformly readable, and the tool says so rather than leaving a blank.** OpenRouter exposes per-key usage and ceiling. Groq and Cerebras retain the registry's `no_billing_api` classification. Sail documents billing routes that this integration does not read: its keys report `spendReadability: "unread"`, its registry reports spend visibility `unknown`, and `usdSpent` remains null. No billing request is added. A blank money field must not read as zero.
 
 `usdLimit: null` with `uncapped: true` is the finding worth acting on: a key with no spend ceiling can spend without bound if it leaks.
 

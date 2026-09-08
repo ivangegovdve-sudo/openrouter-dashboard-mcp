@@ -540,8 +540,8 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics claimed tool support Groq does not publish");
     }
 
-    // Cerebras publishes nothing, so it must be kept and explained, never dropped
-    // and never allowed to read as free.
+    // This fixture represents the current Cerebras connector's unpriced rows:
+    // keep and explain them, without treating them as free.
     const cerebras = byId.get("fixture-cerebras/bare");
     if (cerebras === undefined) {
       throw new Error("fixture economics dropped the unpriced Cerebras model");
@@ -550,7 +550,7 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics treated an unpriced model as rankable or free");
     }
     if (cerebras.emitsText !== null) {
-      throw new Error("fixture economics invented a modality Cerebras does not publish");
+      throw new Error("fixture economics invented a modality absent from the Cerebras fixture");
     }
     if (typeof cerebras.unrankableReason !== "string" || cerebras.unrankableReason === "") {
       throw new Error("fixture economics left an unpriced model unexplained");
