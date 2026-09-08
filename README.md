@@ -2,7 +2,7 @@
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **0.9.0** registers **12 providers** and exposes fourteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.0.0** registers **12 providers** and exposes sixteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -90,13 +90,13 @@ Stale pricing is the exact harm this tool exists to prevent, so a number is neve
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **12 providers** in **open-dashboard-mcp 0.9.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **12 providers** in **open-dashboard-mcp 1.0.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
 | <span data-provider-id="openrouter">OpenRouter</span><br>Multi-provider aggregator | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
 | <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="qwencloud">QwenCloud</span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="deepinfra">DeepInfra</span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
@@ -220,16 +220,23 @@ The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protoc
 
 The summary, provider declarations, pitches, caveats and tool table are generated from the package registry and a real in-memory `tools/list` handshake. `npm run build` regenerates them; `npm run docs:check` fails if committed README facts differ. `npm run docs:generate` refreshes the marked `generated-do-not-edit` blocks. The companion site pins the same package export to an immutable source commit so its release candidate documentation can be reviewed before npm publication.
 
+## Contract versioning and deprecations
+
+`dashboard_contract` is the explicit MCP contract endpoint. It returns `schema_version`, the installed `package_version`, and `deprecations[]`. Each notice names the field or tool being retired, the release that removes it, its replacement (or a plain reason when there is none), and the date the notice first appeared. A known future removal with no reliable release date uses `removed_in: "unknown"`; it is never guessed.
+
+Version 1.0 introduces this notice mechanism. Therefore it could not preannounce the 0.9-to-1.0 removals: the 1.0 release notes state that exception once, and those notices are necessarily retrospective. Future removals will be announced in an earlier release; a field is not repurposed under an old name.
+
 ## Tools
 
 <!-- tools:begin generated-do-not-edit -->
 
-**14 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**16 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
 | `dashboard_benchmarks` | Dashboard benchmark observations |
 | `dashboard_catalogue` | Provider model catalogue and comparable media prices |
+| `dashboard_contract` | MCP schema and deprecation contract |
 | `dashboard_free_models` | Dashboard usable free models |
 | `dashboard_github_movers` | Dashboard public GitHub momentum movers |
 | `dashboard_github_trending` | GitHub trending repositories |
@@ -240,6 +247,7 @@ The summary, provider declarations, pitches, caveats and tool table are generate
 | `dashboard_price_comparison` | Shared-model aggregator price comparison |
 | `dashboard_resolve_model` | Dashboard resolve model |
 | `dashboard_source_health` | Dashboard source health |
+| `dashboard_speed` | Provider speed claims and probe protocol |
 | `dashboard_usage_leaders` | Dashboard public ecosystem usage leaders |
 | `dashboard_whats_changed` | Dashboard changes |
 
@@ -275,14 +283,9 @@ For example, request WaveSpeed video detail with:
 
 Filtering happens after acquisition, in stable provider/id order. `population` reports acquired, matched and returned counts, exclusions by media kind and model ID, and rows omitted by pagination. Each provider separately reports `listed`, `received`, `retained`, `excluded`, `exclusionRules`, `completeness` and the applied `requestParameters`. A missing native denominator stays null with an explanation; unavailable and unknown populations never become zero. These counters describe the rows actually acquired, not a claim that every provider's entire global inventory was observed.
 
-Each model's `pricing.status` is `available` or `price_not_available`. Unavailable prices carry a reason and an empty `prices` list, while the identity and native pricing data remain visible. Comparable entries use **USD per image** (`usd_per_image`) or **USD per second of video** (`usd_per_video_second`). Each entry retains:
+Each model exposes `pricePoints` directly. A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`; amounts are exact decimal strings, and units are one of `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `request`, or `gpu_hour`. Conditions are a closed union of `latency_window`, `time_band`, `tier`, and `rate_class`, so a rate is never detached from the choice that produced it. `provenance` is `published`, `derived`, `parsed_from_prose`, or `unknown`; derived points also name `derivedFrom`, and prose-derived points retain `sourceText`.
 
-- `native`: original decimal string, native unit and source field.
-- `conversion`: multiplier, divisor and the exact multiply-then-divide formula.
-- `exact`: integer-string numerator and denominator; consumers can compare without floating-point rounding.
-- `value`: plain decimal string only when the exact ratio terminates. A recurring fraction keeps `exact` and omits `value`; it is never silently rounded.
-- `conditions` and `sourceUrl`: configuration assumptions and the provider source. Different resolutions, durations, output quantities or formulas remain explicit conditions.
-- `provenance`: when `basis` is `derived`, the source rate card and observed multiplier that produced the quote. Derived quotes are not independent provider-price measurements.
+Pricing state is separate from the points: `published` requires at least one point, while `not_published` and `unknown` carry an empty list and an explanatory `pricingNote`. A missing or non-comparable price is never represented as zero. Every normalized summary figure uses `{ value, unit, assumption, derived_from }`; an assumption cannot be omitted.
 
 Token prices retain token units; compute rental, character, voice and other unsupported billing axes remain native data rather than being relabelled as image or video generation prices. Structured provider pitches and scoped caveats accompany the response in `providerMetadata`.
 
@@ -296,13 +299,17 @@ Coverage has specific limits. The dashboard's legacy archive does not expose eve
 {"modelIds":["gpt-4o","gpt-4o-mini","gpt-4.1"],"limit":20}
 ```
 
-The response presents independently comparable input/output quotes side by side and computes savings with exact decimal fractions. Crazyrouter quotes are its public default pricing group; the caller's billing group and settled charges are unverified. The exact GPT-4o, GPT-4o mini and GPT-4.1 quotes are marked `provenance.basis: "derived"`, with their OpenAI source and observed `0.65` multiplier, so their comparison legs are `not_comparable` and never report savings. OpenRouter quotes are collected during the call for rows that remain eligible. Available direct-provider references are explicitly dated published-price observations, not live account prices. Exact API aliases do not establish that two services resolve to the same immutable model snapshot.
+The response presents every compatible input/output price point and condition side by side and computes savings with exact decimal fractions. If units or conditions do not match, that leg is `not_comparable` with a reason; it never picks one rate silently. Crazyrouter quotes are its public default pricing group; the caller's billing group and settled charges are unverified. Per-model discount badges are retained as `derived` points with their model-specific factor and source text; there is no global `0.65` assumption. OpenRouter quotes are collected during the call for rows that remain eligible. Available direct-provider references are explicitly dated published-price observations, not live account prices. Exact API aliases do not establish that two services resolve to the same immutable model snapshot.
 
 Crazyrouter's dated claim is attributed and checked only where an independently comparable direct-provider reference exists. Derived rate-card matches are retained as evidence but excluded from that assessment; a quote outside the claimed range is reported as a discrepancy, and absent direct prices remain unknown. A few compared aliases do not prove a statement about most models. The tool makes no inference request and measures no latency or model quality.
 
 Supply optional `FAL_API_KEY` and `CRAZYROUTER_API_KEY` through the host's environment. Startup and tool discovery remain credential-free. This package does not read Secret Manager itself, write keys, or modify an account. Account spend remains unread by these collectors.
 
-Install-time selection of tools and providers belongs to 1.0. These request filters select catalogue output; they do not remove tools from MCP discovery.
+Install-time selection of tools and providers belongs to 1.0. Set `OPEN_DASHBOARD_TOOLS` and/or `OPEN_DASHBOARD_PROVIDERS` to comma-separated allowlists before startup. Deselected tools are absent from `tools/list`; provider-bearing tools omit deselected providers, and the price comparison tool is omitted unless both `openrouter` and `crazyrouter` are selected. Request filters still select output within the installed surface.
+
+## Speed claims and measurement
+
+`dashboard_speed` keeps publisher claims and measurements in separate observations. The fixed probe protocol is a streaming prompt with `maxTokens: 700`, four runs, the first discarded, and median/min/max over the remaining three. A measured observation records provider, model, timestamp (or explicit `unknown`), vantage point, prompt hash, token count, TTFT and sustained tokens per second. A published claim has provider attribution and source URL but no fabricated measurement. The current metadata includes Cerebras's published approximately 3,000 tokens/second claim alongside the retained 2026-08-28 measured 867/1,022/1,108 tokens/second record, and Groq's published 8,000-token/minute ceiling; the units and states remain distinct. Missing observations are `unknown`.
 
 ## Sail pricing: a pinned document, not an API
 

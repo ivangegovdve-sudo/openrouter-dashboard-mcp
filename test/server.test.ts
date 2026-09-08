@@ -5,6 +5,7 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type { McpServer } from "@modelcontextprotocol/server";
 
 import { createServer } from "../src/server.js";
+import { contractOutputSchema } from "../src/tools/contract.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
 import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
@@ -37,7 +38,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers exactly the fourteen tools without fetching during construction or tools/list", async () => {
+test("registers exactly the sixteen tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -53,6 +54,7 @@ test("registers exactly the fourteen tools without fetching during construction 
       [
         "dashboard_benchmarks",
         "dashboard_catalogue",
+        "dashboard_contract",
         "dashboard_free_models",
         "dashboard_github_movers",
         "dashboard_github_trending",
@@ -63,6 +65,7 @@ test("registers exactly the fourteen tools without fetching during construction 
         "dashboard_price_comparison",
         "dashboard_resolve_model",
         "dashboard_source_health",
+        "dashboard_speed",
         "dashboard_usage_leaders",
         "dashboard_whats_changed",
       ],
@@ -76,6 +79,24 @@ test("registers exactly the fourteen tools without fetching during construction 
       assert.ok(tool.inputSchema);
       assert.ok(tool.outputSchema);
     }
+  } finally {
+    await client.close();
+  }
+});
+
+test("install-time selection removes deselected tools and provider comparisons", async () => {
+  const server = createServer({
+    selectedTools: ["dashboard_contract", "dashboard_price_comparison"],
+    selectedProviders: ["openrouter"],
+    fetchImpl: failIfCalled(),
+  });
+  const client = await connectTestClient(server);
+  try {
+    const listed = await client.listTools();
+    assert.deepEqual(listed.tools.map((tool) => tool.name), ["dashboard_contract"]);
+    const result = await client.callTool({ name: "dashboard_contract", arguments: {} });
+    assert.equal(result.isError, undefined);
+    contractOutputSchema.parse(result.structuredContent);
   } finally {
     await client.close();
   }
@@ -128,7 +149,7 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
     }
 
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 14);
+    assert.equal(listed.tools.length, 16);
   } finally {
     await client.close();
   }
