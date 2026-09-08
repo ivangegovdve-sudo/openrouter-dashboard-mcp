@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectMediaCatalogue, parseNativeJson } from "../src/catalogue/index.js";
+import { collectMediaCatalogue, DEFAULT_WAVESPEED_ENRICH_IDS, parseNativeJson } from "../src/catalogue/index.js";
 import { exactDecimalRatio, normalizeExactPrice } from "../src/catalogue/decimal.js";
 import { normalizeDeepInfra, normalizeWaveSpeed, normalizeFal, normalizeChutes, parseFalPricingPage } from "../src/catalogue/normalize.js";
 import { cataloguePricingSchema } from "../src/catalogue/schemas.js";
+import { runCatalogue } from "../src/tools/catalogue.js";
 
 const observedAt = "2026-09-08T15:00:00Z", sourceUrl = "https://example.test/catalogue";
 const deep = (pricing: unknown, type = "text-to-image") => normalizeDeepInfra({ model_name: "vendor/model", reported_type: type, pricing }, sourceUrl, observedAt, 0);
@@ -118,4 +119,107 @@ test("pricing schema forbids fabricated available empty prices and unexplained a
   assert.equal(cataloguePricingSchema.safeParse({ status: "price_not_available", prices: [], native: null }).success, false);
   const price = normalizeExactPrice({ value: "0", nativeUnit: "usd_per_image", sourceField: "price", unit: "usd_per_image", sourceUrl });
   assert.equal(cataloguePricingSchema.safeParse({ status: "available", prices: [price], native: "0" }).success, true);
+});
+
+const falModelsResponse = { models: [{ endpoint_id: "fal-ai/image", metadata: { category: "text-to-image" } }], has_more: false, next_cursor: null };
+test("Fal pricing HTTP failure preserves full identity population but reports unavailable pricing and partial tool status", async () => {
+  const calls: string[] = [];
+  const result = await runCatalogue({ providers: ["fal"], offset: 0, limit: 10 }, { client: {} as never, fetchImpl: async input => {
+    const url = String(input); calls.push(url);
+    return url === "https://fal.ai/pricing" ? new Response("PRIVATE_ERROR_BODY", { status: 503 }) : Response.json(falModelsResponse);
+  } });
+  assert.equal(result.status, "partial");
+  const provider = result.providers[0]!;
+  assert.equal(provider.status, "partial");
+  assert.deepEqual(provider.population, { listed: 1, received: 1, retained: 1, excluded: 0, exclusionRules: [], completeness: "full" });
+  assert.equal(provider.requestParameters.pricingAcquisitionStatus, "unavailable");
+  assert.equal(provider.requestParameters.priceSource, "https://fal.ai/pricing");
+  assert.equal(provider.requestParameters.pricingError, "HTTP_503");
+  assert.equal(provider.requestParameters.publishedPricingRows, undefined);
+  assert.equal(result.models[0]?.pricing.reason, "pricing_source_unavailable");
+  assert.deepEqual(result.models[0]?.pricing.prices, []);
+  assert.equal(calls.filter(url => url === "https://fal.ai/pricing").length, 1);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ERROR_BODY|price_not_in_public_pricing_table/);
+});
+test("Fal malformed pricing table is a failed observation, while a successfully checked absent row stays absent", async () => {
+  for (const [html, expectedStatus, expectedReason] of [
+    ["<html>layout changed</html>", "partial", "pricing_source_unavailable"],
+    ['<table><tr><td><a href="/models/fal-ai/different">Other</a></td><td>image</td><td>$0.03</td></tr></table>', "available", "price_not_in_public_pricing_table_individual_page_not_observed"],
+  ] as const) {
+    const result = await collectMediaCatalogue({ providers: ["fal"], fetchImpl: async input => String(input) === "https://fal.ai/pricing" ? new Response(html) : Response.json(falModelsResponse) });
+    assert.equal(result.providers[0]?.status, expectedStatus);
+    assert.equal(result.providers[0]?.population.completeness, "full");
+    assert.equal(result.models[0]?.pricing.reason, expectedReason);
+    assert.equal(result.providers[0]?.requestParameters.pricingAcquisitionStatus, expectedStatus === "partial" ? "unavailable" : "available");
+  }
+});
+const waveDefaultId = DEFAULT_WAVESPEED_ENRICH_IDS[0], waveCallerId = "caller/video";
+const waveList = { total: 2, items: [{ model_uuid: waveDefaultId, type: "text-to-video", base_price: "300000" }, { model_uuid: waveCallerId, type: "text-to-video", base_price: "300000" }] };
+const waveCallerDetail = { code: 200, data: { model_uuid: waveCallerId, base_price: "300000", input: '{"properties":{"duration":{"default":5}}}', formula: '{"total_price": base_price * duration / 5}' } };
+test("WaveSpeed isolated default detail failures do not prevent later caller price acquisition", async () => {
+  const isolatedFailures: Array<[() => Response, string]> = [
+    [() => new Response("missing", { status: 404 }), "HTTP_404"],
+    [() => new Response("not-json"), "DETAIL_JSON_INVALID"],
+    [() => Response.json({ code: 200, data: { model_uuid: "different/model" } }), "DETAIL_IDENTITY_MISMATCH"],
+    [() => Response.json({ data: {} }), "DETAIL_RESPONSE_SHAPE_CHANGED"],
+  ];
+  for (const [failure, expectedError] of isolatedFailures) {
+    const calls: string[] = [];
+    const result = await collectMediaCatalogue({ providers: ["wavespeed"], enrichIds: [waveCallerId], fetchImpl: async input => {
+      const url = String(input); calls.push(url);
+      if (url.startsWith("https://wavespeed.ai/api/models?")) return Response.json(waveList);
+      if (url.endsWith(waveDefaultId)) return failure();
+      assert.ok(url.endsWith(waveCallerId)); return Response.json(waveCallerDetail);
+    } });
+    assert.equal(result.models.find(model => model.id === waveCallerId)?.pricing.prices[0]?.value, "0.06", expectedError);
+    assert.equal(result.models.find(model => model.id === waveDefaultId)?.pricing.reason, "pricing_source_unavailable");
+    assert.equal(result.providers[0]?.status, "partial");
+    assert.equal(result.providers[0]?.population.completeness, "full");
+    assert.deepEqual(result.providers[0]?.requestParameters.enrichedIds, [waveCallerId]);
+    assert.deepEqual(result.providers[0]?.requestParameters.detailFailures, [{ id: waveDefaultId, error: expectedError }]);
+    assert.equal(calls.length, 3);
+  }
+});
+test("WaveSpeed shared service failures stop further detail calls without retrying or discarding identities", async () => {
+  for (const status of [401, 403, 429, 503]) {
+    let calls = 0;
+    const result = await collectMediaCatalogue({ providers: ["wavespeed"], enrichIds: [waveCallerId], fetchImpl: async input => {
+      calls++;
+      return String(input).startsWith("https://wavespeed.ai/api/models?") ? Response.json(waveList) : new Response("not reflected", { status });
+    } });
+    assert.equal(calls, 2);
+    assert.equal(result.models.length, 2);
+    assert.equal(result.providers[0]?.status, "partial");
+    assert.equal(result.providers[0]?.population.completeness, "full");
+    assert.equal(result.providers[0]?.requestParameters.detailStopReason, `HTTP_${status}`);
+    assert.deepEqual(result.providers[0]?.requestParameters.enrichedIds, []);
+  }
+});
+test("WaveSpeed shared deadline stops before requesting detail and preserves the collected population", async context => {
+  let clock = 0, calls = 0;
+  context.mock.method(Date, "now", () => clock);
+  const result = await collectMediaCatalogue({ providers: ["wavespeed"], enrichIds: [waveCallerId], fetchImpl: async () => {
+    calls++; clock = 60001; return Response.json(waveList);
+  } });
+  assert.equal(calls, 1);
+  assert.equal(result.models.length, 2);
+  assert.equal(result.providers[0]?.population.completeness, "full");
+  assert.equal(result.providers[0]?.status, "partial");
+  assert.equal(result.providers[0]?.requestParameters.detailStopReason, "PROVIDER_TIME_BUDGET");
+});
+test("WaveSpeed request timeout and application-level auth error stop the detail batch", async () => {
+  for (const failureKind of ["timeout", "application_auth"] as const) {
+    let calls = 0;
+    const result = await collectMediaCatalogue({ providers: ["wavespeed"], timeoutMs: 1, enrichIds: [waveCallerId], fetchImpl: async (input, init) => {
+      calls++;
+      if (String(input).startsWith("https://wavespeed.ai/api/models?")) return Response.json(waveList);
+      if (failureKind === "application_auth") return Response.json({ code: 401, message: "not reflected" });
+      return new Promise<Response>((_resolve, reject) => init!.signal!.addEventListener("abort", () => reject(new Error("not reflected")), { once: true }));
+    } });
+    assert.equal(calls, 2);
+    assert.equal(result.providers[0]?.status, "partial");
+    assert.equal(result.providers[0]?.population.completeness, "full");
+    assert.equal(result.providers[0]?.requestParameters.detailStopReason, failureKind === "timeout" ? "SOURCE_TIMEOUT" : "HTTP_401");
+    assert.doesNotMatch(JSON.stringify(result), /not reflected/);
+  }
 });

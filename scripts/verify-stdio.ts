@@ -173,6 +173,9 @@ export const DIAGNOSTIC_CALLS = [
   {
     name: "dashboard_model_economics",
     arguments: {
+      // Keep the synthetic matrix confined to its three fixture providers;
+      // otherwise the runtime also retrieves Sail's live pricing document.
+      providers: ["openrouter", "groq", "cerebras"],
       ids: [
         "fixture/discounted",
         "fixture-groq/priced",
@@ -476,6 +479,36 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
   const output = asRecord(parsed.data, `${name} structuredContent`);
   if (output.status === "error") throw new Error(`${name} fixture returned error`);
 
+  if (name === "dashboard_benchmarks") {
+    const response = asRecord(output.response, "fixture benchmark response");
+    const rows = Array.isArray(response.data) ? response.data : [];
+    if (rows.length !== 1 || response.stale !== true) {
+      throw new Error("fixture benchmarks lost their row or stale evidence");
+    }
+    const row = asRecord(rows[0], "fixture benchmark row");
+    if (row.modelPermaslug !== "fixture/benchmark-unknown" || row.source !== "openrouter") {
+      throw new Error("fixture benchmark identity or source changed");
+    }
+    if (row.primaryScore !== null || row.accuracy !== null) {
+      throw new Error("fixture replaced an unknown benchmark score");
+    }
+  }
+  if (name === "dashboard_github_trending") {
+    if (output.collectedAt !== "2026-08-19T06:00:00.000Z") {
+      throw new Error("fixture trending changed the collection time");
+    }
+    const rows = Array.isArray(output.repositories) ? output.repositories : [];
+    const cap = asRecord(output.cap, "fixture trending cap");
+    if (rows.length !== cap.limit || cap.reached !== true) {
+      throw new Error("fixture trending did not apply its result limit");
+    }
+    if (rows.some((entry, index) => {
+      const row = asRecord(entry, "fixture trending row");
+      return row.fullName !== `fixture/trending-${index + 1}` || row.starsGained !== null;
+    })) {
+      throw new Error("fixture trending changed row order or invented gained stars");
+    }
+  }
   if (name === "dashboard_resolve_model") {
     if (output.unsatisfiable !== true) throw new Error("fixture resolver is satisfiable");
     if (!Array.isArray(output.resolved) || output.resolved.length !== 0) {

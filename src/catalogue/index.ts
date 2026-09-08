@@ -54,6 +54,9 @@ async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: numbe
       text += decoder.decode(value, { stream: true });
     }
     return text + decoder.decode();
+  } catch (error) {
+    if (controller.signal.aborted) throw new CatalogueFetchError("SOURCE_TIMEOUT");
+    throw error;
   } finally { clearTimeout(timer); }
 }
 type Collection = { provider: CatalogueProvider; models: CatalogueModel[] };
@@ -67,7 +70,7 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     return readSource(fetchImpl, url, Math.min(timeout, remaining));
   };
   const rows: NativeRecord[] = [], rowUrls: string[] = [];
-  let listed: number | null = null, complete = false, error: string | undefined, pageCount = 0, received = false;
+  let listed: number | null = null, complete = false, pricingFailed = false, error: string | undefined, pageCount = 0, received = false;
   const requestParameters: Record<string, unknown> = { modelFilter: "none", priceFilter: "none", includeUnpriced: true, pageLimit: maxPages, timeoutMs: timeout, providerBudgetMs: 60000 };
   const cursors = new Set<string>(); let cursor: string | undefined;
   try {
@@ -118,17 +121,28 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     } catch { exclusions.push(`row ${index}: missing stable native model identity`); complete = false; error = "INVALID_MODEL_IDENTITY"; }
   }
   if (provider === "fal" && models.length) {
+    requestParameters.priceSource = "https://fal.ai/pricing";
     try {
       const published = parseFalPricingPage(await request("https://fal.ai/pricing"));
       if (published.size === 0) throw new CatalogueFetchError("PRICING_TABLE_SHAPE_CHANGED");
-      requestParameters.priceSource = "https://fal.ai/pricing";
+      requestParameters.pricingAcquisitionStatus = "available";
       requestParameters.publishedPricingRows = published.size;
       requestParameters.priceCoverageRule = "Only exact endpoint ids in public pricing table; individual model pages not observed. Image reference is 1MP. Whole-video prices without duration withheld.";
       for (let index = 0; index < models.length; index++) {
         const model = models[index]!;
         models[index] = normalizeFal(rows[model.provenance.sourceIndex]!, model.provenance.sourceUrl, observedAt, model.provenance.sourceIndex, published.get(model.id));
       }
-    } catch (cause) { requestParameters.pricingError = safeError(cause); }
+    } catch (cause) {
+      // Identity acquisition and price acquisition are independent: retain the
+      // proven catalogue denominator, but never describe an unread table as
+      // successfully checked and missing its prices.
+      pricingFailed = true;
+      requestParameters.pricingAcquisitionStatus = "unavailable";
+      requestParameters.pricingError = safeError(cause);
+      requestParameters.priceCoverageRule = "Pricing source acquisition failed; no conclusion about price publication can be drawn. Collected model identities are retained.";
+      delete requestParameters.publishedPricingRows;
+      for (const model of models) model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
+    }
   }
   if (provider === "wavespeed" && models.length) {
     const ids = [...new Set([...DEFAULT_WAVESPEED_ENRICH_IDS, ...(options.enrichIds ?? []).slice(0, 20)])];
@@ -139,19 +153,40 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
       if (!id.split("/").every(segment => /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(segment) && segment !== "..")) { failures.push({ id, error: "INVALID_MODEL_ID_FOR_DETAIL" }); continue; }
       const detailUrl = `https://api.wavespeed.ai/center/default/api/v1/model_product/detail/${id.split("/").map(encodeURIComponent).join("/")}`;
       try {
-        const body = record(parseNativeJson(await request(detailUrl))), detail = record(body.data);
-        if (String(body.code) !== "200" || detail.model_uuid !== id) throw new CatalogueFetchError("DETAIL_IDENTITY_MISMATCH");
+        const text = await request(detailUrl);
+        let payload: unknown;
+        try { payload = parseNativeJson(text); } catch { throw new CatalogueFetchError("DETAIL_JSON_INVALID"); }
+        const body = record(payload), detail = record(body.data);
+        if (String(body.code) !== "200") {
+          if (/^[45]\d\d$/.test(String(body.code))) throw new CatalogueFetchError(`HTTP_${body.code}`);
+          throw new CatalogueFetchError("DETAIL_RESPONSE_SHAPE_CHANGED");
+        }
+        if (detail.model_uuid !== id) throw new CatalogueFetchError("DETAIL_IDENTITY_MISMATCH");
         const original = models[index]!;
         models[index] = normalizeWaveSpeed({ ...rows[original.provenance.sourceIndex], ...detail }, detailUrl, observedAt, original.provenance.sourceIndex);
         observed.push(id);
-      } catch (cause) { failures.push({ id, error: safeError(cause) }); break; }
+      } catch (cause) {
+        const detailError = safeError(cause);
+        failures.push({ id, error: detailError });
+        const model = models[index]!;
+        model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
+        // A missing or malformed individual model does not invalidate another
+        // model's read. Shared auth, resource, network and deadline failures
+        // stop the bounded batch; neither kind is retried.
+        if (!["HTTP_404", "HTTP_410", "DETAIL_JSON_INVALID", "DETAIL_RESPONSE_SHAPE_CHANGED", "DETAIL_IDENTITY_MISMATCH"].includes(detailError)) {
+          requestParameters.detailStopReason = detailError;
+          break;
+        }
+      }
     }
+    if (failures.length) pricingFailed = true;
+    requestParameters.pricingAcquisitionStatus = failures.length ? observed.length ? "partial" : "unavailable" : observed.length ? "available" : "not_attempted";
     requestParameters.priceCoverageRule = "All base prices retained; canonical prices only for observed simple formulas with established output quantity. No account discount applied. Other dynamic formulas require parameter selection.";
     requestParameters.detailBudget = 24; requestParameters.enrichedIds = observed; requestParameters.detailFailures = failures;
   }
   if (provider === "chutes") requestParameters.priceCoverageRule = "Public deployments retained by chute_id, including custom deployments; explicit USD per-million token legs converted per token. Compute rental rates retained natively and never labelled output prices. Null template means modality unknown.";
   return { models, provider: {
-    provider, status: !received ? "unavailable" : complete ? "available" : "partial", sourceUrl, observedAt,
+    provider, status: !received ? "unavailable" : complete && !pricingFailed ? "available" : "partial", sourceUrl, observedAt,
     population: { listed, received: received ? rows.length : null, retained: received ? models.length : null, excluded: received ? exclusions.length : null, exclusionRules: exclusions, completeness: !received ? "unavailable" : complete ? "full" : "partial" },
     requestParameters, ...(error ? { error } : {}),
   } };
