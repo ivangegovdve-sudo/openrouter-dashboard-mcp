@@ -40,12 +40,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to reviewed commit SHAs. This job holds id-token: write and can publish,
+      # so a mutable major-version ref is a supply-chain hole with a release on the end of it.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # Tags and history are needed by the manual-publish guard below.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -124,9 +126,24 @@ jobs:
           fi
           echo "main, tag v$packaged exists, and it points at HEAD."
 
+      # A PRERELEASE MUST NOT BECOME `latest`. The `published` release event fires for
+      # prereleases too, and `npm publish` with no --tag assigns `latest` -- so releasing
+      # v1.2.0-beta.1 would hand every ordinary consumer a beta. The dist-tag is chosen
+      # from the release itself rather than assumed.
+      - name: Choose the dist-tag
+        id: disttag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+            echo "Prerelease: publishing under dist-tag next, not latest."
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "Publishing under dist-tag latest."
+          fi
+
       - name: Publish with provenance
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag "${{ steps.disttag.outputs.tag }}"
 
       - name: Dry run only, nothing published
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
@@ -136,18 +153,24 @@ jobs:
       # to two minutes before the registry resolved the version -- measured twice on this
       # package, ~40s for 1.0.0 and ~2min for 1.0.1. A green job that only proves the
       # command exited zero would let a failed publish look successful.
-      - name: Confirm the registry actually resolves the new version
+      # THE CLI'S OUTPUT IS THE WRONG LAYER. `npm publish` printed its success line ~40s
+      # before the registry resolved 1.0.0 and ~2min before 1.0.1, measured on this package.
+      #
+      # It asks for the EXACT VERSION, not `/latest`. Querying latest was wrong twice over:
+      # a prerelease is deliberately not latest, and if a newer version were already latest
+      # the check would wait five minutes and then call a successful publish a failure.
+      - name: Confirm the registry actually resolves the published version
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         run: |
           expected="$(node -p "require('./package.json').version")"
           for attempt in $(seq 1 30); do
-            actual="$(curl -sf https://registry.npmjs.org/open-dashboard-mcp/latest | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version' 2>/dev/null || echo pending)"
-            echo "attempt $attempt: registry=$actual expected=$expected"
-            if [ "$actual" = "$expected" ]; then
+            code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$expected")"
+            echo "attempt $attempt: registry returned $code for $expected"
+            if [ "$code" = "200" ]; then
               echo "The registry resolves $expected."
               exit 0
             fi
             sleep 10
           done
-          echo "::error::The registry did not resolve $expected within five minutes. The publish may have failed even if the CLI reported success."
+          echo "::error::The registry did not resolve $expected within five minutes. The publish may have failed even though the CLI reported success."
           exit 1
