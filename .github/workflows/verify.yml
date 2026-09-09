@@ -12,8 +12,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
-      # Check committed documentation BEFORE build regenerates it.
+      # Check committed documentation BEFORE build regenerates it. This has to stay first:
+      # once build runs, docs:check would be comparing the README against a copy build just
+      # rewrote, and would pass no matter what was committed.
       - run: npm run docs:check
-      - run: npm test
+      # Build BEFORE test. Some tests verify what the tarball actually ships -- that
+      # build/contract-vocabulary.json matches the schemas, and that every exports subpath
+      # resolves -- and those cannot run against a tree that has not been built. They passed
+      # locally only because a previous build had left build/ behind, which is the same
+      # stale-artifact trap that made the local suite report 347 tests where a clean
+      # checkout reports 337.
       - run: npm run build
+      - run: npm test
       - run: npm pack --dry-run
