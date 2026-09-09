@@ -49,11 +49,32 @@ const rateClassConditionSchema = z
   })
   .strict();
 
+/**
+ * WHOSE price this is. Added in 1.0 because an authenticated fal price -- what THIS
+ * account is charged -- was emitted with `condition: null`, which positively asserts that
+ * no condition applies. The scope survived only in the provider's requestParameters, so a
+ * consumer reading a single price point could not tell an account-specific rate from a
+ * public list rate, and comparePriceSets (which keys on the condition) would treat the
+ * two as directly comparable.
+ *
+ * `rateClass` is folded in rather than left to the separate rate_class condition because
+ * a price point carries exactly one condition: an account-scoped "as low as" GPU rate is
+ * both things at once, and splitting them would drop one.
+ */
+const priceScopeConditionSchema = z
+  .object({
+    kind: z.literal("price_scope"),
+    name: z.enum(["authenticated_account", "public_list"]),
+    rateClass: z.enum(["list", "as_low_as"]).optional(),
+  })
+  .strict();
+
 export const priceConditionSchema = z.union([
   latencyWindowConditionSchema,
   timeBandConditionSchema,
   tierConditionSchema,
   rateClassConditionSchema,
+  priceScopeConditionSchema,
 ]);
 export type PriceCondition = z.infer<typeof priceConditionSchema> | null;
 
@@ -129,6 +150,17 @@ const DEPRECATIONS: DeprecationNotice[] = [
   { field: "modelEconomicsModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
   { field: "freeModels.liveCandidates[].pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
   { field: "modelStatus.model.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
+  // THIS ONE WAS MISSING AND THE TOOL PROMISED IT WOULD NOT BE. dashboard_contract says
+  // it returns "every field or tool announced for removal", and 1.0 removed the per-row
+  // claimAssessment -- the vendor-discount contradiction verdict, whose statuses included
+  // outside_range_for_this_model -- without a notice. A removal mechanism that omits a
+  // removal is worse than none, because it invites consumers to trust the list.
+  // No replacement exists: the top-level vendorClaim.globalAssessment still reports
+  // whether the claim is established platform-wide, but the per-model verdict is gone, so
+  // the notice carries a reason rather than a replaced_by.
+  { field: "priceComparison.rows[].claimAssessment", removed_in: "1.0.0", replaced_by: null,
+    reason: "Per-model assessment of a vendor discount claim is not published in 1.0. vendorClaim.globalAssessment still reports whether the claim is established across the platform, but no per-model verdict replaces this field.",
+    since: "2026-09-08", state: "published" },
 ];
 
 export function contractEnvelope(): ContractEnvelope {

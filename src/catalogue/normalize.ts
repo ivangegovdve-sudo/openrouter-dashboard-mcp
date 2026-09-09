@@ -267,11 +267,16 @@ export function normalizeFalAuthenticated(
     const sourceText = proseSource(p);
     const priceSource = "https://api.fal.ai/v1/models/pricing";
     let canonical: PriceUnit | undefined;
-    let condition: PricePoint["condition"] = null;
+    // EVERY PRICE ON THIS PATH IS ACCOUNT-SCOPED. These come from the authenticated
+    // pricing endpoint and are what this key is charged, not a public list rate. They
+    // used to be emitted with `condition: null` -- an assertion that no condition applies
+    // -- so nothing downstream could tell them apart from public prices. The id already
+    // ended ":account"; the condition now says so too, where the comparison can see it.
+    let condition: PricePoint["condition"] = { kind: "price_scope", name: "authenticated_account" };
     if (p.currency !== "USD") note = "native_currency_not_usd";
     else if (unit && /gpu|compute/.test(unit)) {
       canonical = "gpu_hour";
-      condition = { kind: "rate_class", name: p.rate_class === "as_low_as" ? "as_low_as" : "list" };
+      condition = { kind: "price_scope", name: "authenticated_account", rateClass: p.rate_class === "as_low_as" ? "as_low_as" : "list" };
     } else if (["image", "images"].includes(unit ?? "") && model.mediaKind === "image") canonical = "image";
     else if (["megapixel", "megapixels"].includes(unit ?? "") && model.mediaKind === "image") canonical = "megapixel";
     else if (["video_second", "video_seconds", "output_video_second", "output_video_seconds"].includes(unit ?? "") && model.mediaKind === "video") canonical = "video_second";

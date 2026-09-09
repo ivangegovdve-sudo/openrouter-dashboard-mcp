@@ -32,6 +32,17 @@ test("authenticated fal prices every catalogue identity in bounded 50-ID batches
   assert.equal(result.models.find(row => row.id === kontext)?.pricePoints[0]?.amount, "0.04");
   const video = result.models.find(row => row.id === kling)?.pricePoints[0];
   assert.equal(video?.amount, "0.07"); assert.equal(video?.unit, "video_second");
+  // RESTORED FROM THE 0.9 SHAPE, WHICH ASSERTED conditions.priceScope HERE. The 1.0
+  // rewrite dropped that assertion with no replacement and the price went out as
+  // `condition: null` -- claiming no condition applies to a rate that is specific to this
+  // account. Every price from the authenticated endpoint must name its scope.
+  assert.deepEqual(video?.condition, { kind: "price_scope", name: "authenticated_account" });
+  for (const row of result.models) {
+    for (const point of row.pricePoints) {
+      assert.equal(point.condition?.kind, "price_scope", `${row.id}: an authenticated price must carry its scope`);
+      assert.equal((point.condition as { name: string }).name, "authenticated_account");
+    }
+  }
   assert.equal(result.models.find(row => row.id === kling)?.nativePricing?.[0]?.unit, "seconds");
   assert.equal(result.models.at(-1)?.pricingNote, "price_not_returned_by_authenticated_source");
   assert.deepEqual(result.providers[0]?.requestParameters.pricePopulation, { listed: 101, requested: 101, observed: 101, receivedPriceRows: 100, withNativePrice: 100, withoutNativePrice: 1, unobserved: 0, normalized: 100, uncomparable: 0 });
@@ -153,4 +164,26 @@ test("authenticated fal rejects credentials reflected in successful catalogue or
       assert.equal(result.models[0]?.nativePricing, null);
     }
   }
+});
+
+test("an authenticated fal price says whose price it is, and will not compare with a public one", async () => {
+  // WAS `condition: null`, WHICH ASSERTS THAT NO CONDITION APPLIES. These prices come
+  // from the authenticated pricing endpoint and are what THIS account is charged. The old
+  // shape carried conditions.priceScope = "authenticated_account" per price; the 1.0
+  // rewrite dropped it to provider-level requestParameters, so a consumer reading one
+  // price point could not tell an account rate from a list rate -- and comparePriceSets,
+  // which keys on the condition, saw two nulls and called them directly comparable.
+  const { pricePoint } = await import("../src/catalogue/price-set.js");
+  const { comparePriceSets } = await import("../src/catalogue/compare.js");
+  const make = (id: string, condition: unknown) => pricePoint({
+    id, amount: "0.03", unit: "image", condition: condition as never,
+    sourceUrl: "https://api.fal.ai/v1/models/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published",
+  });
+  const account = make("fal:x:image:account", { kind: "price_scope", name: "authenticated_account" });
+  const publicList = make("fal:x:image", null);
+  assert.equal(account.condition?.kind, "price_scope");
+
+  const result = comparePriceSets([account], [publicList], { unit: "image", assumption: "one generated image" });
+  assert.equal(result.status, "refused", "an account price and an unconditioned price are not the same quantity");
+  assert.match(result.reason, /condition/i);
 });

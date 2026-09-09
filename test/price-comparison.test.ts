@@ -47,7 +47,15 @@ test("price comparison excludes Crazyrouter prices derived from OpenAI list pric
   assert.equal(result.population.comparableBeforePagination, 1);
 });
 
-test("price comparison reports a scoped contradiction without converting most-models marketing into a universal guarantee", async () => {
+// RENAMED. This was called "price comparison reports a scoped contradiction without
+// converting most-models marketing into a universal guarantee" and was rewritten during
+// the 1.0 migration to assert the opposite of what its name promised: 0.9 computed -10%
+// on a discount that is really a markup and flagged claimAssessment
+// "outside_range_for_this_model", while 1.0 refuses the comparison outright. The
+// assertions were updated to the new behaviour and the name was not, so the suite read as
+// if contradiction reporting still existed. The removal is now declared in DEPRECATIONS;
+// the name says what the test checks.
+test("price comparison refuses a markup-shaped discount rather than reporting a contradiction, as 1.0 declares", async () => {
   const { runPriceComparison } = await module();
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ rows: [crazy("gpt-4o", { discount: 1.1 })] }) });
   assert.equal(result.rows[0]?.status, "price_not_available");
