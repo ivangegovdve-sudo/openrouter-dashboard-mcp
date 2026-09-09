@@ -41,6 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Tags and history are needed by the manual-publish guard below.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -50,11 +53,13 @@ jobs:
           # and trusted publishing is negotiated against this registry.
           registry-url: https://registry.npmjs.org
 
-      # npm 11.5.1 or newer is required for trusted publishing. The runner image ships a
-      # recent npm, but pinning the requirement rather than assuming it means a failure
-      # says which version was missing instead of returning a confusing auth error.
-      - name: Require an npm that supports trusted publishing
+      # npm 11.5.1+ is REQUIRED for trusted publishing, and Node 22 bundles npm 10.x -- so
+      # this installs it rather than merely asserting it. The first version of this step
+      # only CHECKED the version, which would have failed every run instead of fixing
+      # anything: a precondition you verify but never satisfy is just a scheduled failure.
+      - name: Install an npm that supports trusted publishing
         run: |
+          npm install -g npm@^11.5.1
           version="$(npm --version)"
           echo "npm $version"
           node -e '
@@ -107,7 +112,17 @@ jobs:
             echo "::error::No tag v$packaged exists. Tag the release first so the published artifact is one a release names."
             exit 1
           fi
-          echo "main, and tag v$packaged exists."
+          # THE TAG MUST POINT AT WHAT IS BEING BUILT, not merely exist. Checking existence
+          # alone lets main advance past the tag and then publish a DIFFERENT tree under a
+          # tagged version -- the artifact would not be the one the release names, which is
+          # the whole guarantee this step claims to provide.
+          tagged_commit="$(git rev-parse "refs/tags/v$packaged^{commit}")"
+          head_commit="$(git rev-parse HEAD)"
+          if [ "$tagged_commit" != "$head_commit" ]; then
+            echo "::error::Tag v$packaged points at $tagged_commit but HEAD is $head_commit. Publish from the tagged commit, or move the tag."
+            exit 1
+          fi
+          echo "main, tag v$packaged exists, and it points at HEAD."
 
       - name: Publish with provenance
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
