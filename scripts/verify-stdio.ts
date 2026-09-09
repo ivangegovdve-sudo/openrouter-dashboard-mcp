@@ -31,6 +31,8 @@ import {
 import { sourceHealthOutputSchema } from "../src/tools/source-health.js";
 import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
 import { whatsChangedOutputSchema } from "../src/tools/whats-changed.js";
+import { contractOutputSchema } from "../src/tools/contract.js";
+import { speedOutputSchema } from "../src/tools/speed.js";
 
 import {
   allocateDeadDashboardUrl,
@@ -73,6 +75,7 @@ type VerificationEvidence = {
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_benchmarks",
   "dashboard_catalogue",
+  "dashboard_contract",
   "dashboard_free_models",
   "dashboard_github_movers",
   "dashboard_github_trending",
@@ -83,6 +86,7 @@ export const EXPECTED_TOOL_NAMES = [
   "dashboard_price_comparison",
   "dashboard_resolve_model",
   "dashboard_source_health",
+  "dashboard_speed",
   "dashboard_usage_leaders",
   "dashboard_whats_changed",
 ] as const;
@@ -128,6 +132,8 @@ export const STANDARD_CALLS = [
     arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_contract", arguments: {} },
+  { name: "dashboard_speed", arguments: {} },
   { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
@@ -187,6 +193,8 @@ export const DIAGNOSTIC_CALLS = [
     },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_contract", arguments: {} },
+  { name: "dashboard_speed", arguments: {} },
   { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
@@ -226,6 +234,8 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_model_economics", modelEconomicsOutputSchema],
   ["dashboard_key_inventory", keyInventoryOutputSchema],
   ["dashboard_matrix", matrixOutputSchema],
+  ["dashboard_contract", contractOutputSchema],
+  ["dashboard_speed", speedOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([
@@ -242,6 +252,8 @@ const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   // still applies to it, so a real key appearing here is still caught.
   "secretname",
   "tokenizer",
+  "maxtokens",
+  "tokencount",
   "totaltokens",
 ]);
 
@@ -824,8 +836,8 @@ function assertFreeModelsLiveInvariants(
       model.availability !== "available" ||
       model.isFree !== true ||
       model.freeKind !== "concrete_free" ||
-      !isZeroExactDecimal(model.pricing.promptUsdPerToken) ||
-      !isZeroExactDecimal(model.pricing.completionUsdPerToken) ||
+      !isZeroExactDecimal(model.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)?.amount ?? null) ||
+      !isZeroExactDecimal(model.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)?.amount ?? null) ||
       !model.outputModalities?.includes(input.outputModality)
     ) {
       throw new Error("free-model output contains an unavailable or non-free row");
@@ -864,7 +876,7 @@ export function assertModeResult(
   // It must still parse its own schema — asserted above — but demanding dashboard
   // failure evidence from a tool that never called the dashboard would be testing
   // a claim the tool does not make. It is exercised by its own unit tests instead.
-  const readsDashboard = name !== "dashboard_key_inventory";
+  const readsDashboard = !["dashboard_key_inventory", "dashboard_contract", "dashboard_speed"].includes(name);
 
   if (mode === "offline") {
     if (!readsDashboard) return;

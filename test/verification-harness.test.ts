@@ -216,7 +216,7 @@ test("dead-port allocation returns a loopback URL that refuses connections", asy
   );
 });
 
-test("standard call matrix covers the exact twelve tools and arguments", async () => {
+test("standard call matrix covers the exact fourteen exercised tools and arguments", async () => {
   const { STANDARD_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(STANDARD_CALLS, [
@@ -260,11 +260,13 @@ test("standard call matrix covers the exact twelve tools and arguments", async (
       arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_contract", arguments: {} },
+    { name: "dashboard_speed", arguments: {} },
     { name: "dashboard_matrix", arguments: {} },
   ]);
 });
 
-test("diagnostic call matrix covers all twelve deliberate assertions", async () => {
+test("diagnostic call matrix covers all fourteen deliberate assertions", async () => {
   const { DIAGNOSTIC_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(DIAGNOSTIC_CALLS, [
@@ -321,9 +323,11 @@ test("diagnostic call matrix covers all twelve deliberate assertions", async () 
       },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_contract", arguments: {} },
+    { name: "dashboard_speed", arguments: {} },
     { name: "dashboard_matrix", arguments: {} },
   ]);
-  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 12);
+  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 14);
 });
 
 test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {
@@ -760,7 +764,7 @@ test("free-model live invariants require zero concrete-free pricing", async () =
     );
 
     const nonzeroPrompt = structuredClone(free);
-    nonzeroPrompt.liveCandidates.data[0]!.pricing.promptUsdPerToken =
+    nonzeroPrompt.liveCandidates.data[0]!.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)!.amount =
       "0.000001";
     assert.throws(() =>
       assertModeResult(
@@ -773,7 +777,7 @@ test("free-model live invariants require zero concrete-free pricing", async () =
     );
 
     const nonzeroCompletion = structuredClone(free);
-    nonzeroCompletion.liveCandidates.data[0]!.pricing.completionUsdPerToken =
+    nonzeroCompletion.liveCandidates.data[0]!.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)!.amount =
       "0.000001";
     assert.throws(() =>
       assertModeResult(

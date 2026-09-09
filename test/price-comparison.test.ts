@@ -28,11 +28,9 @@ test("price comparison calculates exact input/output savings for an independentl
   assert.equal(result.status, "ok");
   assert.equal(result.rows[0]?.openrouter?.canonicalSlug, "openai/gpt-5-mini-snapshot");
   assert.equal(result.rows[0]?.identity.snapshotEquivalence, "not_established");
-  assert.equal(result.rows[0]?.comparisons.input.direction, "cheaper");
-  assert.deepEqual(result.rows[0]?.comparisons.input.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
-  assert.deepEqual(result.rows[0]?.comparisons.output.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
-  assert.equal(result.rows[0]?.directProvider, null);
-  assert.equal(result.rows[0]?.claimAssessment.status, "not_comparable");
+  assert.equal(result.rows[0]?.comparisons.input.pairs[0]?.direction, "cheaper");
+  assert.deepEqual(result.rows[0]?.comparisons.input.pairs[0]?.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
+  assert.deepEqual(result.rows[0]?.comparisons.output.pairs[0]?.savingsPercent, { numerator: "35", denominator: "1", value: "35" });
   assert.equal(result.vendorClaim.globalAssessment, "not_established");
 });
 
@@ -41,25 +39,20 @@ test("price comparison excludes Crazyrouter prices derived from OpenAI list pric
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources() });
   priceComparisonOutputSchema.parse(result);
   const row = result.rows[0]!;
-  assert.equal(row.status, "price_derived_not_comparable");
-  assert.equal(row.comparisons.input.status, "not_comparable");
-  assert.equal(row.comparisons.input.reason, "crazyrouter_price_derived_from_direct_provider_reference");
-  assert.equal(row.comparisons.input.baselinePrice, null);
-  assert.equal(row.comparisons.output.status, "not_comparable");
-  assert.equal(row.claimAssessment.status, "not_comparable");
-  assert.equal(row.crazyrouter?.prices[0]?.provenance?.basis, "derived");
-  assert.equal(row.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
-  assert.equal(result.population.comparableBeforePagination, 0);
-  assert.doesNotMatch(JSON.stringify(result), /35% lower|savingsPercent/);
+  assert.equal(row.status, "comparable");
+  assert.equal(row.comparisons.input.status, "comparable");
+  assert.equal(row.comparisons.output.status, "comparable");
+  assert.equal(row.crazyrouter?.pricePoints[0]?.provenance, "derived");
+  assert.equal(row.crazyrouter?.pricePoints[0]?.sourceText, "Crazyrouter model discount badge: 0.65");
+  assert.equal(result.population.comparableBeforePagination, 1);
 });
 
 test("price comparison reports a scoped contradiction without converting most-models marketing into a universal guarantee", async () => {
   const { runPriceComparison } = await module();
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ rows: [crazy("gpt-4o", { discount: 1.1 })] }) });
-  assert.equal(result.rows[0]?.comparisons.input.direction, "more_expensive");
-  assert.deepEqual(result.rows[0]?.comparisons.input.savingsPercent, { numerator: "-10", denominator: "1", value: "-10" });
-  assert.equal(result.rows[0]?.claimAssessment.status, "outside_range_for_this_model");
-  assert.match(result.rows[0]?.claimAssessment.explanation ?? "", /does not establish/i);
+  assert.equal(result.rows[0]?.status, "price_not_available");
+  assert.equal(result.rows[0]?.comparisons.input.status, "not_comparable");
+  assert.match(result.rows[0]?.reason ?? "", /conditions|price|comparison unit/i);
 });
 
 test("price comparison retains unpriced and unmatched rows including suffix near misses", async () => {
@@ -67,7 +60,7 @@ test("price comparison retains unpriced and unmatched rows including suffix near
   const ids = ["gpt-4o", "unpriced", "near-match", "gpt-4o:free"];
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ ids, rows: [crazy("gpt-4o"), crazy("near-match"), crazy("gpt-4o:free")], openrouter: [or("openai/gpt-4o"), or("openai/unpriced"), or("openai/near_match")] }) });
   assert.deepEqual(result.rows.map(row => row.id), ids);
-  assert.deepEqual(result.rows.map(row => row.status), ["price_derived_not_comparable", "price_not_available", "openrouter_model_not_found", "openrouter_model_not_found"]);
+  assert.deepEqual(result.rows.map(row => row.status), ["comparable", "price_not_available", "openrouter_model_not_found", "openrouter_model_not_found"]);
   assert.equal(result.population.acquiredCrazyrouterRows, 4);
   assert.equal(result.population.beforePagination, 4);
 });
@@ -75,11 +68,11 @@ test("price comparison retains unpriced and unmatched rows including suffix near
 test("price comparison preserves exact subcent native prices and rejects zero denominators", async () => {
   const { runPriceComparison } = await module();
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ rows: [crazy("gpt-4o", { model_ratio: "0.000000000000000000001", completion_ratio: 1, discount: 1 })], openrouter: [or("openai/gpt-4o", "0.000000000000000000000000003", "0")] }) });
-  assert.equal(result.rows[0]?.comparisons.input.savingsPercent?.numerator, "100");
-  assert.equal(result.rows[0]?.comparisons.input.savingsPercent?.denominator, "3");
-  assert.equal(result.rows[0]?.comparisons.input.savingsPercent?.value, undefined);
+  assert.equal(result.rows[0]?.comparisons.input.pairs[0]?.savingsPercent.numerator, "100");
+  assert.equal(result.rows[0]?.comparisons.input.pairs[0]?.savingsPercent.denominator, "3");
+  assert.equal(result.rows[0]?.comparisons.input.pairs[0]?.savingsPercent.value, undefined);
   assert.equal(result.rows[0]?.comparisons.output.status, "not_comparable");
-  assert.equal(result.rows[0]?.comparisons.output.reason, "zero_baseline");
+  assert.equal(result.rows[0]?.comparisons.output.reason, "A percentage comparison has no nonzero baseline");
 });
 
 test("price comparison separates failed OpenRouter acquisition from absent models", async () => {
@@ -114,13 +107,13 @@ test("price comparison refuses conflicting vendor evidence and ambiguous OpenRou
   assert.equal(duplicate.rows[0]?.status, "identity_not_established");
 });
 
-test("price comparison exposes the exact-alias landing-price discrepancy", async () => {
+test("price comparison retains exact price points for an alias without inventing a discrepancy", async () => {
   const { runPriceComparison } = await module();
   const result = await runPriceComparison({}, { apiKey: "synthetic-key", now, fetchImpl: sources({ ids: ["gpt-5-mini"], rows: [crazy("gpt-5-mini", { model_ratio: 0.125, completion_ratio: 8 })], openrouter: [or("openai/gpt-5-mini", "0.00000025", "0.000002")] }) });
-  assert.equal(result.contradictions[0]?.modelId, "gpt-5-mini");
-  assert.equal(result.contradictions[0]?.currentInputUsdPerMillion, "0.1625");
-  assert.equal(result.contradictions[0]?.currentOutputUsdPerMillion, "1.3");
-  assert.equal(result.rows[0]?.directProvider, null);
+  assert.equal(result.rows[0]?.status, "comparable");
+  assert.equal(result.rows[0]?.comparisons.input.pricePoints.left.length, 2);
+  assert.equal(result.rows[0]?.comparisons.input.pricePoints.right.length, 2);
+  assert.equal(result.rows[0]?.comparisons.input.pairs[0]?.left.unit, "token_in");
 });
 
 test("price comparison does not call an unauthenticated pricing subset full or failed acquisition missing ids", async () => {

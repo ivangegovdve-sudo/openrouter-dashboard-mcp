@@ -16,16 +16,16 @@ const transport = new StdioClientTransport({ command: process.execPath, args: [r
   env: { FAL_API_KEY: falKey, CRAZYROUTER_API_KEY: crazyKey }, stderr: "pipe" });
 const startedAt = new Date().toISOString();
 const falChecks = [
-  { id: "fal-ai/bytedance/seedream/v4/text-to-image", value: "0.03", unit: "usd_per_image" },
-  { id: "fal-ai/flux-pro/kontext", value: "0.04", unit: "usd_per_image" },
-  { id: "fal-ai/kling-video/v2.5-turbo/pro/image-to-video", value: "0.07", unit: "usd_per_video_second" },
+  { id: "fal-ai/bytedance/seedream/v4/text-to-image", value: "0.03", unit: "image" },
+  { id: "fal-ai/flux-pro/kontext", value: "0.04", unit: "image" },
+  { id: "fal-ai/kling-video/v2.5-turbo/pro/image-to-video", value: "0.07", unit: "video_second" },
 ] as const;
 const sharedIds = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"];
 try {
   await client.connect(transport);
   const tools = (await client.listTools()).tools;
   assert.deepEqual(tools.map(tool => tool.name).sort(), [...EXPECTED_TOOL_NAMES].sort());
-  assert.equal(client.getServerVersion()?.version, "0.9.0");
+  assert.equal(client.getServerVersion()?.version, "1.0.0");
   assert.ok(tools.every(tool => tool.annotations?.readOnlyHint));
   const catalogueCall = await client.callTool({ name: "dashboard_catalogue", arguments: {
     providers: ["fal", "crazyrouter"], modelIds: [...falChecks.map(check => check.id), ...sharedIds], limit: 20,
@@ -49,9 +49,9 @@ try {
   const priceChecks = falChecks.map(check => {
     const model = catalogue.models.find(model => model.provider === "fal" && model.id === check.id);
     assert.ok(model, "Required fal identity was not retained");
-    const actual = model.pricing.prices.find(price => price.unit === check.unit)?.value;
+    const actual = model.pricePoints.find(price => price.unit === check.unit)?.amount;
     // A source limit is recorded honestly. Never turn unknown into a passing price assertion.
-    return { ...check, actual: actual ?? null, status: actual === undefined ? "unobserved" : actual === check.value ? "matched" : "mismatch", reason: model.pricing.reason ?? null };
+    return { ...check, actual: actual ?? null, status: actual === undefined ? "unobserved" : actual === check.value ? "matched" : "mismatch", reason: model.pricingNote ?? null };
   });
   const evidence = { startedAt, finishedAt: new Date().toISOString(), version: client.getServerVersion()?.version,
     tools: tools.map(tool => tool.name), catalogue, comparison, priceChecks, noInferenceRequested: true };
@@ -62,14 +62,13 @@ try {
   for (const id of sharedIds) {
     const row = comparison.rows.find(row => row.id === id);
     assert.ok(row, "Required shared identity was not retained");
-    assert.equal(row.status, "price_derived_not_comparable");
-    assert.equal(row.comparisons.input.status, "not_comparable");
-    assert.equal(row.comparisons.output.status, "not_comparable");
-    assert.equal(row.comparisons.input.savingsPercent, undefined);
-    assert.equal(row.comparisons.output.savingsPercent, undefined);
-    assert.equal(row.claimAssessment.status, "not_comparable");
-    assert.equal(row.crazyrouter?.prices[0]?.provenance?.basis, "derived");
-    assert.equal(row.crazyrouter?.prices[0]?.provenance?.observedMultiplier, "0.65");
+    assert.equal(row.status, "comparable");
+    assert.equal(row.comparisons.input.status, "comparable");
+    assert.equal(row.comparisons.output.status, "comparable");
+    assert.ok(row.comparisons.input.pairs[0]?.savingsPercent);
+    assert.ok(row.comparisons.output.pairs[0]?.savingsPercent);
+    assert.equal(row.crazyrouter?.pricePoints[0]?.provenance, "derived");
+    assert.ok(row.crazyrouter?.pricePoints[0]?.derivedFrom);
   }
-  console.log(JSON.stringify({ version: evidence.version, tools: tools.length, catalogueProviders: catalogue.providers.map(p => ({ provider: p.provider, status: p.status, population: p.population, pricePopulation: p.requestParameters.pricePopulation })), priceChecks, sharedModels: comparison.rows.map(row => ({ id: row.id, status: row.status, inputSavingsPercent: row.comparisons.input.savingsPercent, outputSavingsPercent: row.comparisons.output.savingsPercent, claimAssessment: row.claimAssessment.status })), comparisonPopulation: comparison.population }));
+  console.log(JSON.stringify({ version: evidence.version, tools: tools.length, catalogueProviders: catalogue.providers.map(p => ({ provider: p.provider, status: p.status, population: p.population, pricePopulation: p.requestParameters.pricePopulation })), priceChecks, sharedModels: comparison.rows.map(row => ({ id: row.id, status: row.status, inputSavingsPercent: row.comparisons.input.pairs[0]?.savingsPercent.value ?? null, outputSavingsPercent: row.comparisons.output.pairs[0]?.savingsPercent.value ?? null })), comparisonPopulation: comparison.population }));
 } finally { await client.close(); }

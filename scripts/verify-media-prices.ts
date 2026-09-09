@@ -27,7 +27,7 @@ const comparisons: Array<Record<string, unknown>> = [];
 function price(provider: string, id: string) {
   const model = catalogue.models.find(m => m.provider === provider && m.id === id);
   assert.ok(model, `${provider}/${id}: missing identity`);
-  const p = model.pricing.prices[0]; assert.ok(p?.value, `${provider}/${id}: no exact terminating price`);
+  const p = model.pricePoints[0]; assert.ok(p?.amount, `${provider}/${id}: no exact terminating price`);
   return p;
 }
 const deepUrl = "https://deepinfra.com/pricing", deepHtml = await page(deepUrl);
@@ -37,8 +37,8 @@ const deepCells = [...deepRow[1]!.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)];
 const deepPublished = /^\$\s*(\d+(?:\.\d+)?)$/.exec(stripTags(deepCells[1]?.[1] ?? ""))?.[1];
 assert.ok(deepPublished, "DeepInfra published price missing");
 const deepPrice = price("deepinfra", "black-forest-labs/FLUX-1.1-pro");
-assert.equal(deepPrice.value, exactDecimalRatio(deepPublished).value);
-comparisons.push({ provider: "deepinfra", id: "black-forest-labs/FLUX-1.1-pro", native: deepPrice.native, converted: deepPrice.value, unit: deepPrice.unit, published: deepPublished, sourceUrl: deepUrl, match: true });
+  assert.equal(deepPrice.amount, exactDecimalRatio(deepPublished).value);
+comparisons.push({ provider: "deepinfra", id: "black-forest-labs/FLUX-1.1-pro", native: catalogue.models.find(m => m.provider === "deepinfra" && m.id === "black-forest-labs/FLUX-1.1-pro")?.nativePricing ?? null, converted: deepPrice.amount, unit: deepPrice.unit, published: deepPublished, sourceUrl: deepUrl, match: true });
 
 for (const id of DEFAULT_WAVESPEED_ENRICH_IDS) {
   const url = `https://wavespeed.ai/models/${id}`, html = await page(url);
@@ -48,21 +48,21 @@ for (const id of DEFAULT_WAVESPEED_ENRICH_IDS) {
   const published = /^\$\s*(\d+(?:\.\d+)?)$/.exec(stripTags(cells.at(-1)?.[1] ?? ""))?.[1];
   assert.ok(published, `WaveSpeed five-second price absent: ${id}`);
   const p = price("wavespeed", id);
-  assert.equal(p.value, exactDecimalRatio(published, "1", "5").value);
-  comparisons.push({ provider: "wavespeed", id, native: p.native, converted: p.value, unit: p.unit, publishedForFiveSeconds: published, sourceUrl: url, match: true });
+  assert.equal(p.amount, exactDecimalRatio(published, "1", "5").value);
+  comparisons.push({ provider: "wavespeed", id, native: catalogue.models.find(m => m.provider === "wavespeed" && m.id === id)?.nativePricing ?? null, converted: p.amount, unit: p.unit, publishedForFiveSeconds: published, sourceUrl: url, match: true });
 }
 const falId = "fal-ai/bytedance/seedream/v4/text-to-image", falUrl = `https://fal.ai/models/${falId}`;
 const falText = stripTags(await page(falUrl));
 const falPublished = /Your request\s+will cost\s+\$\s*(\d+(?:\.\d+)?)\s+per image/.exec(falText)?.[1];
 assert.ok(falPublished, "Fal model page explicit per-image price absent");
 const falPrice = price("fal", falId);
-assert.equal(falPrice.value, exactDecimalRatio(falPublished).value);
-comparisons.push({ provider: "fal", id: falId, native: falPrice.native, converted: falPrice.value, unit: falPrice.unit, published: falPublished, sourceUrl: falUrl, match: true });
+assert.equal(falPrice.amount, exactDecimalRatio(falPublished).value);
+comparisons.push({ provider: "fal", id: falId, native: catalogue.models.find(m => m.provider === "fal" && m.id === falId)?.nativePricing ?? null, converted: falPrice.amount, unit: falPrice.unit, published: falPublished, sourceUrl: falUrl, match: true });
 
 console.log(JSON.stringify({ observedAt: new Date().toISOString(),
   population: catalogue.population,
   providers: catalogue.providers.map(provider => ({ provider: provider.provider, population: provider.population, pagesFetched: provider.requestParameters.pagesFetched,
-    pricedModels: catalogue.models.filter(m => m.provider === provider.provider && m.pricing.status === "available").length,
-    mediaPricedModels: catalogue.models.filter(m => m.provider === provider.provider && m.pricing.prices.some(p => ["usd_per_image", "usd_per_video_second"].includes(p.unit))).length,
+    pricedModels: catalogue.models.filter(m => m.provider === provider.provider && m.pricePoints.length > 0).length,
+    mediaPricedModels: catalogue.models.filter(m => m.provider === provider.provider && m.pricePoints.some(p => ["image", "megapixel", "video_second", "video"].includes(p.unit))).length,
   })), comparisons, comparisonCount: comparisons.length, comparedProviders: [...new Set(comparisons.map(c => c.provider))],
 }, null, 2));
