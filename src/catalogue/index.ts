@@ -4,6 +4,7 @@ import { parseNativeJson } from "./json.js";
 export * from "./schemas.js";
 export * from "./decimal.js";
 export * from "./json.js";
+export * from "./price-set.js";
 
 export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes"];
 export const MEDIA_CATALOGUE_SOURCES: Record<MediaCatalogueProviderId, string> = {
@@ -169,16 +170,25 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     for (let index = 0; index < models.length; index++) {
       const model = models[index]!;
       if (checked.has(model.id)) models[index] = normalizeFalAuthenticated(rows[model.provenance.sourceIndex]!, model.provenance.sourceUrl, observedAt, model.provenance.sourceIndex, priceById.get(model.id) ?? []);
-      else model.pricing = { status: "price_not_available", prices: [], native: null, reason: failedIds.has(model.id) ? "pricing_source_unavailable" : priceError === "PRICE_BATCH_BUDGET_EXHAUSTED" ? "pricing_not_observed_price_batch_budget" : "pricing_not_observed_after_source_failure" };
+      else {
+        model.pricePoints = [];
+        model.pricingState = "unknown";
+        model.pricingNote = failedIds.has(model.id)
+          ? "pricing_source_unavailable"
+          : priceError === "PRICE_BATCH_BUDGET_EXHAUSTED"
+            ? "pricing_not_observed_price_batch_budget"
+            : "pricing_not_observed_after_source_failure";
+        model.nativePricing = null;
+      }
     }
     // Pricing requests are deduplicated by endpoint id, unlike retained source
     // rows. Keep every price denominator on that same identity basis even if
     // upstream pagination repeats a model (the catalogue stays partial).
-    const normalized = new Set(models.filter(model => model.pricing.status === "available").map(model => model.id)).size;
+    const normalized = new Set(models.filter(model => model.pricePoints.length > 0).map(model => model.id)).size;
     const priceExclusionReasons: Record<string, number> = {};
     const reasonIds = new Map<string, Set<string>>();
-    for (const model of models) if (model.pricing.reason) {
-      const ids = reasonIds.get(model.pricing.reason) ?? new Set<string>(); ids.add(model.id); reasonIds.set(model.pricing.reason, ids);
+    for (const model of models) if (model.pricingNote) {
+      const ids = reasonIds.get(model.pricingNote) ?? new Set<string>(); ids.add(model.id); reasonIds.set(model.pricingNote, ids);
     }
     for (const [reason, ids] of reasonIds) priceExclusionReasons[reason] = ids.size;
     requestParameters.pricePopulationBasis = "Unique endpoint ids; catalogue received and retained counts remain source-row counts. Reason counts are distinct ids per reason.";
@@ -209,7 +219,11 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
       requestParameters.pricingError = safeError(cause);
       requestParameters.priceCoverageRule = "Pricing source acquisition failed; no conclusion about price publication can be drawn. Collected model identities are retained.";
       delete requestParameters.publishedPricingRows;
-      for (const model of models) model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
+      for (const model of models) {
+        model.pricePoints = [];
+        model.pricingState = "unknown";
+        model.pricingNote = "pricing_source_unavailable";
+      }
     }
   }
   if (provider === "wavespeed" && models.length) {
@@ -237,21 +251,24 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
         // superseding an already verified catalogue price and source. Merely
         // inheriting old price fields would invent detail-source provenance.
         const independentDetail = normalizeWaveSpeed({ type: original.nativeType, ...detail }, detailUrl, observedAt, original.provenance.sourceIndex);
-        if (original.pricing.status === "available" && independentDetail.pricing.status !== "available") {
+        if (original.pricePoints.length > 0 && independentDetail.pricePoints.length === 0) {
           const detailError = "DETAIL_PRICE_NOT_ESTABLISHED";
           failures.push({ id, error: detailError });
-          detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "price_not_comparable", error: detailError, reason: independentDetail.pricing.reason, retainedPriceSourceUrl: original.provenance.sourceUrl });
+          detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "price_not_comparable", error: detailError, reason: independentDetail.pricingNote, retainedPriceSourceUrl: original.provenance.sourceUrl });
           continue;
         }
         models[index] = candidate;
-        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: candidate.pricing.status === "available" ? "available" : "price_not_comparable", ...(candidate.pricing.reason ? { reason: candidate.pricing.reason } : {}) });
+        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: candidate.pricePoints.length > 0 ? "available" : "price_not_comparable", ...(candidate.pricingNote ? { reason: candidate.pricingNote } : {}) });
         observed.push(id);
       } catch (cause) {
         const detailError = safeError(cause);
         failures.push({ id, error: detailError });
         const model = models[index]!;
-        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "unavailable", error: detailError, ...(model.pricing.status === "available" ? { retainedPriceSourceUrl: model.provenance.sourceUrl } : {}) });
-        if (model.pricing.status !== "available") model.pricing = { status: "price_not_available", prices: [], native: model.pricing.native, reason: "pricing_source_unavailable" };
+        detailPriceObservations.push({ id, sourceUrl: detailUrl, status: "unavailable", error: detailError, ...(model.pricePoints.length > 0 ? { retainedPriceSourceUrl: model.provenance.sourceUrl } : {}) });
+        if (model.pricePoints.length === 0) {
+          model.pricingState = "unknown";
+          model.pricingNote = "pricing_source_unavailable";
+        }
         // A missing or malformed individual model does not invalidate another
         // model's read. Shared auth, resource, network and deadline failures
         // stop the bounded batch; neither kind is retried.
