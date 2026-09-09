@@ -80,8 +80,6 @@ test("rejects an oversized declared JSON body before reading and cancels it", as
       });
     },
   });
-  const startedAt = performance.now();
-
   await assert.rejects(
     client.get(
       "/api/public/v2/manifest",
@@ -94,7 +92,17 @@ test("rejects an oversized declared JSON body before reading and cancels it", as
       !error.message.includes("17"),
   );
 
-  assert.ok(performance.now() - startedAt < 100);
+  // A WALL-CLOCK BOUND USED TO SIT HERE: `performance.now() - startedAt < 100`. It failed
+  // roughly one run in six on a loaded machine, always on that line and never on the
+  // behaviour, which makes a red suite mean "the box was busy" instead of "the code is
+  // wrong" -- and a suite that cries wolf gets its failures waved through.
+  //
+  // Nothing is lost by removing it, because the two assertions below plus the rejection
+  // above already say everything it said, without consulting a clock:
+  //   - `kind === "invalid_payload"` proves the request did NOT reach its 200ms timeout,
+  //     since a timeout rejects with kind "timeout" instead. That is the fast-fail claim.
+  //   - `pulled === false` proves the body was never read, which is the "before reading"
+  //     claim, and is what the elapsed time was standing in for.
   assert.equal(pulled, false);
   assert.equal(cancelled, true);
 });

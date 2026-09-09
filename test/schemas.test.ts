@@ -40,7 +40,7 @@ test("preserves exact integer, decimal, and opaque cursor strings", () => {
   const parsed = liveModelsResponseSchema.parse(liveModelsFixture);
 
   assert.equal(parsed.data[0]?.contextLength, "90071992547409930001");
-  assert.equal(parsed.data[0]?.pricing.promptUsdPerToken, "0.0000001250");
+  assert.equal(parsed.data[0]?.pricePoints.find((point) => point.unit === "token_in")?.amount, "0.0000001250");
   assert.equal(parsed.data[0]?.performance?.throughputTps, "123.4500");
   assert.equal(parsed.cursor, opaqueCursor);
   assert.equal(exactIntegerStringSchema.safeParse("01").success, false);
@@ -161,4 +161,36 @@ test("validates the separate public error envelope and rejects extra fields", ()
     publicErrorSchema.safeParse({ ...payload, responseBody: "private" }).success,
     false,
   );
+});
+
+test("a migrated legacy price never invents the source it came from", async () => {
+  // WAS A FABRICATION. The legacy-pricing preprocessor hardcoded
+  // "https://dashboard.test/api/public/v2/live-models" -- a host that does not resolve --
+  // as source.url on every migrated point, and substituted "2026-01-01T00:00:00.000Z"
+  // for readAt whenever lastConfirmedAt was missing. Those are the two fields the 1.0
+  // contract exists to make trustworthy.
+  const { liveModelSchema } = await import("../src/dashboard/schemas/live-models.js");
+  const { liveModelFixture } = await import("./fixtures.js");
+  const { pricePoints: _points, pricingState: _state, lastConfirmedAt: _confirmed, ...base } = liveModelFixture as Record<string, unknown>;
+  const legacy = (extra: Record<string, unknown>) => ({
+    ...base,
+    pricing: { promptUsdPerToken: "0.0000025", completionUsdPerToken: "0.00001" },
+    ...extra,
+  });
+
+  const confirmed = liveModelSchema.parse(legacy({ lastConfirmedAt: "2026-08-19T06:00:00.000Z" })) as any;
+  assert.equal(confirmed.pricePoints.length, 2);
+  for (const point of confirmed.pricePoints) {
+    assert.doesNotMatch(point.source.url, /dashboard\.test/, "the migrated URL must not name a nonexistent host");
+    assert.equal(point.source.readAt, "2026-08-19T06:00:00.000Z", "readAt must be the record's own confirmed time");
+  }
+
+  // The invented "2026-01-01T00:00:00.000Z" readAt fallback was, on inspection,
+  // UNREACHABLE: liveModelObjectSchema requires lastConfirmedAt, so a record lacking it
+  // is rejected after preprocessing and the fabricated date never reaches a consumer.
+  // Only the fabricated URL was ever live. That requirement is what makes the fallback
+  // unnecessary, so it is asserted here rather than assumed -- if lastConfirmedAt ever
+  // becomes optional, this test fails and the fabrication becomes reachable again.
+  const { lastConfirmedAt: _drop, ...withoutConfirmation } = legacy({}) as Record<string, unknown>;
+  assert.throws(() => liveModelSchema.parse(withoutConfirmation), /lastConfirmedAt/);
 });

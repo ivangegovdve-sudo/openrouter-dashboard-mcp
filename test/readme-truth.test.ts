@@ -122,7 +122,7 @@ test("the opening line's tool count matches the number of tools actually served"
   const live = await liveToolNames();
   const words = [
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
-    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
   ];
   const word = words[live.length];
   assert.ok(
@@ -138,4 +138,51 @@ test("the opening line's tool count matches the number of tools actually served"
     new RegExp(`\\b${word} bounded tools\\b`),
     `the opening line should say "${word} bounded tools" for ${live.length} served tools`,
   );
+});
+
+test("the README states outright that 1.0 skips 0.9.0", () => {
+  // A consumer watching version numbers sees 0.8.0 then 1.0.0 and reasonably concludes
+  // they missed a release. They did not: 0.9.0 was built here and never published. The
+  // npmjs page IS this README, so the statement has to live here, not only in docs/.
+  // An earlier draft of the deprecation copy went further and claimed "0.9.0 shipped
+  // before this mechanism existed", which is a false admission about a release that
+  // never existed -- worse than saying nothing.
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  assert.match(readme, /no 0\.9\.0 on npm/i, "the README must say plainly that 0.9.0 was never published");
+  assert.match(readme, /0\.8\.0/, "and must name the version consumers are actually upgrading from");
+  assert.doesNotMatch(readme, /0\.9\.0 shipped/i, "nothing may claim 0.9.0 shipped");
+
+  const notes = readFileSync(new URL("../docs/release-1.0.0.md", import.meta.url), "utf8");
+  assert.match(notes, /skips 0\.9\.0/i);
+  assert.doesNotMatch(notes, /0\.9\.0 shipped/i);
+});
+
+test("the documented refusal statuses are the statuses the code returns", async () => {
+  // THE README ASSERTED A STATUS THE PRIMITIVE DOES NOT RETURN. It said mismatched units,
+  // conditions or a zero baseline produce `not_comparable`; comparePriceSets returns
+  // `refused`, and only the tool layer renames it. Two layers, two names, and the doc
+  // named one of them for both -- a README describing a contract the package does not
+  // have, which is the exact defect this release exists to remove. Caught by the
+  // cross-family review of the fix branch, not by me.
+  const { comparePriceSets } = await import("../src/catalogue/price-set.js").then(() => import("../src/catalogue/compare.js"));
+  const { pricePoint } = await import("../src/catalogue/price-set.js");
+  const point = (id: string, amount: string, condition: unknown) => pricePoint({
+    id, amount, unit: "image", condition: condition as never,
+    sourceUrl: "https://example.test/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published",
+  });
+  const basis = { unit: "image" as const, assumption: "one generated image" };
+
+  // The primitive refuses under the name the README now gives it.
+  for (const [left, right] of [
+    [point("l", "0.03", null), point("r", "0", null)],
+    [point("l", "0.03", { kind: "price_scope", name: "authenticated_account" }), point("r", "0.02", null)],
+  ] as const) {
+    assert.equal(comparePriceSets([left], [right], basis).status, "refused");
+  }
+
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  assert.match(readme, /price-set primitive returns `status: "refused"`/,
+    "the README must name the status the primitive actually returns");
+  assert.match(readme, /`status: "not_comparable"`/,
+    "and the status the tool layer renames it to");
 });
