@@ -81,7 +81,7 @@ jobs:
           # could inject commands into the one job holding id-token: write. It is pinned to
           # a strict semver shape here, and passed through env rather than interpolated
           # there. Both halves matter: validation alone still interpolates.
-          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
             echo "::error::package.json version '$version' is not a plain semver string; refusing to pass it to the publish job"
             exit 1
           fi
@@ -154,7 +154,7 @@ jobs:
         run: |
           # Re-validated on arrival: the producing job is trusted to have checked, but this
           # job is the one that can publish, so it does not take that on faith.
-          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
             echo "::error::Refusing a version string that is not plain semver"
             exit 1
           fi
@@ -251,6 +251,17 @@ jobs:
           DIST_TAG: ${{ steps.disttag.outputs.tag }}
           IS_PRIVATE: ${{ github.event.repository.private }}
         run: |
+          # ALREADY PUBLISHED IS NOT A FAILURE. The two supported paths overlap: a manual
+          # publish followed by publishing the corresponding GitHub release runs this job
+          # twice for the same version, and npm permanently refuses a republish. Treating
+          # that as an error would turn a correct, already-completed release into a red
+          # pipeline and invite someone to "fix" it.
+          version="$(node -p "require('./package.json').version")"
+          existing="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$version" || echo 000)"
+          if [ "$existing" = "200" ]; then
+            echo "::notice::$version is already on the registry; nothing to publish. The confirmation step below still verifies it resolves."
+            exit 0
+          fi
           if [ "$IS_PRIVATE" = "false" ]; then
             echo "Public repository: publishing with a provenance attestation."
             npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
@@ -276,7 +287,10 @@ jobs:
         run: |
           expected="$VERSION"
           for attempt in $(seq 1 30); do
-            code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$expected")"
+            # --connect-timeout/--max-time make the five-minute bound REAL. Without them a
+            # stalled TCP or TLS handshake blocks forever and the job hangs after npm may
+            # already have published -- a loop that claims a timeout it does not enforce.
+            code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$expected" || echo 000)"
             echo "attempt $attempt: registry returned $code for $expected"
             if [ "$code" = "200" ]; then
               echo "The registry resolves $expected."
