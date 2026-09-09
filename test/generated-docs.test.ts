@@ -46,7 +46,24 @@ test("the vocabulary shipped in the tarball is the vocabulary the schemas define
   // what the schemas say right now, so the artifact a consumer reads cannot lag the code.
   const { readFile } = await import("node:fs/promises");
   const { contractVocabulary, exportPackageFacts } = await import("../scripts/generate-docs.js");
-  const shipped = JSON.parse(await readFile(new URL("../build/contract-vocabulary.json", import.meta.url), "utf8"));
+
+  // THIS TEST READS A BUILD ARTIFACT, AND THAT IS THE POINT -- it checks what actually
+  // SHIPS, not what the source says. It therefore requires `npm run build` to have run,
+  // which is why CI now builds before it tests. It turned main red with a bare ENOENT
+  // because it passed locally against a build/ directory left behind by an earlier build:
+  // the same stale-artifact trap that made the local suite count 347 tests where a clean
+  // checkout counts 337. A failure that says what to do beats a filesystem error.
+  const vocabularyPath = new URL("../build/contract-vocabulary.json", import.meta.url);
+  let raw = "";
+  try {
+    raw = await readFile(vocabularyPath, "utf8");
+  } catch {
+    assert.fail(
+      "build/contract-vocabulary.json does not exist, so what this package SHIPS cannot be checked. " +
+      "Run `npm run build` first. Never soften this to a skip: the built artifact is the subject of the test.",
+    );
+  }
+  const shipped = JSON.parse(raw);
   const facts = await exportPackageFacts();
 
   assert.deepEqual(shipped.contract, contractVocabulary(), "the shipped vocabulary must equal the schemas' own");
