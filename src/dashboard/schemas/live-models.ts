@@ -6,6 +6,7 @@ import {
   publicCollectionSchema,
 } from "./common.js";
 import { pricePointSchema } from "../../contract.js";
+import { dashboardBaseUrl } from "../../config.js";
 
 /**
  * DELIBERATELY NOT AN ENUM.
@@ -122,15 +123,27 @@ export const liveModelSchema = z.preprocess((raw) => {
   if (!Object.hasOwn(value, "pricing")) return raw;
   const pricing = value.pricing;
   if (pricing === null || typeof pricing !== "object" || Array.isArray(pricing)) return raw;
-  const source = { url: "https://dashboard.test/api/public/v2/live-models", readAt: typeof value.lastConfirmedAt === "string" ? value.lastConfirmedAt : "2026-01-01T00:00:00.000Z" };
+  // NEITHER OF THESE MAY BE INVENTED. This hardcoded the URL
+  // "https://dashboard.test/api/public/v2/live-models" -- a host that does not exist --
+  // and fell back to a readAt of "2026-01-01T00:00:00.000Z" whenever lastConfirmedAt was
+  // absent. Both were then emitted through source.url and source.readAt, the very fields
+  // 1.0 asks consumers to trust: the release's promise is that every price point names
+  // where and when it was read, and this path made both up. The URL now comes from the
+  // configured dashboard the response actually came from, and a record with no confirmed
+  // read time yields no price points at all rather than a fabricated one.
+  const readAt = typeof value.lastConfirmedAt === "string" ? value.lastConfirmedAt : null;
+  const source = readAt === null ? null : { url: new URL("/api/public/v2/live-models", dashboardBaseUrl()).href, readAt };
   const window = typeof value.pricingWindow === "string" ? value.pricingWindow.toLowerCase() : "";
   const condition = window.includes("asap") ? { kind: "latency_window", name: "ASAP" } : window.includes("balanced") ? { kind: "latency_window", name: "Balanced" } : window.includes("flex") ? { kind: "latency_window", name: "Flex" } : null;
-  const pricePoints = Object.entries(pricing as Record<string, unknown>).flatMap(([name, amount]) => {
+  const pricePoints = source === null ? [] : Object.entries(pricing as Record<string, unknown>).flatMap(([name, amount]) => {
     if (typeof amount !== "string") return [];
     const unit = name === "promptUsdPerToken" ? "token_in" : name === "completionUsdPerToken" ? "token_out" : null;
     return unit === null ? [] : [{ id: `${String(value.provider)}:${String(value.id)}:${unit}`, amount, unit, condition, source, provenance: "published" }];
   });
   const { pricing: _pricing, pricingWindow: _pricingWindow, ...rest } = value;
+  // A legacy record whose read time was never confirmed is unknown, not unpriced: the
+  // prices exist upstream, we simply cannot say when they were read. Both cases already
+  // land on "unknown", which is the correct third state.
   return { ...rest, pricePoints, pricingState: pricePoints.length > 0 ? "published" : "unknown" };
 }, liveModelObjectSchema);
 

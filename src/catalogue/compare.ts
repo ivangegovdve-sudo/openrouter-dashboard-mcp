@@ -156,7 +156,14 @@ export function comparePriceSets(left: PricePoint[], right: PricePoint[], basis:
   for (const leftPoint of left) {
     for (const rightPoint of right) {
       if (leftPoint.unit !== rightPoint.unit || conditionKey(leftPoint) !== conditionKey(rightPoint)) continue;
-      if (rightPoint.amount === "0") {
+      // NUMERIC ZERO, NOT THE LITERAL STRING "0". This compared the amount against "0"
+      // by string equality, so "0.0", "0.00" and "0.000" -- all valid decimal amounts
+      // under the price-point schema, and all exactly what a free model quotes -- walked
+      // past the guard. percentageDifference then hit its own numeric zero check and
+      // returned 0%, so a free model against a paid one was reported `comparable` with
+      // "0% cheaper" instead of being refused. The refusal rule was defeated by a
+      // trailing zero.
+      if (decimalRatio(rightPoint.amount).numerator === 0n) {
         return { status: "refused", reason: "A percentage comparison has no nonzero baseline", leftUnits, rightUnits };
       }
       const comparison = compareDecimal(leftPoint.amount, rightPoint.amount);
