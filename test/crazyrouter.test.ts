@@ -232,3 +232,21 @@ test("Crazyrouter vendor joins require unique explicit ids on both sides", async
     assert.equal(crazyrouterIdentity(result.models[0]!).authorNamespace, undefined);
   }
 });
+
+test("one unparseable time-band price cannot take down the whole catalogue", async () => {
+  // WAS AN UNCAUGHT THROW. decimal()/perMillionToToken() reject a non-terminating source
+  // value, and the time-band branch called them bare while the per-token branch beside it
+  // wrapped identical calls in try. A single bad row from Crazyrouter therefore rejected
+  // collectCrazyrouterCatalogue and returned no catalogue at all -- one bad row taking
+  // down every model. A source we do not control must never be able to do that.
+  const collect = await collector();
+  const bad = tokenRow("banded", { time_pricing: { peak: { input: "1", output: "3" }, off_peak: { input: "1", output: "1/3" } } });
+  const result: any = await collect({ apiKey: "synthetic-key", now,
+    fetchImpl: source(list(["fine", "banded"]), pricing([tokenRow("fine"), bad])) });
+  assert.deepEqual(result.models.map((model: any) => model.id).sort(), ["banded", "fine"], "both identities retained");
+  const banded = result.models.find((model: any) => model.id === "banded");
+  assert.deepEqual(banded.pricePoints, [], "no partial band price is published");
+  assert.notEqual(banded.pricingState, "not_published", "unparseable is unknown, never a claim that no price exists");
+  const fine = result.models.find((model: any) => model.id === "fine");
+  assert.ok(fine.pricePoints.length > 0, "the healthy model beside it is still priced");
+});

@@ -129,19 +129,34 @@ function normalizeModel(args: {
     note = "native_billing_not_supported";
     const timeRows = timeBandRows(row);
     if (timeRows.length > 0) {
+      // GUARDED, LIKE ITS SIBLING BRANCH BELOW. `decimal` and `perMillionToToken` throw
+      // on a malformed or non-terminating source value, and this branch called them bare
+      // while the per-token branch a few lines down wrapped identical calls in try. So a
+      // single bad time-band value from Crazyrouter threw out of normalizeModel and
+      // rejected collectCrazyrouterCatalogue entirely: one unparseable row took down the
+      // whole catalogue instead of degrading that one model. A source we do not control
+      // must never be able to do that.
       note = "time_band_prices_published";
-      for (const band of timeRows) {
-        for (const [leg, value, unit] of [["input", band.input, "token_in"], ["output", band.output, "token_out"]] as const) {
-          pricePoints.push(normalizePricePoint({
-            id: `crazyrouter:${args.id}:${leg}:${band.name}`,
-            value: perMillionToToken(decimal(value)),
-            unit,
-            condition: { kind: "time_band", name: band.name, timezone: "Asia/Shanghai", hours: band.hours },
-            sourceUrl: CRAZYROUTER_PRICING_URL,
-            readAt: args.observedAt,
-            provenance: "published",
-          }));
+      try {
+        for (const band of timeRows) {
+          for (const [leg, value, unit] of [["input", band.input, "token_in"], ["output", band.output, "token_out"]] as const) {
+            pricePoints.push(normalizePricePoint({
+              id: `crazyrouter:${args.id}:${leg}:${band.name}`,
+              value: perMillionToToken(decimal(value)),
+              unit,
+              condition: { kind: "time_band", name: band.name, timezone: "Asia/Shanghai", hours: band.hours },
+              sourceUrl: CRAZYROUTER_PRICING_URL,
+              readAt: args.observedAt,
+              provenance: "published",
+            }));
+          }
         }
+      } catch {
+        // Partial time-band points would misrepresent a band-priced model as if only
+        // some bands existed, so the model is retained with no price and the reason is
+        // named. Unknown, not absent.
+        pricePoints.length = 0;
+        note = "time_band_price_unparseable";
       }
     } else if (row.quota_type === "0" && !row.billing_expr && !row.tiered_expr && !row.time_pricing && !row.video_pricing && !row.image_pricing && (!row.billing_mode || row.billing_mode === "per_token")) {
       note = "missing_or_invalid_price_coefficient";
@@ -168,7 +183,12 @@ function normalizeModel(args: {
       } catch { pricePoints.length = 0; }
     }
   }
-  const pricingState = pricePoints.length > 0 ? "published" : /unavailable|incomplete/.test(note) ? "unknown" : "not_published";
+  // The third state is decided by matching the note, which couples a state to the
+  // spelling of a free-text string -- add a reason and forget to list it here and the
+  // model silently claims "not_published", i.e. that the provider publishes no price,
+  // when the truth is that we could not read one. "unparseable" is listed for exactly
+  // that reason; a source we failed to parse is unknown, never an absence of price.
+  const pricingState = pricePoints.length > 0 ? "published" : /unavailable|incomplete|unparseable/.test(note) ? "unknown" : "not_published";
   return catalogueModelSchema.parse({ provider: "crazyrouter", id: args.id, displayName: args.id, mediaKind, nativeType,
     ...(outputModalities ? { outputModalities } : {}), pricePoints, pricingState, pricingNote: note,
     nativePricing: { catalogueRow: args.catalogueRow, pricingRow: row ?? null, vendor: args.vendor ?? null, groupRatios: args.groupRatios, identitySource: args.sourceUrl },
