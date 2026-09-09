@@ -144,11 +144,31 @@ export async function generateDocs({ check = false, readmePath = resolve(root, "
   return { version: facts.version, providers: facts.providers.length, tools: facts.tools.length, changed: actual !== expected };
 }
 
+/**
+ * SHIPPED IN THE TARBALL, so a consumer surface can check itself against this package
+ * rather than against a copy of it. The Open Dashboard page originally asserted its field
+ * names against a manifest committed into the site repo -- which nothing tied back to the
+ * package, so a stale or hand-edited manifest made the whole guard vacuous while still
+ * passing. Reviewer-caught on orchestrator-gpt#527. A guard that cannot go stale has to
+ * read the real artifact.
+ */
+async function writeContractVocabulary(facts: PackageFacts) {
+  const path = resolve(root, "build/contract-vocabulary.json");
+  await writeFile(path, JSON.stringify({ name: facts.name, version: facts.version, tools: facts.tools.map(tool => tool.name), contract: facts.contract }, null, 2) + String.fromCharCode(10));
+  return path;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.some(arg => !["--check", "--facts"].includes(arg))) throw Error("Use --check or --facts.");
   const facts = await exportPackageFacts();
   if (args.includes("--facts")) process.stdout.write(JSON.stringify(facts, null, 2) + "\n");
-  else console.log(JSON.stringify(await generateDocs({ check: args.includes("--check"), facts })));
+  else {
+    const result = await generateDocs({ check: args.includes("--check"), facts });
+    // Written on every generating run so the shipped vocabulary cannot lag the build that
+    // produced it. --check must not write, because a check is a read.
+    if (!args.includes("--check")) await writeContractVocabulary(facts);
+    console.log(JSON.stringify(result));
+  }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch(error => { console.error(error.message); process.exitCode = 1; });

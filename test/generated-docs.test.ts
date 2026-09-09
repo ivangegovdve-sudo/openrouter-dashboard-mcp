@@ -34,3 +34,27 @@ test("README guard detects a changed provider registry, tool registration or dis
     await assert.rejects(generateDocs({ check: true, readmePath, facts }), /disagree/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
+
+test("the vocabulary shipped in the tarball is the vocabulary the schemas define", async () => {
+  // SHIPPED SO A CONSUMER SURFACE CAN CHECK ITSELF AGAINST THIS PACKAGE rather than
+  // against a copy of it. The Open Dashboard page first asserted its field names against a
+  // manifest committed into the site repo, and nothing tied that manifest back here -- so a
+  // stale or hand-edited copy would keep the guard green while the package no longer
+  // matched. Reviewer-caught on orchestrator-gpt#527.
+  //
+  // This is the package half: whatever build/contract-vocabulary.json says must be exactly
+  // what the schemas say right now, so the artifact a consumer reads cannot lag the code.
+  const { readFile } = await import("node:fs/promises");
+  const { contractVocabulary, exportPackageFacts } = await import("../scripts/generate-docs.js");
+  const shipped = JSON.parse(await readFile(new URL("../build/contract-vocabulary.json", import.meta.url), "utf8"));
+  const facts = await exportPackageFacts();
+
+  assert.deepEqual(shipped.contract, contractVocabulary(), "the shipped vocabulary must equal the schemas' own");
+  assert.equal(shipped.version, facts.version, "and must name the version that produced it");
+  assert.equal(shipped.name, "open-dashboard-mcp");
+  assert.deepEqual([...shipped.tools].sort(), facts.tools.map((tool) => tool.name).sort());
+
+  // The subpath a consumer imports must actually resolve to it.
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(manifest.exports["./contract-vocabulary.json"], "./build/contract-vocabulary.json");
+});

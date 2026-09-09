@@ -54,5 +54,9 @@
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   },
-  "homepage": "https://sdforest.site/web/open-dashboard/mcp/"
+  "homepage": "https://sdforest.site/web/open-dashboard/mcp/",
+  "exports": {
+    ".": "./build/index.js",
+    "./contract-vocabulary.json": "./build/contract-vocabulary.json"
+  }
 }
