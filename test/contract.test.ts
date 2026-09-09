@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -47,7 +48,13 @@ test("a deprecation without a replacement must explain why", () => {
 test("the 1.0 envelope carries a self-notice for the old scalar shape", () => {
   const envelope = contractEnvelope();
   assert.equal(envelope.schema_version, "1.0");
-  assert.equal(envelope.package_version, "1.0.0");
+  // READ FROM THE MANIFEST, NOT RETYPED. This asserted the literal "1.0.0" and so went red
+  // on the 1.0.1 bump -- a test that has to be edited every release is a test that gets
+  // edited without being read. The real claim is that the envelope reports the version
+  // actually being shipped, and schema_version stays "1.0" because a patch does not change
+  // the schema.
+  const manifestVersion = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+  assert.equal(envelope.package_version, manifestVersion);
   assert.ok(envelope.deprecations.some((notice) =>
     notice.field === "catalogueModel.pricing.prices" &&
     notice.removed_in === "1.0.0" &&

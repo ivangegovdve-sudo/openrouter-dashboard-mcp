@@ -75,3 +75,30 @@ test("the vocabulary shipped in the tarball is the vocabulary the schemas define
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(manifest.exports["./contract-vocabulary.json"], "./build/contract-vocabulary.json");
 });
+
+test("every subpath a consumer may reasonably import actually resolves", async () => {
+  // 1.0.0 SHIPPED A REGRESSION HERE AND I CAUSED IT. Adding an `exports` map to publish
+  // the contract vocabulary also switched the package from "everything is importable" to
+  // "only what is listed is importable" -- so `open-dashboard-mcp/package.json`, which
+  // bundlers, doctors and version checks read routinely, began throwing
+  // ERR_PACKAGE_PATH_NOT_EXPORTED. It was invisible in-repo, because in-repo nothing
+  // resolves through the exports map; it only appeared on `npm install` of the published
+  // tarball.
+  //
+  // Node's own guidance is to list "./package.json" explicitly for exactly this reason.
+  // This test asserts the whole map rather than that one entry, so adding a subpath
+  // without considering what it excludes fails here first.
+  const { readFile } = await import("node:fs/promises");
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.deepEqual(manifest.exports, {
+    ".": "./build/index.js",
+    "./contract-vocabulary.json": "./build/contract-vocabulary.json",
+    "./package.json": "./package.json",
+  });
+
+  // And every target must exist in what `files` actually ships.
+  for (const target of Object.values(manifest.exports) as string[]) {
+    const shipped = target.startsWith("./build/") || target === "./package.json";
+    assert.ok(shipped, `${target} is exported but not covered by the files array`);
+  }
+});
