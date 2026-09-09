@@ -6,7 +6,9 @@ import { z } from "zod";
 
 import { createDashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
+import { runBenchmarks } from "../src/tools/benchmarks.js";
 import { runFreeModels } from "../src/tools/free-models.js";
+import { runGitHubTrending } from "../src/tools/github-trending.js";
 import { runModelStatus } from "../src/tools/model-status.js";
 import { runResolveModel } from "../src/tools/resolve-model.js";
 
@@ -83,6 +85,69 @@ test("fixture HTTP 500 mode becomes a bounded http_error", async () => {
   }
 });
 
+test("synthetic benchmark fixture supports both call matrices and preserves unknown scores", async () => {
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const { assertFixtureResult } = await loadStdioHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    for (const input of [{ limit: 50 }, { source: "openrouter" as const, limit: 50 }]) {
+      const result = await runBenchmarks(input, { client });
+      assert.equal(result.status, "ok");
+      if (result.status !== "ok") return;
+      assertFixtureResult("dashboard_benchmarks", result);
+      const row = result.response.data[0];
+      assert.equal(row?.source, "openrouter");
+      if (row?.source !== "openrouter") return;
+      assert.equal(row.primaryScore, null);
+      assert.equal(row.accuracy, null);
+      assert.match(row.citation, /synthetic/i);
+      assert.throws(() => assertFixtureResult("dashboard_benchmarks", {
+        ...result,
+        response: { ...result.response, data: [{ ...row, primaryScore: 0 }] },
+      }), /unknown benchmark score/);
+    }
+    assert.deepEqual(fixture.requests, [
+      { method: "GET", path: "/api/public/v2/benchmarks", query: "limit=50" },
+      { method: "GET", path: "/api/public/v2/benchmarks", query: "limit=50&source=openrouter" },
+    ]);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("synthetic trending fixture preserves collection time and applies both matrix limits", async () => {
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const { assertFixtureResult } = await loadStdioHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
+    for (const limit of [3, 5]) {
+      const result = await runGitHubTrending({ since: "daily", limit }, {
+        client,
+        now: () => new Date("2026-08-20T06:00:00.000Z"),
+      });
+      assert.equal(result.status, "ok");
+      if (result.status !== "ok") return;
+      assertFixtureResult("dashboard_github_trending", result);
+      assert.equal(result.repositories.length, limit);
+      assert.equal(result.cap.reached, true);
+      assert.equal(result.ageHours, 24);
+      assert.equal(result.stale, true);
+      assert.match(result.repositories[0]?.description ?? "", /synthetic/i);
+      assert.throws(() => assertFixtureResult("dashboard_github_trending", {
+        ...result,
+        collectedAt: "2026-08-20T06:00:00.000Z",
+      }), /collection time/);
+    }
+    assert.deepEqual(fixture.requests, [
+      { method: "GET", path: "/api/public/v2/github/trending", query: "since=daily" },
+    ]);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("fixture HTML mode becomes non_json without leaking its body", async () => {
   const { startFixtureDashboard } = await loadFixtureHarness();
   const fixture = await startFixtureDashboard({ mode: "fixture" });
@@ -151,7 +216,7 @@ test("dead-port allocation returns a loopback URL that refuses connections", asy
   );
 });
 
-test("standard call matrix covers the exact twelve tools and arguments", async () => {
+test("standard call matrix covers the exact fourteen exercised tools and arguments", async () => {
   const { STANDARD_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(STANDARD_CALLS, [
@@ -195,11 +260,13 @@ test("standard call matrix covers the exact twelve tools and arguments", async (
       arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_contract", arguments: {} },
+    { name: "dashboard_speed", arguments: {} },
     { name: "dashboard_matrix", arguments: {} },
   ]);
 });
 
-test("diagnostic call matrix covers all twelve deliberate assertions", async () => {
+test("diagnostic call matrix covers all fourteen deliberate assertions", async () => {
   const { DIAGNOSTIC_CALLS } = await loadStdioHarness();
 
   assert.deepEqual(DIAGNOSTIC_CALLS, [
@@ -245,6 +312,7 @@ test("diagnostic call matrix covers all twelve deliberate assertions", async () 
     {
       name: "dashboard_model_economics",
       arguments: {
+        providers: ["openrouter", "groq", "cerebras"],
         ids: [
           "fixture/discounted",
           "fixture-groq/priced",
@@ -255,9 +323,11 @@ test("diagnostic call matrix covers all twelve deliberate assertions", async () 
       },
     },
     { name: "dashboard_key_inventory", arguments: {} },
+    { name: "dashboard_contract", arguments: {} },
+    { name: "dashboard_speed", arguments: {} },
     { name: "dashboard_matrix", arguments: {} },
   ]);
-  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 12);
+  assert.equal(new Set(DIAGNOSTIC_CALLS.map((call) => call.name)).size, 14);
 });
 
 test("offline mode rejects a schema-invalid payload with nested unreachable evidence", async () => {
@@ -694,7 +764,7 @@ test("free-model live invariants require zero concrete-free pricing", async () =
     );
 
     const nonzeroPrompt = structuredClone(free);
-    nonzeroPrompt.liveCandidates.data[0]!.pricing.promptUsdPerToken =
+    nonzeroPrompt.liveCandidates.data[0]!.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)!.amount =
       "0.000001";
     assert.throws(() =>
       assertModeResult(
@@ -707,7 +777,7 @@ test("free-model live invariants require zero concrete-free pricing", async () =
     );
 
     const nonzeroCompletion = structuredClone(free);
-    nonzeroCompletion.liveCandidates.data[0]!.pricing.completionUsdPerToken =
+    nonzeroCompletion.liveCandidates.data[0]!.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)!.amount =
       "0.000001";
     assert.throws(() =>
       assertModeResult(

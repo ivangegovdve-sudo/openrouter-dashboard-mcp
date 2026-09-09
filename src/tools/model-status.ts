@@ -24,6 +24,9 @@ import {
   sourceEvidenceSchema,
   toolResult,
 } from "./shared.js";
+import { pricePoint } from "../catalogue/price-set.js";
+import { pricePointSchema, type PriceUnit } from "../contract.js";
+import { dashboardBaseUrl } from "../config.js";
 
 const MANIFEST_ENDPOINT = "/api/public/v2/manifest";
 const LIVE_MODELS_ENDPOINT = "/api/public/v2/live-models";
@@ -93,12 +96,11 @@ const openRouterDetailSchema = publicModelSchema.pick({
   canonicalSlug: true,
   name: true,
   contextLength: true,
-  pricing: true,
   expirationDate: true,
   lifecycleState: true,
   freeKind: true,
   weeklyRank: true,
-});
+}).extend({ pricePoints: z.array(pricePointSchema) }).strict();
 
 const auxiliarySchema = z
   .object({
@@ -167,6 +169,7 @@ export type ModelStatusOutput = z.infer<typeof modelStatusOutputSchema>;
 
 export type ModelStatusDependencies = {
   client: DashboardClient;
+  allowedProviders?: string[];
 };
 
 type LiveModel = z.infer<typeof liveModelSchema>;
@@ -196,6 +199,7 @@ function staleWarning(endpoint: string, stale: boolean): string[] {
 async function scanLiveModels(
   client: DashboardClient,
   slug: string,
+  allowedProviders?: string[],
 ): Promise<LiveScan> {
   const rows: LiveModel[] = [];
   const evidence: Evidence[] = [];
@@ -220,7 +224,9 @@ async function scanLiveModels(
     );
     pagesScanned += 1;
     const remaining = MODEL_STATUS_LIVE_ITEM_LIMIT - rows.length;
-    const boundedRows = page.data.slice(0, remaining);
+    const boundedRows = page.data
+      .filter((row) => allowedProviders === undefined || allowedProviders.includes(row.provider))
+      .slice(0, remaining);
     rows.push(...boundedRows);
     evidence.push(sourceEvidence(LIVE_MODELS_ENDPOINT, page));
     warnings.push(...staleWarning(LIVE_MODELS_ENDPOINT, page.stale));
@@ -370,12 +376,25 @@ function auxiliaryFailure(
 function trimOpenRouterDetail(
   detail: z.infer<typeof publicModelSchema>,
 ): z.infer<typeof openRouterDetailSchema> {
+  const units: Record<string, PriceUnit> = {
+    prompt: "token_in", completion: "token_out", input: "token_in", output: "token_out",
+    input_cache_read: "token_cached", cache_read: "token_cached", input_cache_write: "token_cache_create",
+    cache_creation: "token_cache_create", image: "image", megapixel: "megapixel",
+    video_second: "video_second", video: "video", request: "request",
+  };
+  const pricePoints = Object.entries(detail.pricing).flatMap(([name, amount]) => {
+    const unit = units[name];
+    if (unit === undefined || amount === null) return [];
+    try {
+      return [pricePoint({ id: `openrouter:${detail.id}:${unit}`, amount, unit, condition: null, sourceUrl: new URL(`${MODELS_ENDPOINT}/${encodeURIComponent(detail.id)}`, dashboardBaseUrl()).href, readAt: new Date().toISOString(), provenance: "published" })];
+    } catch { return []; }
+  });
   return openRouterDetailSchema.parse({
     id: detail.id,
     canonicalSlug: detail.canonicalSlug,
     name: detail.name,
     contextLength: detail.contextLength,
-    pricing: detail.pricing,
+    pricePoints,
     expirationDate: detail.expirationDate,
     lifecycleState: detail.lifecycleState,
     freeKind: detail.freeKind,
@@ -385,7 +404,7 @@ function trimOpenRouterDetail(
 
 export async function runModelStatus(
   input: ModelStatusInput,
-  { client }: ModelStatusDependencies,
+  { client, allowedProviders }: ModelStatusDependencies,
 ): Promise<ModelStatusOutput> {
   try {
     const manifest = await client.get(
@@ -406,7 +425,7 @@ export async function runModelStatus(
       };
     }
 
-    const liveScan = await scanLiveModels(client, input.slug);
+    const liveScan = await scanLiveModels(client, input.slug, allowedProviders);
     const evidence = [manifestEvidence, ...liveScan.evidence];
     const warnings = [...liveScan.warnings];
 

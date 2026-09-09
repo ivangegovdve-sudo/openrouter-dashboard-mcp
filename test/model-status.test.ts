@@ -195,20 +195,17 @@ test("returns bounded OpenRouter evidence without the long catalogue description
 
   assert.equal(result.status, "ok");
   if (result.status !== "ok") return;
-  assert.deepEqual(result.auxiliary.detail, {
-    id: liveModelFixture.id,
-    canonicalSlug: liveModelFixture.id,
-    name: "Very Large Model",
-    contextLength: "90071992547409930001",
-    pricing: {
-      prompt: "0.0000001250",
-      completion: "0.0000005000",
-    },
-    expirationDate: null,
-    lifecycleState: "no_announced_expiration",
-    freeKind: "paid_or_unknown",
-    weeklyRank: 1,
-  });
+  assert.equal(result.auxiliary.detail?.id, liveModelFixture.id);
+  assert.equal(result.auxiliary.detail?.canonicalSlug, liveModelFixture.id);
+  assert.equal(result.auxiliary.detail?.contextLength, "90071992547409930001");
+  assert.deepEqual(result.auxiliary.detail?.pricePoints.map((point) => [point.unit, point.amount]), [
+    ["token_in", "0.0000001250"],
+    ["token_out", "0.0000005000"],
+  ]);
+  assert.equal(result.auxiliary.detail?.expirationDate, null);
+  assert.equal(result.auxiliary.detail?.lifecycleState, "no_announced_expiration");
+  assert.equal(result.auxiliary.detail?.freeKind, "paid_or_unknown");
+  assert.equal(result.auxiliary.detail?.weeklyRank, 1);
   assert.equal(result.auxiliary.history?.cursor, opaqueCursor);
   assert.equal(
     result.auxiliary.history?.data[0]?.value,
