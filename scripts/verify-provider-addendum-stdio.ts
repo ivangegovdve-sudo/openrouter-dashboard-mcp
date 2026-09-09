@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { rm, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
@@ -9,13 +9,18 @@ import { EXPECTED_TOOL_NAMES } from "./verify-stdio.js";
 
 // The verifier's parent supplies secrets in memory. Neither CLI arguments nor
 // generated evidence contain them; the MCP child receives only these keys.
-// CLEARED BEFORE ANYTHING THAT CAN ABORT, INCLUDING THE CREDENTIAL CHECK BELOW. Whatever
-// sits at the evidence path afterwards is this run's output or nothing. Placed after the
-// credential assertion first time round, which left exactly one hole: a run with missing
-// keys aborted while the PREVIOUS run's artifact stayed on disk, indistinguishable from
-// current output -- the same misleading-artifact defect this change exists to close.
-if (process.argv[2]) await rm(process.argv[2], { force: true });
-
+// NOTHING IS DELETED HERE, DELIBERATELY, AND THIS WENT BACK AND FORTH TWICE.
+// The concern is real: a run that aborts before writing leaves a PREVIOUS run's artifact
+// on disk, which a reader could mistake for current output. Clearing the path up front
+// closes that -- and opens something worse, because process.argv[2] is an arbitrary
+// caller-supplied path and an unconditional rm on it destroys whatever is there,
+// including a valid prior artifact or an unrelated file, on every failed invocation.
+// Destroying data to prevent a misreading is the wrong trade.
+//
+// Staleness is answered where it actually belongs. The artifact carries `startedAt`,
+// `finishedAt` and an explicit `verdict`, and the process exits non-zero when anything
+// fails, so a caller can always tell whether the file on disk came from the run it just
+// invoked. A verifier is not entitled to delete a path it was merely handed.
 const falKey = process.env.FAL_API_KEY, crazyKey = process.env.CRAZYROUTER_API_KEY;
 assert.ok(falKey && crazyKey, "Both provider environment keys must be supplied for authenticated verification");
 const client = new Client({ name: "provider-addendum-release-verifier", version: "1" });
