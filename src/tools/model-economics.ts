@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { DashboardClient } from "../dashboard/client.js";
 import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
+import { providerEvidenceShape } from "../providers/evidence.js";
 import {
   providerListResponseSchema,
   publicModelsResponseSchema,
@@ -293,6 +294,7 @@ const economicsModelSchema = z
 
 const providerReportSchema = z
   .object({
+    ...providerEvidenceShape,
     // A provider id the dashboard reported. Not an enum: a client that
     // refuses an unfamiliar provider breaks when the server adds one.
     provider: z.string().min(1),
@@ -680,9 +682,9 @@ export async function runModelEconomics(
       unrankableReason: priceComparable
         ? null
         : promptPrice !== null || completionPrice !== null
-          ? // Half a price is not a price. Saying the provider "publishes none"
-            // here would be false -- it published one of the two.
-            `${describeProvider(row.provider).displayName} published only the ${promptPrice !== null ? "prompt" : "completion"} price for this model, so its total cost is unknown — not free, and not comparable.`
+          ? // One comparable direction does not establish that the provider
+            // omitted the other: a token range or time band may be withheld.
+            `Only the ${promptPrice !== null ? "prompt" : "completion"} token price is comparable in the collected data for this ${descriptor.displayName} model, so its total cost is unknown — not free, and not comparable.`
           : unpricedReason(row.provider),
       freeKind: row.freeKind,
       genuinelyFree: row.freeKind === "concrete_free",
@@ -926,13 +928,17 @@ export async function runModelEconomics(
         Object.entries(descriptor.publishes).map(([key, value]) => [key, value]),
       ),
       comparabilityNote: descriptor.comparabilityNote,
+      caveatResearch: descriptor.caveatResearch,
+      pitchResearch: descriptor.pitchResearch,
+      ...(descriptor.caveats ? { caveats: descriptor.caveats } : {}),
+      ...(descriptor.pitch ? { pitch: descriptor.pitch } : {}),
     };
   });
 
   for (const report of providerReports) {
     if (report.modelsInCatalogue === 0) {
       warnings.push(
-        `${report.displayName} contributed no models to this answer; its catalogue is empty upstream.`,
+        `${report.displayName} contributed no models to this token comparison; this does not establish an empty provider catalogue. Use dashboard_catalogue for media identities and source population coverage.`,
       );
     }
   }
