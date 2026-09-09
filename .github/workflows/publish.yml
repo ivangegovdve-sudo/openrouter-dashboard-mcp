@@ -1,0 +1,117 @@
+# Publishes to npm using TRUSTED PUBLISHING (OIDC) rather than a long-lived token.
+#
+# WHY THIS EXISTS, AND THE DEADLINE:
+# Every release so far has been published from a laptop using a granular access token
+# with the 2FA-bypass flag. npm is closing that path in JANUARY, so the next release
+# after that date fails with E403 and no amount of retrying fixes it. This workflow is
+# the replacement, and it is better than the thing it replaces on three counts:
+#
+#   - no long-lived credential exists anywhere. OIDC mints a short-lived token per run,
+#     scoped to this repository and this workflow. There is nothing to leak, rotate or
+#     find in a handoff note.
+#   - it satisfies 2FA-enforced publishing by design, which is the rule that closes the
+#     current path.
+#   - it produces a provenance attestation. For a package whose whole pitch is that its
+#     numbers can be trusted, a cryptographic link from tarball to the commit and
+#     workflow that built it is not decoration.
+#
+# THE PUBLISH IS GATED ON THE SAME VERIFICATION THE REPO ALREADY RUNS, in the same
+# order, for the reason recorded in verify.yml: docs:check must precede build, and build
+# must precede test, because some tests read what the tarball actually ships.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every step but stop before publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # REQUIRED FOR OIDC. Without id-token: write the runner cannot mint the token npm
+  # exchanges, and `npm publish` falls back to looking for a credential that is not there.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          # The registry URL must be set here. setup-node writes the .npmrc that npm reads,
+          # and trusted publishing is negotiated against this registry.
+          registry-url: https://registry.npmjs.org
+
+      # npm 11.5.1 or newer is required for trusted publishing. The runner image ships a
+      # recent npm, but pinning the requirement rather than assuming it means a failure
+      # says which version was missing instead of returning a confusing auth error.
+      - name: Require an npm that supports trusted publishing
+        run: |
+          version="$(npm --version)"
+          echo "npm $version"
+          node -e '
+            const [maj, min, patch] = process.argv[1].split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && patch >= 1)));
+            if (!ok) {
+              console.error("npm " + process.argv[1] + " is too old for trusted publishing; need >= 11.5.1");
+              process.exit(1);
+            }
+          ' "$version"
+
+      - run: npm ci --ignore-scripts
+
+      # Same order and the same reasons as verify.yml. A release must not publish an
+      # artifact that the ordinary verification would have rejected.
+      - run: npm run docs:check
+      - run: npm run build
+      - run: npm test
+      - run: npm pack --dry-run
+
+      # The tag being released must match what is about to be published. Publishing 1.0.1
+      # from a v1.0.0 release would put a version on the registry that no release names.
+      - name: The package version must match the release tag
+        if: github.event_name == 'release'
+        run: |
+          packaged="$(node -p "require('./package.json').version")"
+          tagged="${GITHUB_REF_NAME#v}"
+          echo "package.json=$packaged  tag=$tagged"
+          if [ "$packaged" != "$tagged" ]; then
+            echo "::error::package.json is $packaged but the release tag is $tagged"
+            exit 1
+          fi
+
+      - name: Publish with provenance
+        if: github.event_name == 'release' || inputs.dry_run == false
+        run: npm publish --provenance --access public
+
+      - name: Dry run only, nothing published
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: echo "Verification passed. Re-run with dry_run=false, or publish a release, to actually publish."
+
+      # THE CLI'S OUTPUT IS THE WRONG LAYER. `npm publish` has printed its success line up
+      # to two minutes before the registry resolved the version -- measured twice on this
+      # package, ~40s for 1.0.0 and ~2min for 1.0.1. A green job that only proves the
+      # command exited zero would let a failed publish look successful.
+      - name: Confirm the registry actually resolves the new version
+        if: github.event_name == 'release' || inputs.dry_run == false
+        run: |
+          expected="$(node -p "require('./package.json').version")"
+          for attempt in $(seq 1 30); do
+            actual="$(curl -sf https://registry.npmjs.org/open-dashboard-mcp/latest | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version' 2>/dev/null || echo pending)"
+            echo "attempt $attempt: registry=$actual expected=$expected"
+            if [ "$actual" = "$expected" ]; then
+              echo "The registry resolves $expected."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::The registry did not resolve $expected within five minutes. The publish may have failed even if the CLI reported success."
+          exit 1
