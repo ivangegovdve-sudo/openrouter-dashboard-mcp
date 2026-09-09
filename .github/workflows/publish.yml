@@ -88,20 +88,41 @@ jobs:
             exit 1
           fi
 
+      # A MANUAL DISPATCH MUST NOT BE ABLE TO PUBLISH AN ARBITRARY BRANCH. Without this,
+      # anyone who can run a workflow could publish whatever package.json happens to sit on
+      # their branch, bypassing the release-tag check above entirely -- a publish as a side
+      # effect of pressing a button, which is exactly the accident this workflow exists to
+      # design out. Publishing by hand is allowed only from main, and only for a version
+      # that already has a matching tag, so the artifact is always one a release names.
+      - name: A manual publish must come from main and match an existing tag
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::A manual publish is only allowed from main; this ref is $GITHUB_REF"
+            exit 1
+          fi
+          packaged="$(node -p "require('./package.json').version")"
+          git fetch --tags --quiet
+          if ! git rev-parse -q --verify "refs/tags/v$packaged" >/dev/null; then
+            echo "::error::No tag v$packaged exists. Tag the release first so the published artifact is one a release names."
+            exit 1
+          fi
+          echo "main, and tag v$packaged exists."
+
       - name: Publish with provenance
-        if: github.event_name == 'release' || inputs.dry_run == false
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         run: npm publish --provenance --access public
 
       - name: Dry run only, nothing published
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
-        run: echo "Verification passed. Re-run with dry_run=false, or publish a release, to actually publish."
+        run: echo "Verification passed. Nothing was published. To publish, start a NEW dispatch with dry_run unchecked, or publish a GitHub release. Re-running this run would reuse dry_run=true."
 
       # THE CLI'S OUTPUT IS THE WRONG LAYER. `npm publish` has printed its success line up
       # to two minutes before the registry resolved the version -- measured twice on this
       # package, ~40s for 1.0.0 and ~2min for 1.0.1. A green job that only proves the
       # command exited zero would let a failed publish look successful.
       - name: Confirm the registry actually resolves the new version
-        if: github.event_name == 'release' || inputs.dry_run == false
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         run: |
           expected="$(node -p "require('./package.json').version")"
           for attempt in $(seq 1 30); do
