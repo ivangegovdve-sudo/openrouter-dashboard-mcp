@@ -301,7 +301,9 @@ jobs:
           # sleep is up to ten minutes, so the previous loop advertised a five-minute bound
           # it could not keep -- the same defect as a comment describing behaviour the code
           # does not have, which is what this whole release is about. The clock now decides.
-          deadline=$(( SECONDS + 300 ))
+          # Reserve the request budget so the LAST attempt still finishes inside the window:
+          # checking the clock only before each curl let an attempt started at 299s run to 309s.
+          deadline=$(( SECONDS + 300 - 10 ))
           attempt=0
           while [ "$SECONDS" -lt "$deadline" ]; do
             attempt=$(( attempt + 1 ))
