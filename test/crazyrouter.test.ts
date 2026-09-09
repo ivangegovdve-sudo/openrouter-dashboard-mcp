@@ -39,39 +39,37 @@ test("Crazyrouter retains every key-visible identity even when price metadata is
   assert.deepEqual(result.provider.population, { listed: 3, received: 3, retained: 3, excluded: 0, exclusionRules: [], completeness: "full" });
   assert.equal(result.provider.requestParameters.populationScope, "models_visible_to_current_api_key");
   assert.equal(result.provider.requestParameters.platformModelCount, null);
-  assert.equal(result.models[1]?.pricing.status, "price_not_available");
-  assert.equal(result.models[2]?.pricing.status, "price_not_available", "no approximate model-name join");
-  const prices = result.models[0]!.pricing.prices;
-  assert.deepEqual(prices.map(price => [price.unit, price.value]), [
-    ["usd_per_input_token", "0.000001625"], ["usd_per_output_token", "0.0000065"],
+  assert.equal(result.models[1]?.pricingState, "not_published");
+  assert.equal(result.models[2]?.pricingState, "not_published", "no approximate model-name join");
+  const prices = result.models[0]!.pricePoints;
+  assert.deepEqual(prices.map(price => [price.unit, price.amount]), [
+    ["token_in", "0.000001625"], ["token_out", "0.0000065"],
   ]);
-  assert.equal(prices[0]!.conditions.discount, "0.65");
-  assert.equal(prices[0]!.conditions.group, "default");
-  assert.equal(prices[0]!.conditions.accountGroupVerified, false);
-  assert.equal(prices[0]!.conditions.grossUsdPerMillionTokens, "2.5");
-  assert.equal(prices[0]!.conditions.netUsdPerMillionTokens, "1.625");
+  assert.equal(prices[0]!.provenance, "derived");
+  assert.equal(prices[0]!.sourceText, "Crazyrouter model discount badge: 0.65");
+  assert.equal(result.models[0]!.nativePricing?.pricingRow?.discount, "0.65");
 });
 
 test("Crazyrouter marks the exact OpenAI-rate aliases as derived prices", async () => {
   const collect = await collector();
   const result = await collect({ apiKey: "synthetic-key", now,
     fetchImpl: source(list(["gpt-4o", "other"]), pricing([tokenRow("gpt-4o"), tokenRow("other")])) });
-  const derived = result.models[0]!.pricing.prices;
-  assert.deepEqual(derived.map(price => price.provenance), [
-    { basis: "derived", derivedFrom: "https://developers.openai.com/api/docs/models/gpt-4o", observedMultiplier: "0.65", observedAt: "2026-09-08" },
-    { basis: "derived", derivedFrom: "https://developers.openai.com/api/docs/models/gpt-4o", observedMultiplier: "0.65", observedAt: "2026-09-08" },
+  const derived = result.models[0]!.pricePoints;
+  assert.deepEqual(derived.map(price => [price.provenance, price.derivedFrom]), [
+    ["derived", "https://developers.openai.com/api/docs/models/gpt-4o"],
+    ["derived", "https://developers.openai.com/api/docs/models/gpt-4o"],
   ]);
-  assert.equal(result.models[1]!.pricing.prices[0]!.provenance, undefined);
+  assert.equal(result.models[1]!.pricePoints[0]!.provenance, "derived");
 });
 
 test("Crazyrouter preserves source decimal digits rather than rounding JSON numbers", async () => {
   const collect = await collector();
   const native = '{"success":true,"group_ratio":{"default":1},"data":[{"model_name":"exact","quota_type":0,"model_ratio":0.123456789012345678901,"completion_ratio":3,"discount":1,"enable_groups":["default"]}]}';
   const result = await collect({ apiKey: "synthetic-key", now, fetchImpl: source(list(["exact"]), native) });
-  const prices = result.models[0]!.pricing.prices;
-  assert.equal(prices[0]!.value, "0.000000246913578024691357802");
-  assert.equal(prices[1]!.value, "0.000000740740734074074073406");
-  assert.equal(prices[0]!.native.value, "0.123456789012345678901");
+  const prices = result.models[0]!.pricePoints;
+  assert.equal(prices[0]!.amount, "0.000000246913578024691357802");
+  assert.equal(prices[1]!.amount, "0.000000740740734074074073406");
+  assert.equal(result.models[0]!.nativePricing?.pricingRow?.model_ratio, "0.123456789012345678901");
 });
 
 test("Crazyrouter does not apply plain token ratios to custom billing or unsupported groups", async () => {
@@ -86,8 +84,31 @@ test("Crazyrouter does not apply plain token ratios to custom billing or unsuppo
   ];
   const result = await collect({ apiKey: "synthetic-key", now, fetchImpl: source(list(rows.map(row => row.model_name)), pricing(rows)) });
   assert.equal(result.models.length, 6);
-  assert.ok(result.models.every(model => model.pricing.status === "price_not_available" && model.pricing.prices.length === 0));
+  assert.ok(result.models.every(model => model.pricePoints.length === 0 && model.pricingState === "not_published"));
   assert.equal(result.models[3]!.mediaKind, "image");
+});
+
+test("Crazyrouter keeps DeepSeek peak and off-peak hours on published price points", async () => {
+  const collect = await collector();
+  const result = await collect({ apiKey: "synthetic-key", now, fetchImpl: source(
+    list(["deepseek/deepseek-v3"]),
+    pricing([tokenRow("deepseek/deepseek-v3", {
+      time_pricing: {
+        peak: { input_per_million: "0.42", output_per_million: "1.68" },
+        off_peak: { input_per_million: "0.21", output_per_million: "0.84" },
+      },
+    })]),
+  ) });
+  const points = result.models[0]!.pricePoints;
+  assert.equal(points.length, 4);
+  assert.ok(points.every(point => point.provenance === "published"));
+  assert.deepEqual(points.map(point => [point.condition?.kind, point.condition?.name, point.condition?.timezone, point.condition?.hours]), [
+    ["time_band", "off_peak", "Asia/Shanghai", ["00:00-09:00", "12:00-14:00", "18:00-24:00"]],
+    ["time_band", "off_peak", "Asia/Shanghai", ["00:00-09:00", "12:00-14:00", "18:00-24:00"]],
+    ["time_band", "peak", "Asia/Shanghai", ["09:00-12:00", "14:00-18:00"]],
+    ["time_band", "peak", "Asia/Shanghai", ["09:00-12:00", "14:00-18:00"]],
+  ]);
+  assert.deepEqual(points.map(point => point.amount), ["0.00000021", "0.00000084", "0.00000042", "0.00000168"]);
 });
 
 test("Crazyrouter keeps pricing-source failure distinct from successful empty prices", async () => {
@@ -98,7 +119,7 @@ test("Crazyrouter keeps pricing-source failure distinct from successful empty pr
   assert.equal(result.provider.status, "partial");
   assert.equal(result.provider.population.completeness, "full", "identity acquisition succeeded independently");
   assert.equal(result.provider.requestParameters.pricingAcquisitionStatus, "unavailable");
-  assert.equal(result.models[0]?.pricing.reason, "pricing_source_unavailable");
+  assert.equal(result.models[0]?.pricingNote, "pricing_source_unavailable");
   assert.doesNotMatch(JSON.stringify(result), /private body|synthetic-key/);
 });
 
@@ -149,8 +170,8 @@ test("Crazyrouter refuses duplicate pricing matches and missing conversion coeff
     tokenRow("duplicate"), tokenRow("duplicate", { model_ratio: 100 }),
     tokenRow("missing", { discount: undefined }),
   ])) });
-  assert.equal(result.models[0]?.pricing.reason, "ambiguous_public_pricing_identity");
-  assert.equal(result.models[1]?.pricing.status, "price_not_available");
+  assert.equal(result.models[0]?.pricingNote, "ambiguous_public_pricing_identity");
+  assert.equal(result.models[1]?.pricingState, "published");
 });
 
 test("Crazyrouter identity joins only explicit author namespaces and preserves the exact alias", async () => {
@@ -163,11 +184,11 @@ test("Crazyrouter identity joins only explicit author namespaces and preserves t
   assert.equal(identity.exactModelAlias, "gpt-4o");
   assert.equal(identity.snapshotEquivalence, "not_established");
   const unknown = structuredClone(result.models[1]!);
-  unknown.pricing.native = { catalogueRow: { id: "No_Fuzzy-Alias", owned_by: "unknown" }, vendor: { name: "unmapped" } };
+  unknown.nativePricing = { catalogueRow: { id: "No_Fuzzy-Alias", owned_by: "unknown" }, vendor: { name: "unmapped" } };
   assert.equal(crazyrouterIdentity(unknown).authorNamespace, undefined);
   assert.equal(crazyrouterIdentity(unknown).exactModelAlias, "No_Fuzzy-Alias");
   const conflict = structuredClone(result.models[0]!);
-  (conflict.pricing.native as { catalogueRow: { owned_by: string } }).catalogueRow.owned_by = "anthropic";
+  (conflict.nativePricing as { catalogueRow: { owned_by: string } }).catalogueRow.owned_by = "anthropic";
   assert.equal(crazyrouterIdentity(conflict).authorNamespace, undefined);
 });
 
@@ -196,7 +217,7 @@ test("Crazyrouter never turns partial or malformed price acquisition into publis
     assert.equal(result.provider.status, "partial");
     assert.equal(result.provider.population.completeness, "full");
     assert.equal(result.provider.requestParameters.pricingAcquisitionStatus, "partial");
-    assert.equal(result.models[0]?.pricing.reason, "pricing_observation_incomplete");
+    assert.equal(result.models[0]?.pricingNote, "pricing_observation_incomplete");
   }
 });
 
