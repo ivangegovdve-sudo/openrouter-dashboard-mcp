@@ -104,20 +104,34 @@ jobs:
         with:
           fetch-depth: 0
 
+      # NODE 24, SOLELY TO AVOID DOWNLOADING NPM HERE. Trusted publishing needs npm
+      # 11.5.1+, Node 22 bundles npm 10.x, and the previous version of this job ran
+      # `npm install -g npm@11.5.1` -- downloading and executing external code in the one
+      # job that can publish, which is exactly the isolation this split exists to create.
+      # Node 24 ships npm 11.x in the runner image, so the requirement is met by the
+      # toolchain instead of by a network fetch.
+      #
+      # The tarball was built by the verify job on Node 22; this job only uploads bytes,
+      # so the Node version here does not affect what ships.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
-      # npm 11.5.1+ is required for trusted publishing and Node 22 bundles npm 10.x, so
-      # this INSTALLS it rather than merely asserting it -- an earlier version only checked
-      # the version, which would have failed every run instead of fixing anything. Pinned
-      # exactly rather than by range: this job can publish, so what runs in it is decided
-      # here and not by whatever a range resolves to on the day.
-      - name: Install the npm that trusted publishing requires
+      # Asserted, not installed. If a future runner image regresses below 11.5.1 this
+      # fails loudly rather than silently falling back to a token that no longer exists.
+      - name: The bundled npm must support trusted publishing
         run: |
-          npm install -g npm@11.5.1
-          npm --version
+          version="$(npm --version)"
+          echo "npm $version"
+          node -e '
+            const [maj, min, patch] = process.argv[1].split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && patch >= 1)));
+            if (!ok) {
+              console.error("The runner bundles npm " + process.argv[1] + ", which cannot do trusted publishing (need >= 11.5.1). Raise node-version rather than installing npm in this job.");
+              process.exit(1);
+            }
+          ' "$version"
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -172,17 +186,22 @@ jobs:
             exit 1
           fi
 
-      # A PRERELEASE MUST NOT BECOME `latest`. The `published` release event fires for
-      # prereleases too, and npm with no --tag assigns `latest` -- so releasing
-      # v1.2.0-beta.1 would hand every ordinary consumer a beta.
-      - name: Choose the dist-tag
+      # A PRERELEASE MUST NOT BECOME `latest`, AND THE VERSION DECIDES THAT -- not the
+      # release checkbox. Reading GitHub's `prerelease` flag was wrong twice: a manual
+      # dispatch has no release metadata at all and so always chose latest, and a release
+      # of 1.2.0-beta.1 that nobody ticked as prerelease would also have chosen latest,
+      # handing every ordinary consumer a beta. Semver already encodes this in the version
+      # string, which is the same string being published.
+      - name: Choose the dist-tag from the version being published
         id: disttag
         run: |
-          if [ "${{ github.event_name }}" = "release" ] && [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            echo "tag=next" >> "$GITHUB_OUTPUT"
-            echo "Prerelease: publishing under dist-tag next, not latest."
-          else
+          version="${{ steps.artifact.outputs.version }}"
+          if node -e 'process.exit(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(process.argv[1]) ? 0 : 1)' "$version"; then
             echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "$version is a release version: dist-tag latest."
+          else
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+            echo "$version carries a prerelease or build component: dist-tag next, not latest."
           fi
 
       - name: Publish the verified tarball with provenance
