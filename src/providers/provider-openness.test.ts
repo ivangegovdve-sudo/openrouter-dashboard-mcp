@@ -132,9 +132,9 @@ test("QwenCloud describes the native catalogue and its usable metadata coverage"
 
 test("Cerebras publication claims are scoped to the current connector", () => {
   const cerebras = describeProvider("cerebras");
-  assert.match(cerebras.comparabilityNote, /current \/v1\/models connector/);
-  assert.match(cerebras.comparabilityNote, /3 of 3/);
-  assert.match(cerebras.comparabilityNote, /pending/);
+  assert.match(cerebras.comparabilityNote, /\/v1\/models connector/);
+  assert.match(cerebras.comparabilityNote, /JS-rendered public pricing page/);
+  assert.match(cerebras.comparabilityNote, /listed developer-tier models/);
   assert.match(unpricedReason("cerebras"), /current Cerebras catalogue connector/);
   assert.doesNotMatch(unpricedReason("cerebras"), /publishes no prices/);
 });

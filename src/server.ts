@@ -22,32 +22,49 @@ import { registerWhatsChanged } from "./tools/whats-changed.js";
 import { SERVER_VERSION } from "./version.js";
 import { registerCatalogue } from "./tools/catalogue.js";
 import { registerPriceComparison } from "./tools/price-comparison.js";
+import { registerContract } from "./tools/contract.js";
+import { registerSpeed } from "./tools/speed.js";
 
-export type CreateServerOptions = DashboardClientOptions;
+export type CreateServerOptions = DashboardClientOptions & {
+  /** Install-time allowlist. Omitted means the complete built-in tool set. */
+  selectedTools?: string[];
+  /** Install-time provider allowlist used by provider-bearing tools. */
+  selectedProviders?: string[];
+};
+
+function csv(value: string | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
+}
 
 export function createServer(
   optionsOrContext: CreateServerOptions | McpRequestContext = {},
 ): McpServer {
-  const options =
+  const options: CreateServerOptions =
     "era" in optionsOrContext ? {} : optionsOrContext;
+  const selectedTools = options.selectedTools ?? csv(process.env.OPEN_DASHBOARD_TOOLS);
+  const selectedProviders = options.selectedProviders ?? csv(process.env.OPEN_DASHBOARD_PROVIDERS);
+  const enabled = (name: string) => selectedTools === undefined || selectedTools.includes(name);
   const server = new McpServer({
     name: "open-dashboard-mcp",
     version: SERVER_VERSION,
   });
   const client = createDashboardClient(options);
-  registerSourceHealth(server, { client });
-  registerBenchmarks(server, { client });
-  registerGitHubTrending(server, { client });
-  registerFreeModels(server, { client });
-  registerResolveModel(server, { client });
-  registerModelStatus(server, { client });
-  registerModelEconomics(server, { client });
-  registerWhatsChanged(server, { client });
-  registerUsageLeaders(server, { client });
-  registerMatrix(server, { client });
-  registerGithubMovers(server, { client });
-  registerKeyInventory(server);
-  registerCatalogue(server, { client, ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
-  registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  if (enabled("dashboard_source_health")) registerSourceHealth(server, { client });
+  if (enabled("dashboard_benchmarks")) registerBenchmarks(server, { client });
+  if (enabled("dashboard_github_trending")) registerGitHubTrending(server, { client });
+  if (enabled("dashboard_free_models")) registerFreeModels(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}) });
+  if (enabled("dashboard_resolve_model")) registerResolveModel(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}) });
+  if (enabled("dashboard_model_status")) registerModelStatus(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}) });
+  if (enabled("dashboard_model_economics")) registerModelEconomics(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}) });
+  if (enabled("dashboard_whats_changed")) registerWhatsChanged(server, { client });
+  if (enabled("dashboard_usage_leaders")) registerUsageLeaders(server, { client });
+  if (enabled("dashboard_matrix")) registerMatrix(server, { client });
+  if (enabled("dashboard_github_movers")) registerGithubMovers(server, { client });
+  if (enabled("dashboard_key_inventory")) registerKeyInventory(server);
+  if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  if (enabled("dashboard_contract")) registerContract(server);
+  if (enabled("dashboard_speed")) registerSpeed(server);
   return server;
 }
