@@ -222,7 +222,7 @@ function directReference(identity: CrazyrouterIdentity, observedAt: string): { i
   return { input: point(input, "token_in", "input"), output: point(output, "token_out", "output") };
 }
 
-function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<string, NativeRecord[]>, orAvailable: boolean, crazyAvailable: boolean, duplicateCrazy: boolean, observedAt: string, dropped: string[]) {
+function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<string, NativeRecord[]>, orAvailable: boolean, crazyAvailable: boolean, crazyComplete: boolean, duplicateCrazy: boolean, observedAt: string, dropped: string[]) {
   const identity: CrazyrouterIdentity = model ? crazyrouterIdentity(model) : { exactModelAlias: id, nativeOwner: null, nativeVendorName: null, basis: "model_not_observed", snapshotEquivalence: "not_established" };
   const expectedId = identity.authorNamespace ? `${identity.authorNamespace}/${identity.exactModelAlias}` : undefined;
   const matches = expectedId ? orById.get(expectedId) ?? [] : [];
@@ -233,6 +233,13 @@ function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<strin
   let status: "comparable" | "price_not_available" | "openrouter_model_not_found" | "identity_not_established" | "source_unavailable" | "crazyrouter_model_not_observed" = "comparable";
   let reason: string | undefined;
   if (!crazyAvailable || !orAvailable) { status = "source_unavailable"; reason = "source_acquisition_failed_not_model_absence"; }
+  // ABSENCE MAY ONLY BE ASSERTED FROM A COMPLETE CATALOGUE. `crazyAvailable` was passed
+  // as `status !== "unavailable"`, so a PARTIAL acquisition counted as available and a
+  // model that merely sat on a page we never read was reported
+  // `crazyrouter_model_not_observed` -- a positive claim that Crazyrouter does not carry
+  // it. Not reading a page is not evidence of absence. When the population is not full,
+  // the honest answer is that the source could not settle the question.
+  else if (!model && !crazyComplete) { status = "source_unavailable"; reason = "crazyrouter_catalogue_incomplete_absence_not_established"; }
   else if (!model) status = "crazyrouter_model_not_observed";
   else if (!identity.authorNamespace || matches.length > 1 || duplicateCrazy) { status = "identity_not_established"; reason = matches.length > 1 || duplicateCrazy ? "ambiguous_native_identity" : identity.basis; }
   else if (!matched) status = "openrouter_model_not_found";
@@ -258,8 +265,10 @@ export async function runPriceComparison(rawInput: PriceComparisonInput, depende
   // bare `catch {}` whose comment said "remains unobserved" while nothing told the caller
   // so, and the row still reported a clean comparison against whatever survived.
   const droppedOpenrouterPrices: string[] = [];
-  const rows = selectedModels.map(model => rowFor(model.id, model, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", identityCounts.get(model.id)! > 1, observedAt, droppedOpenrouterPrices));
-  rows.push(...requestedNotObserved.map(id => rowFor(id, undefined, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", false, observedAt, droppedOpenrouterPrices)));
+  // Completeness, not mere availability, is what licenses a claim of absence.
+  const crazyComplete = crazy.provider.status === "available" && crazy.provider.population.completeness === "full";
+  const rows = selectedModels.map(model => rowFor(model.id, model, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", crazyComplete, identityCounts.get(model.id)! > 1, observedAt, droppedOpenrouterPrices));
+  rows.push(...requestedNotObserved.map(id => rowFor(id, undefined, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", crazyComplete, false, observedAt, droppedOpenrouterPrices)));
   const comparable = rows.filter(row => row.status === "comparable").length;
   const paged = rows.slice(input.offset, input.offset + input.limit);
   return priceComparisonOutputSchema.parse({
@@ -268,8 +277,8 @@ export async function runPriceComparison(rawInput: PriceComparisonInput, depende
     observedAt,
     sources: { crazyrouter: crazy.provider, openrouter: openrouter.source },
     rows: paged,
-    population: { acquiredCrazyrouterRows: crazy.provider.population.received, retainedCrazyrouterRows: crazy.provider.population.retained, openrouterReceivedRows: openrouter.source.received, excludedByUserFilter: crazy.models.length - selectedModels.length, missingRequestedIds: crazy.provider.status === "unavailable" ? [] : requestedNotObserved, beforePagination: rows.length, returned: paged.length, comparableBeforePagination: comparable, offset: input.offset, limit: input.limit, nextOffset: input.offset + paged.length < rows.length ? input.offset + paged.length : null, filterRule: selected ? "exact Crazyrouter native id allowlist; missing requested ids retained explicitly" : "all acquired Crazyrouter identities, including unpriced and unmatched", platformPopulationEstablished: false },
+    population: { acquiredCrazyrouterRows: crazy.provider.population.received, retainedCrazyrouterRows: crazy.provider.population.retained, openrouterReceivedRows: openrouter.source.received, excludedByUserFilter: crazy.models.length - selectedModels.length, missingRequestedIds: crazyComplete ? requestedNotObserved : [], beforePagination: rows.length, returned: paged.length, comparableBeforePagination: comparable, offset: input.offset, limit: input.limit, nextOffset: input.offset + paged.length < rows.length ? input.offset + paged.length : null, filterRule: selected ? "exact Crazyrouter native id allowlist; missing requested ids retained explicitly" : "all acquired Crazyrouter identities, including unpriced and unmatched", platformPopulationEstablished: false },
     vendorClaim: { text: "Pay-as-you-go pricing: 20–50% cheaper than official provider rates on most models", attribution: "Crazyrouter Team", sourceUrl: "https://crazyrouter.com/en/blog/openrouter-vs-crazyrouter-ai-api-router-comparison-2026", publishedAt: "2026-03-01", observedAt: "2026-09-08", scope: "Vendor claim versus official provider rates on most models; not a universal guarantee or an OpenRouter-specific comparison.", globalAssessment: "not_established" },
-    warnings: [...(droppedOpenrouterPrices.length === 0 ? [] : [`${droppedOpenrouterPrices.length} OpenRouter native price${droppedOpenrouterPrices.length === 1 ? "" : "s"} could not be represented and ${droppedOpenrouterPrices.length === 1 ? "was" : "were"} omitted from the comparison baseline: ${[...new Set(droppedOpenrouterPrices)].join(", ")}. A comparison missing a baseline point is narrower than it looks.`]), "Overall status describes source acquisition and token-visible catalogue completeness, not universal price coverage; each row carries its own comparison status.", "Join uses explicit author namespace and exact API alias only; immutable snapshot and deployment equivalence are not established.", "Every comparison is basis-bound and refuses incompatible units or conditions rather than coercing them."]
+    warnings: [...(crazyComplete || requestedNotObserved.length === 0 ? [] : [`${requestedNotObserved.length} requested id${requestedNotObserved.length === 1 ? "" : "s"} ${requestedNotObserved.length === 1 ? "was" : "were"} not found in an INCOMPLETE Crazyrouter catalogue, so missingRequestedIds is empty rather than listing them: not reading a page is not evidence a model is absent from it.`]), ...(droppedOpenrouterPrices.length === 0 ? [] : [`${droppedOpenrouterPrices.length} OpenRouter native price${droppedOpenrouterPrices.length === 1 ? "" : "s"} could not be represented and ${droppedOpenrouterPrices.length === 1 ? "was" : "were"} omitted from the comparison baseline: ${[...new Set(droppedOpenrouterPrices)].join(", ")}. A comparison missing a baseline point is narrower than it looks.`]), "Overall status describes source acquisition and token-visible catalogue completeness, not universal price coverage; each row carries its own comparison status.", "Join uses explicit author namespace and exact API alias only; immutable snapshot and deployment equivalence are not established.", "Every comparison is basis-bound and refuses incompatible units or conditions rather than coercing them."]
   });
 }

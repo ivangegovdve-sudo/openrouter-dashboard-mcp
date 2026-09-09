@@ -147,3 +147,33 @@ test("a native price we could not represent is reported, not silently dropped", 
   assert.match(dropped[0], /token_in/, "the warning names which price was lost");
   assert.match(dropped[0], /openai\/gpt-4o/, "and which model it belonged to");
 });
+
+test("an incomplete catalogue cannot report a requested model as absent", async () => {
+  // WAS A POSITIVE CLAIM FROM A NEGATIVE OBSERVATION. crazyAvailable was passed as
+  // `status !== "unavailable"`, so a PARTIAL acquisition counted as available: a model
+  // that merely sat on a page never read came back as crazyrouter_model_not_observed and
+  // was listed in missingRequestedIds -- both assertions that Crazyrouter does not carry
+  // it. Not reading a page is not evidence of absence.
+  const { runPriceComparison } = await module();
+  const partial: typeof fetch = async (input, init) => {
+    const url = String(input);
+    assert.equal(init?.method, "GET");
+    if (url === "https://api.crazyrouter.com/v1/models") return Response.json({ success: true, object: "list", data: [{ id: "gpt-4o", owned_by: "openai" }] });
+    // has_more marks the price population as not fully read.
+    if (url === "https://crazyrouter.com/api/pricing") return Response.json({ success: true, data: [crazy("gpt-4o")], group_ratio: { default: 1 }, vendors: [{ id: 4, name: "OpenAI" }], has_more: true });
+    return Response.json({ data: [or("openai/gpt-4o")] });
+  };
+  const result: any = await runPriceComparison({ modelIds: ["gpt-4o", "never-read"] }, { apiKey: "synthetic-key", now, fetchImpl: partial });
+
+  const missing = result.rows.find((row: any) => row.id === "never-read");
+  assert.ok(missing, "the requested id is still retained as a row");
+  assert.notEqual(missing.status, "crazyrouter_model_not_observed", "an unread page may not become a claim of absence");
+  assert.equal(missing.status, "source_unavailable");
+  assert.match(missing.reason ?? "", /incomplete_absence_not_established/);
+
+  assert.deepEqual(result.population.missingRequestedIds, [], "missingRequestedIds asserts absence, so it stays empty while the catalogue is incomplete");
+  assert.ok(
+    result.warnings.some((warning: string) => /not evidence a model is absent/.test(warning)),
+    "and the caller is told why the list is empty rather than left to assume nothing was missing",
+  );
+});
