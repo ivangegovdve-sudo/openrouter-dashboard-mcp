@@ -75,19 +75,28 @@ test("a real probe records the basis it actually used", async () => {
 });
 
 test("no speed observation publishes a rate this package cannot source", () => {
-  // THE REGRESSION THIS EXISTS TO CATCH. dashboard_speed shipped Groq's 8,000
-  // tokens-per-MINUTE free-plan quota as 8,000 tokens per SECOND of throughput -- a 60x
-  // overstatement attributed to Groq by name, from https://groq.com/, a page that does
-  // not state it. src/providers/evidence.ts already stored the same number correctly as
-  // `unit: "tokens/minute"` with the scope "this is not tokens per second or an
-  // inference-speed ceiling", so the repository contradicted itself in two files.
-  // A rate may be emitted only in the `published` state, and that state requires a
-  // source URL and attribution; nothing here may carry a rate without both.
+  // THIS TEST USED TO BE USELESS AND THE REVIEW CAUGHT IT. Its first version asserted that
+  // any observation carrying a rate must be `published` with a sourceUrl and attribution
+  // -- which the fabricated Groq and Cerebras claims both satisfied, because a fabricated
+  // claim can carry a fabricated source. It passed against the exact code it was written
+  // to catch. Structure was never the problem; the problem was that a number appeared
+  // whose cited page does not contain it, and structure cannot see that.
+  //
+  // So the check is an explicit inventory instead. Every rate this package publishes must
+  // be listed here by hand, with the page it came from and the date that page was read.
+  // The list is empty because both former entries were withdrawn: Groq's 8000 is a
+  // tokens-per-MINUTE quota and https://www.cerebras.ai/pricing carries no per-model rate
+  // (re-read 2026-09-09). Adding a rate without adding it here fails, which is deliberate
+  // friction -- the last two got in precisely because nothing made anyone name a source.
+  const SOURCED_RATES: Array<{ provider: string; model: string; sourceUrl: string; readOn: string }> = [];
+
   for (const observation of runSpeed({}).observations) {
-    if (observation.sustained_tps === null) continue;
-    assert.equal(observation.state, "published", `${observation.provider}: only a published claim may carry a rate`);
-    assert.ok(observation.sourceUrl, `${observation.provider}: a published rate must name the page it was read from`);
-    assert.ok(observation.attribution, `${observation.provider}: a published rate must name who published it`);
+    if (observation.sustained_tps === null && observation.ttft_ms === null) continue;
+    const listed = SOURCED_RATES.find((entry) => entry.provider === observation.provider && entry.model === observation.model);
+    assert.ok(listed, `${observation.provider}/${observation.model} publishes a rate that is not in the sourced-rate inventory; add it with the page and read date, or withdraw the rate`);
+    assert.equal(observation.state, "published");
+    assert.equal(observation.sourceUrl, listed.sourceUrl);
+    assert.ok(observation.attribution);
   }
 });
 
