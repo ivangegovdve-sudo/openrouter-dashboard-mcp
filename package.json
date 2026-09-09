@@ -1,6 +1,6 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Read-only MCP: OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter; media and token prices, caveats, GitHub trending. It refuses to quote Sail prices if its document changes.",
   "keywords": [
     "mcp",
