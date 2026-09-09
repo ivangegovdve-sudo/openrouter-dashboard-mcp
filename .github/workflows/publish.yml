@@ -75,6 +75,16 @@ jobs:
         run: |
           npm pack
           version="$(node -p "require('./package.json').version")"
+          # VALIDATED BEFORE IT LEAVES THIS JOB. This value comes from package.json, flows
+          # into the privileged job, and previously reached `run:` through workflow-expression
+          # interpolation -- which splices it into shell SOURCE, so a crafted version string
+          # could inject commands into the one job holding id-token: write. It is pinned to
+          # a strict semver shape here, and passed through env rather than interpolated
+          # there. Both halves matter: validation alone still interpolates.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::package.json version '$version' is not a plain semver string; refusing to pass it to the publish job"
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           ls -l "open-dashboard-mcp-$version.tgz"
 
@@ -139,8 +149,16 @@ jobs:
 
       - name: Identify the artifact
         id: artifact
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          version="${{ needs.verify.outputs.version }}"
+          # Re-validated on arrival: the producing job is trusted to have checked, but this
+          # job is the one that can publish, so it does not take that on faith.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Refusing a version string that is not plain semver"
+            exit 1
+          fi
+          version="$VERSION"
           file="open-dashboard-mcp-$version.tgz"
           if [ ! -f "$file" ]; then
             echo "::error::The verified artifact $file was not produced"
@@ -156,11 +174,13 @@ jobs:
       # The tag being released must name what is about to be published.
       - name: The package version must match the release tag
         if: github.event_name == 'release'
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
         run: |
           tagged="${GITHUB_REF_NAME#v}"
-          echo "package=${{ steps.artifact.outputs.version }}  tag=$tagged"
-          if [ "${{ steps.artifact.outputs.version }}" != "$tagged" ]; then
-            echo "::error::package.json is ${{ steps.artifact.outputs.version }} but the release tag is $tagged"
+          echo "package=$VERSION  tag=$tagged"
+          if [ "$VERSION" != "$tagged" ]; then
+            echo "::error::package.json is $VERSION but the release tag is $tagged"
             exit 1
           fi
 
@@ -169,12 +189,14 @@ jobs:
       # branch -- a publish as a side effect of pressing a button.
       - name: A manual publish must come from main and match an existing tag
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "::error::A manual publish is only allowed from main; this ref is $GITHUB_REF"
             exit 1
           fi
-          version="${{ steps.artifact.outputs.version }}"
+          version="$VERSION"
           # BOTH TAG CONVENTIONS, because the release path above accepts both. It strips a
           # leading "v" only when present, so a release tagged 1.0.0 passes there -- while
           # this path hardcoded refs/tags/v$version and would then fail for the same
@@ -204,8 +226,10 @@ jobs:
       # string, which is the same string being published.
       - name: Choose the dist-tag from the version being published
         id: disttag
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
         run: |
-          version="${{ steps.artifact.outputs.version }}"
+          version="$VERSION"
           if node -e 'process.exit(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(process.argv[1]) ? 0 : 1)' "$version"; then
             echo "tag=latest" >> "$GITHUB_OUTPUT"
             echo "$version is a release version: dist-tag latest."
@@ -216,7 +240,10 @@ jobs:
 
       - name: Publish the verified tarball with provenance
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
-        run: npm publish "${{ steps.artifact.outputs.file }}" --provenance --access public --tag "${{ steps.disttag.outputs.tag }}"
+        env:
+          TARBALL: ${{ steps.artifact.outputs.file }}
+          DIST_TAG: ${{ steps.disttag.outputs.tag }}
+        run: npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
 
       - name: Dry run only, nothing published
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
@@ -230,8 +257,10 @@ jobs:
       # call a successful publish a failure.
       - name: Confirm the registry actually resolves the published version
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
         run: |
-          expected="${{ steps.artifact.outputs.version }}"
+          expected="$VERSION"
           for attempt in $(seq 1 30); do
             code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$expected")"
             echo "attempt $attempt: registry returned $code for $expected"
