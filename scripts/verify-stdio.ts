@@ -14,6 +14,7 @@ import {
 } from "../src/tools/free-models.js";
 import { benchmarksOutputSchema } from "../src/tools/benchmarks.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
+import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { keyInventoryOutputSchema } from "../src/tools/key-inventory.js";
 import { modelEconomicsOutputSchema } from "../src/tools/model-economics.js";
 import { matrixOutputSchema } from "../src/tools/matrix.js";
@@ -30,6 +31,8 @@ import {
 import { sourceHealthOutputSchema } from "../src/tools/source-health.js";
 import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
 import { whatsChangedOutputSchema } from "../src/tools/whats-changed.js";
+import { contractOutputSchema } from "../src/tools/contract.js";
+import { speedOutputSchema } from "../src/tools/speed.js";
 
 import {
   allocateDeadDashboardUrl,
@@ -71,13 +74,19 @@ type VerificationEvidence = {
 
 export const EXPECTED_TOOL_NAMES = [
   "dashboard_benchmarks",
+  "dashboard_catalogue",
+  "dashboard_contract",
   "dashboard_free_models",
   "dashboard_github_movers",
+  "dashboard_github_trending",
   "dashboard_key_inventory",
+  "dashboard_matrix",
   "dashboard_model_economics",
   "dashboard_model_status",
+  "dashboard_price_comparison",
   "dashboard_resolve_model",
   "dashboard_source_health",
+  "dashboard_speed",
   "dashboard_usage_leaders",
   "dashboard_whats_changed",
 ] as const;
@@ -123,6 +132,8 @@ export const STANDARD_CALLS = [
     arguments: { outputModality: "text", limit: 5, discountEnrichment: 2 },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_contract", arguments: {} },
+  { name: "dashboard_speed", arguments: {} },
   { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
@@ -169,6 +180,9 @@ export const DIAGNOSTIC_CALLS = [
   {
     name: "dashboard_model_economics",
     arguments: {
+      // Keep the synthetic matrix confined to its three fixture providers;
+      // otherwise the runtime also retrieves Sail's live pricing document.
+      providers: ["openrouter", "groq", "cerebras"],
       ids: [
         "fixture/discounted",
         "fixture-groq/priced",
@@ -179,6 +193,8 @@ export const DIAGNOSTIC_CALLS = [
     },
   },
   { name: "dashboard_key_inventory", arguments: {} },
+  { name: "dashboard_contract", arguments: {} },
+  { name: "dashboard_speed", arguments: {} },
   { name: "dashboard_matrix", arguments: {} },
 ] as const satisfies readonly ToolCall[];
 
@@ -214,9 +230,12 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_usage_leaders", usageLeadersOutputSchema],
   ["dashboard_source_health", sourceHealthOutputSchema],
   ["dashboard_github_movers", githubMoversOutputSchema],
+  ["dashboard_github_trending", githubTrendingOutputSchema],
   ["dashboard_model_economics", modelEconomicsOutputSchema],
   ["dashboard_key_inventory", keyInventoryOutputSchema],
   ["dashboard_matrix", matrixOutputSchema],
+  ["dashboard_contract", contractOutputSchema],
+  ["dashboard_speed", speedOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([
@@ -233,6 +252,8 @@ const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   // still applies to it, so a real key appearing here is still caught.
   "secretname",
   "tokenizer",
+  "maxtokens",
+  "tokencount",
   "totaltokens",
 ]);
 
@@ -471,6 +492,36 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
   const output = asRecord(parsed.data, `${name} structuredContent`);
   if (output.status === "error") throw new Error(`${name} fixture returned error`);
 
+  if (name === "dashboard_benchmarks") {
+    const response = asRecord(output.response, "fixture benchmark response");
+    const rows = Array.isArray(response.data) ? response.data : [];
+    if (rows.length !== 1 || response.stale !== true) {
+      throw new Error("fixture benchmarks lost their row or stale evidence");
+    }
+    const row = asRecord(rows[0], "fixture benchmark row");
+    if (row.modelPermaslug !== "fixture/benchmark-unknown" || row.source !== "openrouter") {
+      throw new Error("fixture benchmark identity or source changed");
+    }
+    if (row.primaryScore !== null || row.accuracy !== null) {
+      throw new Error("fixture replaced an unknown benchmark score");
+    }
+  }
+  if (name === "dashboard_github_trending") {
+    if (output.collectedAt !== "2026-08-19T06:00:00.000Z") {
+      throw new Error("fixture trending changed the collection time");
+    }
+    const rows = Array.isArray(output.repositories) ? output.repositories : [];
+    const cap = asRecord(output.cap, "fixture trending cap");
+    if (rows.length !== cap.limit || cap.reached !== true) {
+      throw new Error("fixture trending did not apply its result limit");
+    }
+    if (rows.some((entry, index) => {
+      const row = asRecord(entry, "fixture trending row");
+      return row.fullName !== `fixture/trending-${index + 1}` || row.starsGained !== null;
+    })) {
+      throw new Error("fixture trending changed row order or invented gained stars");
+    }
+  }
   if (name === "dashboard_resolve_model") {
     if (output.unsatisfiable !== true) throw new Error("fixture resolver is satisfiable");
     if (!Array.isArray(output.resolved) || output.resolved.length !== 0) {
@@ -540,8 +591,8 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics claimed tool support Groq does not publish");
     }
 
-    // Cerebras publishes nothing, so it must be kept and explained, never dropped
-    // and never allowed to read as free.
+    // This fixture represents the current Cerebras connector's unpriced rows:
+    // keep and explain them, without treating them as free.
     const cerebras = byId.get("fixture-cerebras/bare");
     if (cerebras === undefined) {
       throw new Error("fixture economics dropped the unpriced Cerebras model");
@@ -550,7 +601,7 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
       throw new Error("fixture economics treated an unpriced model as rankable or free");
     }
     if (cerebras.emitsText !== null) {
-      throw new Error("fixture economics invented a modality Cerebras does not publish");
+      throw new Error("fixture economics invented a modality absent from the Cerebras fixture");
     }
     if (typeof cerebras.unrankableReason !== "string" || cerebras.unrankableReason === "") {
       throw new Error("fixture economics left an unpriced model unexplained");
@@ -785,8 +836,8 @@ function assertFreeModelsLiveInvariants(
       model.availability !== "available" ||
       model.isFree !== true ||
       model.freeKind !== "concrete_free" ||
-      !isZeroExactDecimal(model.pricing.promptUsdPerToken) ||
-      !isZeroExactDecimal(model.pricing.completionUsdPerToken) ||
+      !isZeroExactDecimal(model.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)?.amount ?? null) ||
+      !isZeroExactDecimal(model.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)?.amount ?? null) ||
       !model.outputModalities?.includes(input.outputModality)
     ) {
       throw new Error("free-model output contains an unavailable or non-free row");
@@ -825,7 +876,7 @@ export function assertModeResult(
   // It must still parse its own schema — asserted above — but demanding dashboard
   // failure evidence from a tool that never called the dashboard would be testing
   // a claim the tool does not make. It is exercised by its own unit tests instead.
-  const readsDashboard = name !== "dashboard_key_inventory";
+  const readsDashboard = !["dashboard_key_inventory", "dashboard_contract", "dashboard_speed"].includes(name);
 
   if (mode === "offline") {
     if (!readsDashboard) return;

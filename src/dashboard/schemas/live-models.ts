@@ -5,6 +5,7 @@ import {
   exactIntegerStringSchema,
   publicCollectionSchema,
 } from "./common.js";
+import { pricePointSchema } from "../../contract.js";
 
 /**
  * DELIBERATELY NOT AN ENUM.
@@ -33,25 +34,31 @@ export function isSemanticZeroDecimal(value: string | null): boolean {
 }
 
 type FreenessMetadata = {
-  pricing: {
-    promptUsdPerToken: string | null;
-    completionUsdPerToken: string | null;
-  };
+  pricePoints: Array<{ unit: string; amount: string; condition: unknown }>;
   isFree: boolean | null;
   freeKind: z.infer<typeof freeKindSchema>;
 };
 
+function tokenAmount(
+  value: FreenessMetadata,
+  unit: "token_in" | "token_out",
+): string | null {
+  return value.pricePoints.find(
+    (point) => point.unit === unit && point.condition === null,
+  )?.amount ?? null;
+}
+
 export function hasConsistentLiveModelFreeness(
   value: FreenessMetadata,
 ): boolean {
-  const pricesComplete =
-    value.pricing.promptUsdPerToken !== null &&
-    value.pricing.completionUsdPerToken !== null;
+  const input = tokenAmount(value, "token_in");
+  const output = tokenAmount(value, "token_out");
+  const pricesComplete = input !== null && output !== null;
   if (value.freeKind === "concrete_free") {
     return (
       value.isFree === true &&
-      isSemanticZeroDecimal(value.pricing.promptUsdPerToken) &&
-      isSemanticZeroDecimal(value.pricing.completionUsdPerToken)
+      isSemanticZeroDecimal(input) &&
+      isSemanticZeroDecimal(output)
     );
   }
   return value.isFree === (pricesComplete ? false : null);
@@ -64,19 +71,16 @@ export function isConcreteFreeLiveModel(value: FreenessMetadata): boolean {
   );
 }
 
-export const liveModelSchema = z
+const liveModelObjectSchema = z
   .object({
     provider: providerIdSchema,
     id: z.string().min(1),
     displayName: z.string().nullable(),
     ownedBy: z.string().nullable(),
     contextLength: exactIntegerStringSchema.nullable(),
-    pricing: z
-      .object({
-        promptUsdPerToken: exactDecimalStringSchema.nullable(),
-        completionUsdPerToken: exactDecimalStringSchema.nullable(),
-      })
-      .strict(),
+    pricePoints: z.array(pricePointSchema),
+    pricingState: z.enum(["published", "not_published", "unknown"]),
+    pricingNote: z.string().optional(),
     isFree: z.boolean().nullable(),
     freeKind: freeKindSchema,
     providerActive: z.boolean().nullable(),
@@ -98,12 +102,6 @@ export const liveModelSchema = z
     disappearedAt: z.string().datetime({ offset: true }).nullable(),
     absenceStreak: exactIntegerStringSchema,
     missingFields: z.array(z.string()),
-    // The completion window a price belongs to, when the provider prices per
-    // window. Sail publishes asap/balanced/flex at different rates, and the
-    // window is part of the price: two rows can look identical and require
-    // different settings to obtain. Optional, so the providers that do not
-    // price per window are unaffected.
-    pricingWindow: z.string().nullable().optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -115,5 +113,25 @@ export const liveModelSchema = z
       });
     }
   });
+
+/** Accepts old dashboard input only at the untrusted source boundary, then
+ * projects it immediately to the 1.0 shape. The old field is never emitted. */
+export const liveModelSchema = z.preprocess((raw) => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const value = raw as Record<string, unknown>;
+  if (!Object.hasOwn(value, "pricing")) return raw;
+  const pricing = value.pricing;
+  if (pricing === null || typeof pricing !== "object" || Array.isArray(pricing)) return raw;
+  const source = { url: "https://dashboard.test/api/public/v2/live-models", readAt: typeof value.lastConfirmedAt === "string" ? value.lastConfirmedAt : "2026-01-01T00:00:00.000Z" };
+  const window = typeof value.pricingWindow === "string" ? value.pricingWindow.toLowerCase() : "";
+  const condition = window.includes("asap") ? { kind: "latency_window", name: "ASAP" } : window.includes("balanced") ? { kind: "latency_window", name: "Balanced" } : window.includes("flex") ? { kind: "latency_window", name: "Flex" } : null;
+  const pricePoints = Object.entries(pricing as Record<string, unknown>).flatMap(([name, amount]) => {
+    if (typeof amount !== "string") return [];
+    const unit = name === "promptUsdPerToken" ? "token_in" : name === "completionUsdPerToken" ? "token_out" : null;
+    return unit === null ? [] : [{ id: `${String(value.provider)}:${String(value.id)}:${unit}`, amount, unit, condition, source, provenance: "published" }];
+  });
+  const { pricing: _pricing, pricingWindow: _pricingWindow, ...rest } = value;
+  return { ...rest, pricePoints, pricingState: pricePoints.length > 0 ? "published" : "unknown" };
+}, liveModelObjectSchema);
 
 export const liveModelsResponseSchema = publicCollectionSchema(liveModelSchema);

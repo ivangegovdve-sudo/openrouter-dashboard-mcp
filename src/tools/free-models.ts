@@ -19,6 +19,9 @@ import {
   publicModelSchema,
 } from "../dashboard/schemas/openrouter.js";
 import { RESOLVE_MODEL_CAPABILITY_MESSAGE } from "./resolve-model.js";
+import { pricePoint } from "../catalogue/price-set.js";
+import { pricePointSchema, type PriceUnit } from "../contract.js";
+import { dashboardBaseUrl } from "../config.js";
 import {
   READ_ONLY_TOOL_ANNOTATIONS,
   safeDashboardError,
@@ -58,14 +61,15 @@ const freeCatalogueModelSchema = publicModelSchema.pick({
   contentTrust: true,
   contextLength: true,
   architecture: true,
-  pricing: true,
   supportedParameters: true,
   expirationDate: true,
   lifecycleState: true,
   freeKind: true,
   weeklyRank: true,
   rankMethod: true,
-});
+}).extend({
+  pricePoints: z.array(pricePointSchema),
+}).strict();
 
 const listCapSchema = z
   .object({
@@ -219,13 +223,41 @@ export const freeModelsOutputSchema = z.discriminatedUnion("status", [
 
 export type FreeModelsInput = z.input<typeof freeModelsInputSchema>;
 export type FreeModelsOutput = z.infer<typeof freeModelsOutputSchema>;
-export type FreeModelsDependencies = { client: DashboardClient };
+export type FreeModelsDependencies = { client: DashboardClient; allowedProviders?: string[] };
 
 type CatalogueModel = z.infer<typeof publicModelSchema>;
 type Provenance = z.infer<typeof publicProvenanceSchema>;
 type FrontierResponse = z.infer<typeof freeFrontierResponseSchema>;
 
-function catalogueModel(model: CatalogueModel) {
+function cataloguePricePoints(model: CatalogueModel, observedAt: string) {
+  const sourceUrl = new URL(FREE_MODELS_ENDPOINT, dashboardBaseUrl()).href;
+  const units: Record<string, PriceUnit> = {
+    prompt: "token_in",
+    completion: "token_out",
+    input: "token_in",
+    output: "token_out",
+    input_cache_read: "token_cached",
+    cache_read: "token_cached",
+    input_cache_write: "token_cache_create",
+    cache_creation: "token_cache_create",
+    image: "image",
+    megapixel: "megapixel",
+    video_second: "video_second",
+    video: "video",
+    request: "request",
+  };
+  return Object.entries(model.pricing).flatMap(([name, amount]) => {
+    const unit = units[name];
+    if (unit === undefined || amount === null) return [];
+    try {
+      return [pricePoint({ id: `openrouter:${model.id}:${unit}`, amount, unit, condition: null, sourceUrl, readAt: observedAt, provenance: "published" })];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function catalogueModel(model: CatalogueModel, observedAt: string) {
   return {
     id: model.id,
     canonicalSlug: model.canonicalSlug,
@@ -233,7 +265,7 @@ function catalogueModel(model: CatalogueModel) {
     contentTrust: model.contentTrust,
     contextLength: model.contextLength,
     architecture: model.architecture,
-    pricing: model.pricing,
+    pricePoints: cataloguePricePoints(model, observedAt),
     supportedParameters: model.supportedParameters,
     expirationDate: model.expirationDate,
     lifecycleState: model.lifecycleState,
@@ -319,10 +351,11 @@ function unavailableFrontier(
 
 async function runFreeModelsUnsafe(
   rawInput: FreeModelsInput,
-  { client }: FreeModelsDependencies,
+  { client, allowedProviders }: FreeModelsDependencies,
 ): Promise<FreeModelsOutput> {
   const outputModalityDefaulted = rawInput.outputModality === undefined;
   const input = freeModelsInputSchema.parse(rawInput);
+  const observedAt = new Date().toISOString();
   const manifest = await client.get(
     MANIFEST_ENDPOINT,
     new URLSearchParams(),
@@ -391,7 +424,10 @@ async function runFreeModelsUnsafe(
   let excludedNotFreeCount = 0;
   let excludedUnknownPriceCount = 0;
   let excludedModalityCount = 0;
-  for (const model of live.data) {
+  const visibleLive = allowedProviders === undefined
+    ? live.data
+    : live.data.filter((model) => allowedProviders.includes(model.provider));
+  for (const model of visibleLive) {
     if (model.availability !== "available") {
       excludedUnavailableCount += 1;
       continue;
@@ -400,10 +436,9 @@ async function runFreeModelsUnsafe(
       excludedNotFreeCount += 1;
       continue;
     }
-    if (
-      model.pricing.promptUsdPerToken === null ||
-      model.pricing.completionUsdPerToken === null
-    ) {
+    const hasTokenPrice = (unit: "token_in" | "token_out") =>
+      model.pricePoints.some((point) => point.unit === unit && point.condition === null);
+    if (!hasTokenPrice("token_in") || !hasTokenPrice("token_out")) {
       excludedUnknownPriceCount += 1;
       continue;
     }
@@ -497,7 +532,7 @@ async function runFreeModelsUnsafe(
       warnings: liveWarnings,
       cap: {
         requestedLimit: input.limit,
-        examinedCount: live.data.length,
+        examinedCount: visibleLive.length,
         returnedCount: liveCandidates.length,
         nextCursor: live.cursor,
         capped: live.cursor !== null,
@@ -509,16 +544,20 @@ async function runFreeModelsUnsafe(
     },
     openRouterCatalogue: {
       endpoint: FREE_MODELS_ENDPOINT,
-      data: catalogue.data.map(catalogueModel),
-      router: catalogue.router === null ? null : catalogueModel(catalogue.router),
-      concreteFreeCount: catalogue.concreteFreeCount,
+      data: allowedProviders !== undefined && !allowedProviders.includes("openrouter")
+        ? []
+        : catalogue.data.map((model) => catalogueModel(model, observedAt)),
+      router: allowedProviders !== undefined && !allowedProviders.includes("openrouter")
+        ? null
+        : catalogue.router === null ? null : catalogueModel(catalogue.router, observedAt),
+      concreteFreeCount: allowedProviders !== undefined && !allowedProviders.includes("openrouter") ? "0" : catalogue.concreteFreeCount,
       evidence: sourceEvidence(FREE_MODELS_ENDPOINT, catalogue),
       stale: catalogue.stale,
       warnings: catalogueWarnings,
       cap: {
         requestedLimit: input.limit,
-        examinedCount: catalogue.data.length,
-        returnedCount: catalogue.data.length,
+        examinedCount: allowedProviders !== undefined && !allowedProviders.includes("openrouter") ? 0 : catalogue.data.length,
+        returnedCount: allowedProviders !== undefined && !allowedProviders.includes("openrouter") ? 0 : catalogue.data.length,
         nextCursor: catalogue.cursor,
         capped: catalogue.cursor !== null,
       },
