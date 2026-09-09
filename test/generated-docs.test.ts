@@ -75,3 +75,47 @@ test("the vocabulary shipped in the tarball is the vocabulary the schemas define
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(manifest.exports["./contract-vocabulary.json"], "./build/contract-vocabulary.json");
 });
+
+test("every subpath a consumer may reasonably import actually resolves", async () => {
+  // 1.0.0 SHIPPED A REGRESSION HERE AND I CAUSED IT. Adding an `exports` map to publish
+  // the contract vocabulary also switched the package from "everything is importable" to
+  // "only what is listed is importable", so `open-dashboard-mcp/package.json` -- which
+  // bundlers, doctors and version checks read routinely -- began throwing
+  // ERR_PACKAGE_PATH_NOT_EXPORTED.
+  //
+  // THE FIRST VERSION OF THIS TEST DID NOT CATCH IT EITHER, and the review said so: it
+  // deep-compared the manifest and checked that each target STARTED WITH "./build/",
+  // which is a string test wearing the words "exists in what is shipped". It would have
+  // passed against the broken 1.0.0 map. That is the same defect as the bug -- a check
+  // aimed at the wrong layer -- committed while fixing the bug.
+  //
+  // Node resolves a package's own name through its own exports map (self-reference), so
+  // importing by package name here exercises the REAL resolution a consumer gets.
+  // Verified: against the 1.0.0 map this throws ERR_PACKAGE_PATH_NOT_EXPORTED in-repo.
+  const { readFile, access } = await import("node:fs/promises");
+  const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const exportsMap = manifest.exports as Record<string, string>;
+
+  for (const [subpath, target] of Object.entries(exportsMap)) {
+    // 1. The target must actually exist on disk, not merely look plausible.
+    await access(new URL("../" + target.replace(/^\.\//, ""), import.meta.url));
+
+    // 2. `files` must actually ship it, checked against the array rather than a prefix.
+    const rel = target.replace(/^\.\//, "");
+    const shipped = (manifest.files as string[]).some((entry) => rel === entry || rel.startsWith(entry.replace(/\/$/, "") + "/"))
+      || rel === "package.json"; // npm always includes the manifest
+    assert.ok(shipped, `${target} is exported but the files array does not ship it`);
+
+    // 3. It must RESOLVE, which is the thing that actually broke.
+    if (subpath === ".") continue; // the entry is exercised by every other suite
+    const specifier = `${manifest.name}${subpath.slice(1)}`;
+    await assert.doesNotReject(
+      () => import(specifier, { with: { type: "json" } }),
+      `${specifier} does not resolve through the package's own exports map`,
+    );
+  }
+
+  // The subpath whose loss shipped in 1.0.0, named so its removal cannot be silent.
+  assert.ok("./package.json" in exportsMap,
+    "package.json must stay exported; omitting it is what broke 1.0.0 for every consumer that reads a package version");
+});
