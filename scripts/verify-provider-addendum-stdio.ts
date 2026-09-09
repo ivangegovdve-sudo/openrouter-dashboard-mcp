@@ -9,14 +9,15 @@ import { EXPECTED_TOOL_NAMES } from "./verify-stdio.js";
 
 // The verifier's parent supplies secrets in memory. Neither CLI arguments nor
 // generated evidence contain them; the MCP child receives only these keys.
-const falKey = process.env.FAL_API_KEY, crazyKey = process.env.CRAZYROUTER_API_KEY;
-assert.ok(falKey && crazyKey, "Both provider environment keys must be supplied for authenticated verification");
-// A STALE ARTIFACT MUST NOT SURVIVE A RUN THAT FAILS BEFORE WRITING. The evidence path
-// is cleared up front, so whatever is there afterwards is this run's or nothing. Without
-// this, a run that aborts early -- including the credential-safety abort below -- leaves
-// the PREVIOUS run's file in place, and a reader has no way to tell it is not current.
+// CLEARED BEFORE ANYTHING THAT CAN ABORT, INCLUDING THE CREDENTIAL CHECK BELOW. Whatever
+// sits at the evidence path afterwards is this run's output or nothing. Placed after the
+// credential assertion first time round, which left exactly one hole: a run with missing
+// keys aborted while the PREVIOUS run's artifact stayed on disk, indistinguishable from
+// current output -- the same misleading-artifact defect this change exists to close.
 if (process.argv[2]) await rm(process.argv[2], { force: true });
 
+const falKey = process.env.FAL_API_KEY, crazyKey = process.env.CRAZYROUTER_API_KEY;
+assert.ok(falKey && crazyKey, "Both provider environment keys must be supplied for authenticated verification");
 const client = new Client({ name: "provider-addendum-release-verifier", version: "1" });
 const transport = new StdioClientTransport({ command: process.execPath, args: [resolve("build/index.js")],
   env: { FAL_API_KEY: falKey, CRAZYROUTER_API_KEY: crazyKey }, stderr: "pipe" });
