@@ -31,8 +31,40 @@ export async function exportPackageFacts() {
     await client.connect(clientTransport);
     const tools = (await client.listTools()).tools.map(({ name, title, description, annotations }) => ({ name, title, description, annotations })).sort((a, b) => a.name.localeCompare(b.name));
     if (!tools.length || new Set(tools.map(tool => tool.name)).size !== tools.length || tools.some(tool => tool.annotations?.readOnlyHint !== true)) throw Error("Documentation read-only tool contract changed.");
-    return { name: manifest.name, version: manifest.version, node: manifest.engines.node, providers: PROVIDER_IDS.map(id => PROVIDER_REGISTRY[id]), tools };
+    return { name: manifest.name, version: manifest.version, node: manifest.engines.node, providers: PROVIDER_IDS.map(id => PROVIDER_REGISTRY[id]), tools, contract: contractVocabulary() };
   } finally { await client.close(); await server.close(); }
+}
+
+
+/**
+ * THE VOCABULARY THIS PACKAGE ACTUALLY EMITS, read out of the schemas.
+ *
+ * Exported so the companion site can assert against it instead of describing the package
+ * from memory. A previous pass put `measured_from` and `listed_but_unserviceable` on the
+ * Open Dashboard page when the package emits `vantagePoint` and has no serviceability
+ * state at all -- a page advertising fields that do not exist, which is the same
+ * stale-surface defect the price-set work exists to remove, one layer out. Prose on one
+ * side and a schema on the other cannot be kept in agreement by care alone.
+ */
+export function contractVocabulary() {
+  const kinds = (priceConditionSchema.options as ReadonlyArray<{ shape: { kind: { value: string } } }>)
+    .map(option => option.shape.kind.value);
+  const point = pricePointSchema as unknown as { shape: Record<string, { options?: readonly string[] }> };
+  const speed = speedObservationSchema as unknown as { shape: Record<string, { options?: readonly string[] }> };
+  return {
+    priceUnits: [...(priceUnitSchema.options as readonly string[])],
+    conditionKinds: kinds,
+    provenance: [...(point.shape.provenance!.options ?? [])],
+    speedStates: [...(speed.shape.state!.options ?? [])],
+    tokenBasis: [...(speed.shape.token_basis!.options ?? [])],
+    // Field names a consumer-facing surface may legitimately print. Read from the schemas
+    // where they are enumerable, listed here where they are object keys.
+    pricePointFields: Object.keys(point.shape),
+    speedFields: Object.keys(speed.shape),
+    contractFields: ["schema_version", "package_version", "deprecations", "field", "removed_in", "replaced_by", "reason", "since", "state"],
+    normalizedFigureFields: ["value", "unit", "assumption", "derived_from"],
+    environmentVariables: ["OPEN_DASHBOARD_TOOLS", "OPEN_DASHBOARD_PROVIDERS", "OPEN_DASHBOARD_KEY_SOURCES", "DASHBOARD_BASE_URL"],
+  };
 }
 
 export type PackageFacts = Awaited<ReturnType<typeof exportPackageFacts>>;
