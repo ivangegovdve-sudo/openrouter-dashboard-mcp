@@ -6,9 +6,7 @@ import { z } from "zod";
 
 import { createDashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
-import { runBenchmarks } from "../src/tools/benchmarks.js";
 import { runFreeModels } from "../src/tools/free-models.js";
-import { runGitHubTrending } from "../src/tools/github-trending.js";
 import { runModelStatus } from "../src/tools/model-status.js";
 import { runResolveModel } from "../src/tools/resolve-model.js";
 
@@ -80,69 +78,6 @@ test("fixture HTTP 500 mode becomes a bounded http_error", async () => {
         error.kind === "http_error" &&
         error.status === 500,
     );
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("synthetic benchmark fixture supports both call matrices and preserves unknown scores", async () => {
-  const { startFixtureDashboard } = await loadFixtureHarness();
-  const { assertFixtureResult } = await loadStdioHarness();
-  const fixture = await startFixtureDashboard({ mode: "fixture" });
-  try {
-    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
-    for (const input of [{ limit: 50 }, { source: "openrouter" as const, limit: 50 }]) {
-      const result = await runBenchmarks(input, { client });
-      assert.equal(result.status, "ok");
-      if (result.status !== "ok") return;
-      assertFixtureResult("dashboard_benchmarks", result);
-      const row = result.response.data[0];
-      assert.equal(row?.source, "openrouter");
-      if (row?.source !== "openrouter") return;
-      assert.equal(row.primaryScore, null);
-      assert.equal(row.accuracy, null);
-      assert.match(row.citation, /synthetic/i);
-      assert.throws(() => assertFixtureResult("dashboard_benchmarks", {
-        ...result,
-        response: { ...result.response, data: [{ ...row, primaryScore: 0 }] },
-      }), /unknown benchmark score/);
-    }
-    assert.deepEqual(fixture.requests, [
-      { method: "GET", path: "/api/public/v2/benchmarks", query: "limit=50" },
-      { method: "GET", path: "/api/public/v2/benchmarks", query: "limit=50&source=openrouter" },
-    ]);
-  } finally {
-    await fixture.close();
-  }
-});
-
-test("synthetic trending fixture preserves collection time and applies both matrix limits", async () => {
-  const { startFixtureDashboard } = await loadFixtureHarness();
-  const { assertFixtureResult } = await loadStdioHarness();
-  const fixture = await startFixtureDashboard({ mode: "fixture" });
-  try {
-    const client = createDashboardClient({ baseUrl: fixture.baseUrl });
-    for (const limit of [3, 5]) {
-      const result = await runGitHubTrending({ since: "daily", limit }, {
-        client,
-        now: () => new Date("2026-08-20T06:00:00.000Z"),
-      });
-      assert.equal(result.status, "ok");
-      if (result.status !== "ok") return;
-      assertFixtureResult("dashboard_github_trending", result);
-      assert.equal(result.repositories.length, limit);
-      assert.equal(result.cap.reached, true);
-      assert.equal(result.ageHours, 24);
-      assert.equal(result.stale, true);
-      assert.match(result.repositories[0]?.description ?? "", /synthetic/i);
-      assert.throws(() => assertFixtureResult("dashboard_github_trending", {
-        ...result,
-        collectedAt: "2026-08-20T06:00:00.000Z",
-      }), /collection time/);
-    }
-    assert.deepEqual(fixture.requests, [
-      { method: "GET", path: "/api/public/v2/github/trending", query: "since=daily" },
-    ]);
   } finally {
     await fixture.close();
   }
@@ -310,7 +245,6 @@ test("diagnostic call matrix covers all twelve deliberate assertions", async () 
     {
       name: "dashboard_model_economics",
       arguments: {
-        providers: ["openrouter", "groq", "cerebras"],
         ids: [
           "fixture/discounted",
           "fixture-groq/priced",

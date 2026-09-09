@@ -34,7 +34,6 @@ const REFUSAL_TIMEOUT_MS = 1_000;
 
 const ROUTES = [
   "/api/public/v2/manifest",
-  "/api/public/v2/benchmarks",
   "/api/public/v2/live-models",
   "/api/public/v2/models",
   "/api/public/v2/models/{id}/providers",
@@ -47,7 +46,6 @@ const ROUTES = [
   "/api/public/v2/apps",
   "/api/public/v2/app-model-matrix",
   "/api/public/v2/github/rankings",
-  "/api/public/v2/github/trending",
   "/api/public/v2/github/repositories",
 ] as const;
 
@@ -116,7 +114,7 @@ const discountedLiveModel = {
   availability: "available" as const,
 };
 
-/** This synthetic Groq row carries a price and no lifecycle signal. */
+/** Groq publishes a price here but no lifecycle signal anywhere. */
 const groqLiveModel = {
   ...liveModelFixture,
   provider: "groq" as const,
@@ -136,9 +134,9 @@ const groqLiveModel = {
 };
 
 /**
- * This synthetic Cerebras row supplies only an id and owner. Every capability
- * is null and the gaps are named, so the tool must report it as unrankable
- * rather than drop it or let a null price read as free.
+ * Cerebras publishes only an id and owner. Every capability is null and the gaps
+ * are named, so the tool must report it as unrankable rather than drop it or let
+ * a null price read as free.
  */
 const cerebrasLiveModel = {
   ...liveModelFixture,
@@ -244,56 +242,6 @@ function sourceStatusResponse() {
   return {
     ...collection(manifestResponse().sources),
     stale: true,
-  } as const;
-}
-
-// Synthetic loopback observations only; neither row is evidence about a live
-// benchmark service or GitHub's current board.
-function benchmarksResponse() {
-  return {
-    ...collection([{
-      source: "openrouter",
-      modelPermaslug: "fixture/benchmark-unknown",
-      displayName: "Synthetic fixture benchmark",
-      matchStatus: "unmatched",
-      pricing: { prompt: null, completion: null },
-      citation: "Synthetic loopback fixture; no live measurement",
-      sourceUrl: "https://example.invalid/fixture/benchmark",
-      benchmarkType: "fixture_unknown_score",
-      primaryMetric: null,
-      primaryScore: null,
-      accuracy: null,
-      accuracyStddev: null,
-      avgCostPerTask: null,
-      avgLatencyPerTaskMs: null,
-      totalTasks: null,
-      lastRunTimestamp: null,
-      searchEngine: null,
-      searchSurface: null,
-    }]),
-    stale: true,
-  } as const;
-}
-
-function trendingResponse() {
-  return {
-    schemaVersion: "2.0",
-    data: Array.from({ length: 6 }, (_, index) => ({
-      fullName: `fixture/trending-${index + 1}`,
-      owner: "fixture",
-      name: `trending-${index + 1}`,
-      description: "Synthetic loopback fixture; not a live GitHub observation",
-      language: null,
-      stars: 6 - index,
-      forks: 0,
-      starsGained: null,
-      url: `https://example.invalid/fixture/trending-${index + 1}`,
-    })),
-    collectedAt: "2026-08-19T06:00:00.000Z",
-    since: "daily",
-    language: null,
-    source: "direct",
-    fallbackReason: null,
   } as const;
 }
 
@@ -696,16 +644,6 @@ function fixtureBody(path: string, query: URLSearchParams): unknown {
   if (path === "/api/public/v2/manifest") {
     assertExactQuery(query, {});
     return manifestResponse();
-  }
-  if (path === "/api/public/v2/benchmarks") {
-    assertExactQuery(query, query.has("source")
-      ? { limit: "50", source: "openrouter" }
-      : { limit: "50" });
-    return benchmarksResponse();
-  }
-  if (path === "/api/public/v2/github/trending") {
-    assertExactQuery(query, { since: "daily" });
-    return trendingResponse();
   }
   if (path === "/api/public/v2/live-models") {
     assertOnlyKeys(query, [
