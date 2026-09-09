@@ -9,24 +9,36 @@ import { EXPECTED_TOOL_NAMES } from "./verify-stdio.js";
 
 // The verifier's parent supplies secrets in memory. Neither CLI arguments nor
 // generated evidence contain them; the MCP child receives only these keys.
-// NOTHING IS DELETED HERE, DELIBERATELY, AND THIS WENT BACK AND FORTH TWICE.
-// The concern is real: a run that aborts before writing leaves a PREVIOUS run's artifact
-// on disk, which a reader could mistake for current output. Clearing the path up front
-// closes that -- and opens something worse, because process.argv[2] is an arbitrary
-// caller-supplied path and an unconditional rm on it destroys whatever is there,
-// including a valid prior artifact or an unrelated file, on every failed invocation.
-// Destroying data to prevent a misreading is the wrong trade.
+const startedAt = new Date().toISOString();
+
+// CLAIM THE OUTPUT PATH UP FRONT, WITH A TRUTHFUL RECORD RATHER THAN A DELETION.
+// This went back and forth three times, so the reasoning is written down.
 //
-// Staleness is answered where it actually belongs. The artifact carries `startedAt`,
-// `finishedAt` and an explicit `verdict`, and the process exits non-zero when anything
-// fails, so a caller can always tell whether the file on disk came from the run it just
-// invoked. A verifier is not entitled to delete a path it was merely handed.
+// The hazard: a run that aborts before writing leaves the PREVIOUS run's artifact on
+// disk, and a reader can mistake `verdict: "passed"` from an hour ago for this run's
+// result. Missing credentials, a fetch failure or a parse error all abort before the
+// evidence object exists, so a failed verdict is never written.
+//
+// Deleting the path was tried and reverted: an unconditional rm on a caller-supplied
+// argument destroys whatever is there on every failed invocation, including an unrelated
+// file, and gives nothing back.
+//
+// Writing does. This path is the declared OUTPUT of this run -- overwriting it is what an
+// output path is for, unlike deleting it -- so it is claimed immediately with an honest
+// `verdict: "incomplete"`. Abort anywhere after this point and the file says so. It is
+// written before any credential is read and contains no provider data, so it cannot leak.
+if (process.argv[2]) {
+  await writeFile(process.argv[2], JSON.stringify({
+    verdict: "incomplete", startedAt,
+    note: "This run had not finished when this file was written. A run that completes replaces this with verdict passed or failed; if you are reading this, the run aborted before its evidence was assembled.",
+  }, null, 2) + String.fromCharCode(10));
+}
+
 const falKey = process.env.FAL_API_KEY, crazyKey = process.env.CRAZYROUTER_API_KEY;
 assert.ok(falKey && crazyKey, "Both provider environment keys must be supplied for authenticated verification");
 const client = new Client({ name: "provider-addendum-release-verifier", version: "1" });
 const transport = new StdioClientTransport({ command: process.execPath, args: [resolve("build/index.js")],
   env: { FAL_API_KEY: falKey, CRAZYROUTER_API_KEY: crazyKey }, stderr: "pipe" });
-const startedAt = new Date().toISOString();
 const falChecks = [
   { id: "fal-ai/bytedance/seedream/v4/text-to-image", value: "0.03", unit: "image" },
   { id: "fal-ai/flux-pro/kontext", value: "0.04", unit: "image" },
