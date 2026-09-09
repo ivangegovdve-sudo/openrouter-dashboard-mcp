@@ -229,7 +229,15 @@ type CatalogueModel = z.infer<typeof publicModelSchema>;
 type Provenance = z.infer<typeof publicProvenanceSchema>;
 type FrontierResponse = z.infer<typeof freeFrontierResponseSchema>;
 
-function cataloguePricePoints(model: CatalogueModel, observedAt: string) {
+/**
+ * `dropped` is NOT optional bookkeeping. This used to `catch { return []; }`, so a price
+ * the schema rejected disappeared with no warning, no state change and no record, while
+ * the tool still answered `status: "ok"` -- silent price loss presented as a complete
+ * answer. A caller cannot distinguish "this model has no such price" from "we could not
+ * read it", which collapses two of the three states this package exists to keep apart.
+ * Every dropped point is now named to the caller.
+ */
+function cataloguePricePoints(model: CatalogueModel, observedAt: string, dropped: string[]) {
   const sourceUrl = new URL(FREE_MODELS_ENDPOINT, dashboardBaseUrl()).href;
   const units: Record<string, PriceUnit> = {
     prompt: "token_in",
@@ -252,12 +260,13 @@ function cataloguePricePoints(model: CatalogueModel, observedAt: string) {
     try {
       return [pricePoint({ id: `openrouter:${model.id}:${unit}`, amount, unit, condition: null, sourceUrl, readAt: observedAt, provenance: "published" })];
     } catch {
+      dropped.push(`${model.id} (${unit})`);
       return [];
     }
   });
 }
 
-function catalogueModel(model: CatalogueModel, observedAt: string) {
+function catalogueModel(model: CatalogueModel, observedAt: string, dropped: string[]) {
   return {
     id: model.id,
     canonicalSlug: model.canonicalSlug,
@@ -265,7 +274,7 @@ function catalogueModel(model: CatalogueModel, observedAt: string) {
     contentTrust: model.contentTrust,
     contextLength: model.contextLength,
     architecture: model.architecture,
-    pricePoints: cataloguePricePoints(model, observedAt),
+    pricePoints: cataloguePricePoints(model, observedAt, dropped),
     supportedParameters: model.supportedParameters,
     expirationDate: model.expirationDate,
     lifecycleState: model.lifecycleState,
@@ -452,6 +461,8 @@ async function runFreeModelsUnsafe(
     }
     liveCandidates.push(model);
   }
+  const droppedCataloguePrices: string[] = [];
+  const catalogueOmitsOpenRouter = allowedProviders !== undefined && !allowedProviders.includes("openrouter");
   const catalogueWarnings = pageWarnings(
     FREE_MODELS_ENDPOINT,
     catalogue.stale,
@@ -512,6 +523,21 @@ async function runFreeModelsUnsafe(
     ? `Found ${liveCandidates.length} live free candidate${liveCandidates.length === 1 ? "" : "s"}; output modality defaulted to text.`
     : `Found ${liveCandidates.length} live free ${input.outputModality}-output candidate${liveCandidates.length === 1 ? "" : "s"}.`;
 
+  // Projected BEFORE the return literal, not inside it: the drop warning below can only
+  // be honest once the mapping has actually run. Relying on object-property evaluation
+  // order to make that true is the kind of coupling that breaks silently on a reorder.
+  const catalogueData = catalogueOmitsOpenRouter
+    ? []
+    : catalogue.data.map((model) => catalogueModel(model, observedAt, droppedCataloguePrices));
+  const catalogueRouter = catalogueOmitsOpenRouter || catalogue.router === null
+    ? null
+    : catalogueModel(catalogue.router, observedAt, droppedCataloguePrices);
+  if (droppedCataloguePrices.length > 0) {
+    catalogueWarnings.push(
+      `${droppedCataloguePrices.length} published price${droppedCataloguePrices.length === 1 ? "" : "s"} could not be represented and ${droppedCataloguePrices.length === 1 ? "is" : "are"} omitted from pricePoints: ${uniqueStrings(droppedCataloguePrices).join(", ")}. Those models are missing a price the source does publish; absence here is unread, not unpriced.`,
+    );
+  }
+
   return {
     status,
     schemaVersion: "2.0",
@@ -544,12 +570,8 @@ async function runFreeModelsUnsafe(
     },
     openRouterCatalogue: {
       endpoint: FREE_MODELS_ENDPOINT,
-      data: allowedProviders !== undefined && !allowedProviders.includes("openrouter")
-        ? []
-        : catalogue.data.map((model) => catalogueModel(model, observedAt)),
-      router: allowedProviders !== undefined && !allowedProviders.includes("openrouter")
-        ? null
-        : catalogue.router === null ? null : catalogueModel(catalogue.router, observedAt),
+      data: catalogueData,
+      router: catalogueRouter,
       concreteFreeCount: allowedProviders !== undefined && !allowedProviders.includes("openrouter") ? "0" : catalogue.concreteFreeCount,
       evidence: sourceEvidence(FREE_MODELS_ENDPOINT, catalogue),
       stale: catalogue.stale,

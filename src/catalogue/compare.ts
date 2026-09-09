@@ -204,11 +204,11 @@ function comparisonLeg(left: PricePoint[], right: PricePoint[], unit: PriceUnit,
   return { status: "comparable", unit: result.unit, assumption: result.assumption, pricePoints: { left, right }, pairs: result.pairs };
 }
 
-function openrouterPrices(row: NativeRecord, observedAt: string): PricePoint[] {
+function openrouterPrices(row: NativeRecord, observedAt: string, dropped: string[]): PricePoint[] {
   const native = record(row.pricing), points: PricePoint[] = [];
   for (const [field, unit] of [["prompt", "token_in"], ["completion", "token_out"]] as const) {
     if (typeof native[field] !== "string") continue;
-    try { points.push(pricePoint({ id: `openrouter:${String(row.id)}:${unit}`, amount: native[field], unit, condition: null, sourceUrl: OPENROUTER_COMPARISON_URL, readAt: observedAt, provenance: "published" })); } catch { /* unknown native price remains unobserved */ }
+    try { points.push(pricePoint({ id: `openrouter:${String(row.id)}:${unit}`, amount: native[field], unit, condition: null, sourceUrl: OPENROUTER_COMPARISON_URL, readAt: observedAt, provenance: "published" })); } catch { dropped.push(`${String(row.id)} (${unit})`); }
   }
   return points;
 }
@@ -222,13 +222,13 @@ function directReference(identity: CrazyrouterIdentity, observedAt: string): { i
   return { input: point(input, "token_in", "input"), output: point(output, "token_out", "output") };
 }
 
-function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<string, NativeRecord[]>, orAvailable: boolean, crazyAvailable: boolean, duplicateCrazy: boolean, observedAt: string) {
+function rowFor(id: string, model: CatalogueModel | undefined, orById: Map<string, NativeRecord[]>, orAvailable: boolean, crazyAvailable: boolean, duplicateCrazy: boolean, observedAt: string, dropped: string[]) {
   const identity: CrazyrouterIdentity = model ? crazyrouterIdentity(model) : { exactModelAlias: id, nativeOwner: null, nativeVendorName: null, basis: "model_not_observed", snapshotEquivalence: "not_established" };
   const expectedId = identity.authorNamespace ? `${identity.authorNamespace}/${identity.exactModelAlias}` : undefined;
   const matches = expectedId ? orById.get(expectedId) ?? [] : [];
   const matched = matches.length === 1 && !duplicateCrazy ? matches[0] : undefined;
   const crazyPoints = model?.pricePoints ?? [];
-  const openrouterPoints = matched ? openrouterPrices(matched, observedAt) : [];
+  const openrouterPoints = matched ? openrouterPrices(matched, observedAt, dropped) : [];
   const comparisons = { input: comparisonLeg(crazyPoints, openrouterPoints, "token_in", "same provider price per input token"), output: comparisonLeg(crazyPoints, openrouterPoints, "token_out", "same provider price per output token") };
   let status: "comparable" | "price_not_available" | "openrouter_model_not_found" | "identity_not_established" | "source_unavailable" | "crazyrouter_model_not_observed" = "comparable";
   let reason: string | undefined;
@@ -254,8 +254,12 @@ export async function runPriceComparison(rawInput: PriceComparisonInput, depende
   for (const model of crazy.models) identityCounts.set(model.id, (identityCounts.get(model.id) ?? 0) + 1);
   for (const row of openrouter.rows) { const id = String(row.id); const matches = orById.get(id) ?? []; matches.push(row); orById.set(id, matches); }
   const requestedNotObserved = [...(selected ?? [])].filter(id => !identityCounts.has(id));
-  const rows = selectedModels.map(model => rowFor(model.id, model, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", identityCounts.get(model.id)! > 1, observedAt));
-  rows.push(...requestedNotObserved.map(id => rowFor(id, undefined, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", false, observedAt)));
+  // A native price we could not represent is UNREAD, not absent. This was swallowed by a
+  // bare `catch {}` whose comment said "remains unobserved" while nothing told the caller
+  // so, and the row still reported a clean comparison against whatever survived.
+  const droppedOpenrouterPrices: string[] = [];
+  const rows = selectedModels.map(model => rowFor(model.id, model, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", identityCounts.get(model.id)! > 1, observedAt, droppedOpenrouterPrices));
+  rows.push(...requestedNotObserved.map(id => rowFor(id, undefined, orById, openrouter.source.status === "available", crazy.provider.status !== "unavailable", false, observedAt, droppedOpenrouterPrices)));
   const comparable = rows.filter(row => row.status === "comparable").length;
   const paged = rows.slice(input.offset, input.offset + input.limit);
   return priceComparisonOutputSchema.parse({
@@ -266,6 +270,6 @@ export async function runPriceComparison(rawInput: PriceComparisonInput, depende
     rows: paged,
     population: { acquiredCrazyrouterRows: crazy.provider.population.received, retainedCrazyrouterRows: crazy.provider.population.retained, openrouterReceivedRows: openrouter.source.received, excludedByUserFilter: crazy.models.length - selectedModels.length, missingRequestedIds: crazy.provider.status === "unavailable" ? [] : requestedNotObserved, beforePagination: rows.length, returned: paged.length, comparableBeforePagination: comparable, offset: input.offset, limit: input.limit, nextOffset: input.offset + paged.length < rows.length ? input.offset + paged.length : null, filterRule: selected ? "exact Crazyrouter native id allowlist; missing requested ids retained explicitly" : "all acquired Crazyrouter identities, including unpriced and unmatched", platformPopulationEstablished: false },
     vendorClaim: { text: "Pay-as-you-go pricing: 20–50% cheaper than official provider rates on most models", attribution: "Crazyrouter Team", sourceUrl: "https://crazyrouter.com/en/blog/openrouter-vs-crazyrouter-ai-api-router-comparison-2026", publishedAt: "2026-03-01", observedAt: "2026-09-08", scope: "Vendor claim versus official provider rates on most models; not a universal guarantee or an OpenRouter-specific comparison.", globalAssessment: "not_established" },
-    warnings: ["Overall status describes source acquisition and token-visible catalogue completeness, not universal price coverage; each row carries its own comparison status.", "Join uses explicit author namespace and exact API alias only; immutable snapshot and deployment equivalence are not established.", "Every comparison is basis-bound and refuses incompatible units or conditions rather than coercing them."]
+    warnings: [...(droppedOpenrouterPrices.length === 0 ? [] : [`${droppedOpenrouterPrices.length} OpenRouter native price${droppedOpenrouterPrices.length === 1 ? "" : "s"} could not be represented and ${droppedOpenrouterPrices.length === 1 ? "was" : "were"} omitted from the comparison baseline: ${[...new Set(droppedOpenrouterPrices)].join(", ")}. A comparison missing a baseline point is narrower than it looks.`]), "Overall status describes source acquisition and token-visible catalogue completeness, not universal price coverage; each row carries its own comparison status.", "Join uses explicit author namespace and exact API alias only; immutable snapshot and deployment equivalence are not established.", "Every comparison is basis-bound and refuses incompatible units or conditions rather than coercing them."]
   });
 }

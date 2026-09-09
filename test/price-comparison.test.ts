@@ -127,3 +127,23 @@ test("price comparison does not call an unauthenticated pricing subset full or f
   assert.equal(failed.rows[0]?.status, "source_unavailable");
   assert.deepEqual(failed.population.missingRequestedIds, []);
 });
+
+test("a native price we could not represent is reported, not silently dropped", async () => {
+  // WAS A BARE `catch {}` whose comment read "unknown native price remains unobserved"
+  // while nothing whatsoever told the caller. openrouterPrices skipped any amount the
+  // canonical-decimal schema rejected -- exponent notation among them -- and the row then
+  // reported a clean comparison against only the points that survived. A comparison
+  // missing half its baseline looks identical to one that had a complete baseline, which
+  // is the three-state collapse this package exists to prevent: unread read as absent.
+  const { runPriceComparison } = await module();
+  const result: any = await runPriceComparison({}, {
+    apiKey: "synthetic-key", now,
+    // "1e-7" is a real shape for a tiny per-token price and is rejected by
+    // canonicalDecimalSchema, so it exercises the drop path exactly.
+    fetchImpl: sources({ rows: [crazy("gpt-4o")], openrouter: [or("openai/gpt-4o", "1e-7", "0.00001")] }),
+  });
+  const dropped = result.warnings.filter((warning: string) => /could not be represented/.test(warning));
+  assert.equal(dropped.length, 1, "the omission must reach the caller");
+  assert.match(dropped[0], /token_in/, "the warning names which price was lost");
+  assert.match(dropped[0], /openai\/gpt-4o/, "and which model it belonged to");
+});

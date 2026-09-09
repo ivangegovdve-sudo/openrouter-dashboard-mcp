@@ -373,8 +373,15 @@ function auxiliaryFailure(
   return { endpoint, error: safeDashboardError(reason.reason) };
 }
 
+/**
+ * `dropped` is NOT optional bookkeeping. This used to `catch { return []; }`, so a price
+ * the schema rejected vanished with no warning and no state change while the tool still
+ * answered successfully. The caller then could not tell "this model has no such price"
+ * from "we could not read it" -- two of the three states this package exists to separate.
+ */
 function trimOpenRouterDetail(
   detail: z.infer<typeof publicModelSchema>,
+  dropped: string[],
 ): z.infer<typeof openRouterDetailSchema> {
   const units: Record<string, PriceUnit> = {
     prompt: "token_in", completion: "token_out", input: "token_in", output: "token_out",
@@ -387,7 +394,10 @@ function trimOpenRouterDetail(
     if (unit === undefined || amount === null) return [];
     try {
       return [pricePoint({ id: `openrouter:${detail.id}:${unit}`, amount, unit, condition: null, sourceUrl: new URL(`${MODELS_ENDPOINT}/${encodeURIComponent(detail.id)}`, dashboardBaseUrl()).href, readAt: new Date().toISOString(), provenance: "published" })];
-    } catch { return []; }
+    } catch {
+      dropped.push(`${detail.id} (${unit})`);
+      return [];
+    }
   });
   return openRouterDetailSchema.parse({
     id: detail.id,
@@ -490,7 +500,13 @@ export async function runModelStatus(
 
     let detail: z.infer<typeof openRouterDetailSchema> | null = null;
     if (detailResult.status === "fulfilled") {
-      detail = trimOpenRouterDetail(detailResult.value.data);
+      const droppedDetailPrices: string[] = [];
+      detail = trimOpenRouterDetail(detailResult.value.data, droppedDetailPrices);
+      if (droppedDetailPrices.length > 0) {
+        warnings.push(
+          `${droppedDetailPrices.length} published price${droppedDetailPrices.length === 1 ? "" : "s"} could not be represented and ${droppedDetailPrices.length === 1 ? "is" : "are"} omitted from pricePoints: ${droppedDetailPrices.join(", ")}. Absence here is unread, not unpriced.`,
+        );
+      }
       evidence.push(sourceEvidence(detailEndpoint, detailResult.value));
       warnings.push(...staleWarning(detailEndpoint, detailResult.value.stale));
     } else {
