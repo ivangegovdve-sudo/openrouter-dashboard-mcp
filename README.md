@@ -6,6 +6,10 @@ Read-only MCP access to public model and GitHub evidence, covering **OpenRouter,
 
 <!-- summary:end -->
 
+## 1.0.0 skips 0.9.0
+
+**There is no 0.9.0 on npm and there never was.** The previously published release is **0.8.0**, so 1.0.0 is the next version you can install and the breaking changes below are the 0.8.0 → 1.0.0 jump. 0.9.0 was built and verified in the repository but never published; if you track version numbers, you have not missed a release. See [the 1.0.0 release notes](docs/release-1.0.0.md).
+
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
 ## Install
@@ -283,7 +287,25 @@ For example, request WaveSpeed video detail with:
 
 Filtering happens after acquisition, in stable provider/id order. `population` reports acquired, matched and returned counts, exclusions by media kind and model ID, and rows omitted by pagination. Each provider separately reports `listed`, `received`, `retained`, `excluded`, `exclusionRules`, `completeness` and the applied `requestParameters`. A missing native denominator stays null with an explanation; unavailable and unknown populations never become zero. These counters describe the rows actually acquired, not a claim that every provider's entire global inventory was observed.
 
-Each model exposes `pricePoints` directly. A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`; amounts are exact decimal strings, and units are one of `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `request`, or `gpu_hour`. Conditions are a closed union of `latency_window`, `time_band`, `tier`, and `rate_class`, so a rate is never detached from the choice that produced it. `provenance` is `published`, `derived`, `parsed_from_prose`, or `unknown`; derived points also name `derivedFrom`, and prose-derived points retain `sourceText`.
+<!-- contract:begin generated-do-not-edit -->
+
+A model does not have *a* price. It has a **set** of price points, each valid only under a stated condition, and the set is the unit this package publishes.
+
+A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. Amounts are exact decimal strings, never floats, so a sub-cent per-token rate survives a round trip. `source` names the page it was read from and when; a price whose read time cannot be established is not emitted at all.
+
+**Units** (10): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `request`, `gpu_hour`.
+
+**Condition kinds** (five): `latency_window`, `time_band`, `tier`, `rate_class`, `price_scope`. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. `price_scope` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.
+
+**Provenance**: `published`, `derived`, `parsed_from_prose`, `unknown`. A `derived` point names `derivedFrom`; a `parsed_from_prose` point retains the `sourceText` it was read out of. `unknown` is a real answer and is never rounded to a number.
+
+**The refusal rule.** A comparison returns every compatible pair or it refuses. Two points compare only under the same unit AND the same condition; mismatched units, mismatched conditions, or a zero baseline produce `not_comparable` with a reason. Nothing is coerced to make a comparison possible, because a comparison across conditions is not a weaker answer, it is a wrong one.
+
+**Speed carries its own conditions.** `dashboard_speed` observations are `measured`, `published`, `unknown`. A rate names `token_basis` (`visible_output`, `billed_total`, `unknown`) because a reasoning model emits tokens that never reach content, so a visible-output rate and a billed rate differ by multiples. Every observation carries a `vantagePoint`: latency is a property of a provider *and* where it was measured from, so a figure without one flatters whoever is nearest the benchmark host. A claim this package cannot source is published as `unknown`, not as a number.
+
+**Deprecations.** `dashboard_contract` returns `schema_version`, the installed `package_version`, and every field or tool announced for removal. A notice names `replaced_by`, or gives a plain `reason` when the capability is gone with no replacement. From 1.0.0 onward a removal is announced before the release that performs it; the 1.0.0 notices are retrospective because no earlier published release carried this mechanism.
+
+<!-- contract:end -->
 
 Pricing state is separate from the points: `published` requires at least one point, while `not_published` and `unknown` carry an empty list and an explanatory `pricingNote`. A missing or non-comparable price is never represented as zero. Every normalized summary figure uses `{ value, unit, assumption, derived_from }`; an assumption cannot be omitted.
 

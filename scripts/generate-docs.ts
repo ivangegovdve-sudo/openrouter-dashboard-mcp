@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { PROVIDER_IDS, PROVIDER_REGISTRY, providerDescriptorSchema } from "../src/providers/registry.js";
+import { priceConditionSchema, priceUnitSchema, pricePointSchema } from "../src/contract.js";
+import { speedObservationSchema } from "../src/speed.js";
 import { createServer } from "../src/server.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -48,8 +50,45 @@ export function readmeBlocks(facts: PackageFacts): Record<string, string> {
   return {
     summary: `Read-only MCP access to public model and GitHub evidence, covering **${facts.providers.map(p => markdown(p.displayName)).join(", ")}**. Version **${facts.version}** registers **${facts.providers.length} providers** and exposes ${numberWords[facts.tools.length] ?? facts.tools.length} bounded tools over stdio. Results use the same machine-readable value in \`structuredContent\` and JSON text content.`,
     providers: `Generated from the package registry: **${facts.providers.length} providers** in **${facts.name} ${facts.version}**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.\n\n| Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |\n|---|---|---|---|---|---|---|---|\n${providerRows}\n\n### Provider pitches and structured caveats\n\nQuotations are the providers' words. Caveats record published limits, including scope and units; they do not claim measured inference speed or a caller's current quota. An absent caveat is accompanied by its research status, never a null placeholder.\n\n${providerEvidence}`,
+    contract: contractBlock(),
     tools: `**${facts.tools.length} read-only tools**, read from the server's actual MCP \`tools/list\` registration graph without calling any tool.\n\n| Tool | Purpose |\n|---|---|\n${facts.tools.map(tool => `| \`${tool.name}\` | ${markdown(tool.title || tool.name)} |`).join("\n")}`,
   };
+}
+
+
+/**
+ * READ OUT OF THE SCHEMAS, NOT RETYPED. The price-set section of this README was prose
+ * and drifted the moment a condition kind was added: it still said the union was
+ * "latency_window, time_band, tier, and rate_class" after price_scope existed in the
+ * code. Anything a reader could check against the package is generated from the package.
+ */
+function contractBlock(): string {
+  const units = (priceUnitSchema.options as readonly string[]).map(u => `\`${u}\``).join(", ");
+  const kinds = (priceConditionSchema.options as ReadonlyArray<{ shape: { kind: { value: string } } }>)
+    .map(option => `\`${option.shape.kind.value}\``);
+  const provenance = (pricePointSchema as unknown as { shape: { provenance: { options: readonly string[] } } })
+    .shape.provenance.options.map(value => `\`${value}\``).join(", ");
+  const speedShape = (speedObservationSchema as unknown as { shape: Record<string, { options: readonly string[] }> }).shape;
+  const speedStates = speedShape.state!.options.map(value => `\`${value}\``).join(", ");
+  const tokenBasis = speedShape.token_basis!.options.map(value => `\`${value}\``).join(", ");
+  const numberWords = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+  return [
+    `A model does not have *a* price. It has a **set** of price points, each valid only under a stated condition, and the set is the unit this package publishes.`,
+    ``,
+    `A point is \`{ amount, unit, condition, source: { url, readAt }, provenance }\`. Amounts are exact decimal strings, never floats, so a sub-cent per-token rate survives a round trip. \`source\` names the page it was read from and when; a price whose read time cannot be established is not emitted at all.`,
+    ``,
+    `**Units** (${(priceUnitSchema.options as readonly string[]).length}): ${units}.`,
+    ``,
+    `**Condition kinds** (${numberWords[kinds.length] ?? kinds.length}): ${kinds.join(", ")}. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. \`price_scope\` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.`,
+    ``,
+    `**Provenance**: ${provenance}. A \`derived\` point names \`derivedFrom\`; a \`parsed_from_prose\` point retains the \`sourceText\` it was read out of. \`unknown\` is a real answer and is never rounded to a number.`,
+    ``,
+    `**The refusal rule.** A comparison returns every compatible pair or it refuses. Two points compare only under the same unit AND the same condition; mismatched units, mismatched conditions, or a zero baseline produce \`not_comparable\` with a reason. Nothing is coerced to make a comparison possible, because a comparison across conditions is not a weaker answer, it is a wrong one.`,
+    ``,
+    `**Speed carries its own conditions.** \`dashboard_speed\` observations are ${speedStates}. A rate names \`token_basis\` (${tokenBasis}) because a reasoning model emits tokens that never reach content, so a visible-output rate and a billed rate differ by multiples. Every observation carries a \`vantagePoint\`: latency is a property of a provider *and* where it was measured from, so a figure without one flatters whoever is nearest the benchmark host. A claim this package cannot source is published as \`unknown\`, not as a number.`,
+    ``,
+    `**Deprecations.** \`dashboard_contract\` returns \`schema_version\`, the installed \`package_version\`, and every field or tool announced for removal. A notice names \`replaced_by\`, or gives a plain \`reason\` when the capability is gone with no replacement. From 1.0.0 onward a removal is announced before the release that performs it; the 1.0.0 notices are retrospective because no earlier published release carried this mechanism.`,
+  ].join(String.fromCharCode(10));
 }
 
 export function replaceReadmeBlocks(readme: string, facts: PackageFacts): string {

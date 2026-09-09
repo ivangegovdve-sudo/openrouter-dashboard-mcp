@@ -139,3 +139,20 @@ test("the opening line's tool count matches the number of tools actually served"
     `the opening line should say "${word} bounded tools" for ${live.length} served tools`,
   );
 });
+
+test("the README states outright that 1.0 skips 0.9.0", () => {
+  // A consumer watching version numbers sees 0.8.0 then 1.0.0 and reasonably concludes
+  // they missed a release. They did not: 0.9.0 was built here and never published. The
+  // npmjs page IS this README, so the statement has to live here, not only in docs/.
+  // An earlier draft of the deprecation copy went further and claimed "0.9.0 shipped
+  // before this mechanism existed", which is a false admission about a release that
+  // never existed -- worse than saying nothing.
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  assert.match(readme, /no 0\.9\.0 on npm/i, "the README must say plainly that 0.9.0 was never published");
+  assert.match(readme, /0\.8\.0/, "and must name the version consumers are actually upgrading from");
+  assert.doesNotMatch(readme, /0\.9\.0 shipped/i, "nothing may claim 0.9.0 shipped");
+
+  const notes = readFileSync(new URL("../docs/release-1.0.0.md", import.meta.url), "utf8");
+  assert.match(notes, /skips 0\.9\.0/i);
+  assert.doesNotMatch(notes, /0\.9\.0 shipped/i);
+});
