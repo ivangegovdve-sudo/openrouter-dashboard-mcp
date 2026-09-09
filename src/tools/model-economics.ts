@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import type { DashboardClient } from "../dashboard/client.js";
 import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
+import { normalizePricePoint } from "../catalogue/price-set.js";
+import { exactDecimalRatio } from "../catalogue/decimal.js";
+import { pricePointSchema, type PricePoint } from "../contract.js";
+import { providerEvidenceShape } from "../providers/evidence.js";
 import {
   providerListResponseSchema,
   publicModelsResponseSchema,
@@ -80,11 +84,6 @@ export function shiftDecimalString(value: string, places: number): string | null
     .replace(/\.$/, "")
     .replace(/^0+(\d)/, "$1");
   return `${sign}${normalized}`;
-}
-
-function usdPerMillionTokens(value: string | null): string | null {
-  if (value === null) return null;
-  return shiftDecimalString(value, 6);
 }
 
 export const discountCoverageSchema = z.enum([
@@ -238,15 +237,9 @@ const economicsModelSchema = z
      * the projection -- a price whose qualifier is missing is a number whose
      * meaning has to be inferred.
      */
-    pricingWindow: z.string().nullable(),
-    pricing: z
-      .object({
-        promptUsdPerToken: z.string().nullable(),
-        completionUsdPerToken: z.string().nullable(),
-        promptUsdPerMillionTokens: z.string().nullable(),
-        completionUsdPerMillionTokens: z.string().nullable(),
-      })
-      .strict(),
+    pricePoints: z.array(pricePointSchema),
+    pricingState: z.enum(["published", "not_published", "unknown"]),
+    pricingNote: z.string().optional(),
     /**
      * Whether this row can take part in a cost ranking at all. False for every
      * model whose provider publishes no price — reported rather than dropped, so
@@ -293,6 +286,7 @@ const economicsModelSchema = z
 
 const providerReportSchema = z
   .object({
+    ...providerEvidenceShape,
     // A provider id the dashboard reported. Not an enum: a client that
     // refuses an unfamiliar provider breaks when the server adds one.
     provider: z.string().min(1),
@@ -438,12 +432,24 @@ export type ModelEconomicsDependencies = {
   client: DashboardClient;
   /** Injected so retirement risk is deterministic under test. */
   now?: () => Date;
+  allowedProviders?: string[];
 };
 
-function comparablePrice(value: string | null): number {
-  if (value === null) return Number.POSITIVE_INFINITY;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+function dependenciesAllowedProviders(input: ModelEconomicsInput, dependencies: ModelEconomicsDependencies): string[] | undefined {
+  if (dependencies.allowedProviders === undefined) return input.providers;
+  const selected = input.providers ?? dependencies.allowedProviders;
+  return selected.filter((provider) => dependencies.allowedProviders!.includes(provider));
+}
+
+function priceForUnit(points: PricePoint[], unit: "token_in" | "token_out", preferredWindow?: "ASAP" | "Balanced" | "Flex"): string | null {
+  return points.find((point) => point.unit === unit && (point.condition === null || (preferredWindow !== undefined && point.condition?.kind === "latency_window" && point.condition.name === preferredWindow)))?.amount ?? null;
+}
+
+function compareExactDecimal(left: string, right: string): number {
+  const a = exactDecimalRatio(left);
+  const b = exactDecimalRatio(right);
+  const difference = BigInt(a.numerator) * BigInt(b.denominator) - BigInt(b.numerator) * BigInt(a.denominator);
+  return difference < 0n ? -1 : difference > 0n ? 1 : 0;
 }
 
 type OpenRouterExtra = {
@@ -455,9 +461,11 @@ type OpenRouterExtra = {
 
 export async function runModelEconomics(
   rawInput: ModelEconomicsInput,
-  { client, now = () => new Date() }: ModelEconomicsDependencies,
+  dependencies: ModelEconomicsDependencies,
 ): Promise<ModelEconomicsOutput> {
+  const { client, now = () => new Date() } = dependencies;
   const input = modelEconomicsInputSchema.parse(rawInput);
+  const allowedProviders = dependenciesAllowedProviders(input, dependencies);
   const asOfIso = now().toISOString();
   const warnings: string[] = [];
   const evidence: z.infer<typeof sourceEvidenceSchema>[] = [];
@@ -492,7 +500,7 @@ export async function runModelEconomics(
   //    parameter list, so there is nothing equivalent to fetch for them — that is a
   //    fact recorded in the provider registry, not an omission here.
 
-  const wantsSail = input.providers === undefined || input.providers.includes("sail");
+  const wantsSail = allowedProviders === undefined || allowedProviders.includes("sail");
   if (wantsSail) {
     // Every Sail row in the answer must come from the digest-verified document,
     // and ONLY from it. The live-model schema permits provider: "sail", so the
@@ -538,56 +546,52 @@ export async function runModelEconomics(
         while ((match = groupRe.exec(docStr)) !== null) {
           const modelId = match[1] || "";
           const block = match[2] || "";
-          
+
           const rowRe = /aria-label="([^"]*?) pricing: input \$([\d.]+), cached \$([\d.]+), output \$([\d.]+)/g;
-          let bestRow: { window: "asap" | "balanced" | "flex"; inputUsd: string; cachedUsd: string; outputUsd: string } | null = null;
+          const pricePoints: PricePoint[] = [];
           let rowMatch;
-          
-          const windowMap = { 'asap': 3, 'balanced': 2, 'flex': 1 };
-          const requestLevel = windowMap[input.latencyTolerance];
-          
+
           while ((rowMatch = rowRe.exec(block)) !== null) {
             if (!rowMatch[1] || !rowMatch[2] || !rowMatch[3] || !rowMatch[4]) continue;
-            
+
             const labelLower = rowMatch[1].toLowerCase();
             let rowWindow: "asap" | "balanced" | "flex" | null = null;
             if (labelLower.includes('asap')) rowWindow = 'asap';
             else if (labelLower.includes('balanced')) rowWindow = 'balanced';
             else if (labelLower.includes('flex')) rowWindow = 'flex';
             else continue;
-            
-            const rowLevel = windowMap[rowWindow];
-            if (rowLevel >= requestLevel) {
-              if (bestRow === null || rowLevel < windowMap[bestRow.window]) {
-                bestRow = {
-                  window: rowWindow,
-                  inputUsd: rowMatch[2],
-                  cachedUsd: rowMatch[3],
-                  outputUsd: rowMatch[4]
-                };
-              }
+
+            const condition = {
+              kind: "latency_window" as const,
+              name: rowWindow === "asap" ? "ASAP" as const : rowWindow === "balanced" ? "Balanced" as const : "Flex" as const,
+            };
+            for (const [leg, value, unit] of [
+              ["input", rowMatch[2], "token_in"],
+              ["cached", rowMatch[3], "token_cached"],
+              ["output", rowMatch[4], "token_out"],
+            ] as const) {
+              pricePoints.push(normalizePricePoint({
+                id: `sail:${modelId}:${rowWindow}:${leg}`,
+                value: exactDecimalRatio(value, "1", "1000000").value!,
+                unit,
+                condition,
+                sourceUrl: sailDocUrl,
+                readAt: asOfIso,
+                provenance: "published",
+                sourceText: rowMatch[0],
+              }));
             }
           }
-          
-          if (bestRow !== null) {
-            const promptUsdPerToken = (parseFloat(bestRow.inputUsd) / 1000000).toFixed(10);
-            const completionUsdPerToken = (parseFloat(bestRow.outputUsd) / 1000000).toFixed(10);
-            
+
+          if (pricePoints.length > 0) {
             liveRows.push({
               provider: "sail",
               id: modelId,
               displayName: modelId,
               ownedBy: null,
               contextLength: null,
-              pricing: {
-                promptUsdPerToken,
-                completionUsdPerToken
-              },
-              // The window this price was read from. Selection may fall back to a
-              // faster window than requested, so without this a caller cannot
-              // know which Sail setting the number requires -- and a price whose
-              // qualifier is missing is a number whose meaning is inferred.
-              pricingWindow: bestRow.window,
+              pricePoints,
+              pricingState: "published",
               isFree: false,
               freeKind: "paid_or_unknown",
               providerActive: null,
@@ -611,8 +615,7 @@ export async function runModelEconomics(
   }
 
   const openRouterExtras = new Map<string, OpenRouterExtra>();
-  const wantsOpenRouter =
-    input.providers === undefined || input.providers.includes("openrouter");
+  const wantsOpenRouter = allowedProviders === undefined || allowedProviders.includes("openrouter");
   if (wantsOpenRouter) {
     let cursor: string | null = null;
     try {
@@ -646,8 +649,9 @@ export async function runModelEconomics(
   const candidates = liveRows.map((row) => {
     const extra = openRouterExtras.get(row.id);
     const descriptor = describeProvider(row.provider);
-    const promptPrice = row.pricing.promptUsdPerToken;
-    const completionPrice = row.pricing.completionUsdPerToken;
+    const preferredWindow = row.provider === "sail" ? (input.latencyTolerance === "asap" ? "ASAP" : input.latencyTolerance === "balanced" ? "Balanced" : "Flex") : undefined;
+    const promptPrice = priceForUnit(row.pricePoints, "token_in", preferredWindow);
+    const completionPrice = priceForUnit(row.pricePoints, "token_out", preferredWindow);
     // Both halves are required. A prompt-priced, completion-unpriced model has an
     // unknown total cost and must not be able to rank as cheapest on half a price.
     const priceComparable = promptPrice !== null && completionPrice !== null;
@@ -665,24 +669,16 @@ export async function runModelEconomics(
       emitsText:
         row.outputModalities === null ? null : row.outputModalities.includes("text"),
       reasoningEfforts: row.reasoningEfforts,
-      // Carried through the projection deliberately. The window was already
-      // selected upstream and then dropped HERE -- an explicit field-by-field
-      // map silently discards anything nobody remembered to list, which is the
-      // same defect as computing a value and never comparing it.
-      pricingWindow: row.pricingWindow ?? null,
-      pricing: {
-        promptUsdPerToken: promptPrice,
-        completionUsdPerToken: completionPrice,
-        promptUsdPerMillionTokens: usdPerMillionTokens(promptPrice),
-        completionUsdPerMillionTokens: usdPerMillionTokens(completionPrice),
-      },
+      pricePoints: row.pricePoints,
+      pricingState: row.pricingState,
+      ...(row.pricingNote ? { pricingNote: row.pricingNote } : {}),
       priceComparable,
       unrankableReason: priceComparable
         ? null
         : promptPrice !== null || completionPrice !== null
-          ? // Half a price is not a price. Saying the provider "publishes none"
-            // here would be false -- it published one of the two.
-            `${describeProvider(row.provider).displayName} published only the ${promptPrice !== null ? "prompt" : "completion"} price for this model, so its total cost is unknown — not free, and not comparable.`
+          ? // One comparable direction does not establish that the provider
+            // omitted the other: a token range or time band may be withheld.
+            `Only the ${promptPrice !== null ? "prompt" : "completion"} token price is comparable in the collected data for this ${descriptor.displayName} model, so its total cost is unknown — not free, and not comparable.`
           : unpricedReason(row.provider),
       freeKind: row.freeKind,
       genuinelyFree: row.freeKind === "concrete_free",
@@ -711,7 +707,7 @@ export async function runModelEconomics(
   });
 
   const matched = candidates.filter((model) => {
-    if (input.providers !== undefined && !input.providers.includes(model.provider)) {
+    if (allowedProviders !== undefined && !allowedProviders.includes(model.provider)) {
       return false;
     }
     if (input.ids !== undefined) return input.ids.includes(model.id);
@@ -745,14 +741,16 @@ export async function runModelEconomics(
     if (left.priceComparable !== right.priceComparable) {
       return left.priceComparable ? -1 : 1;
     }
-    const byPrompt =
-      comparablePrice(left.pricing.promptUsdPerToken) -
-      comparablePrice(right.pricing.promptUsdPerToken);
-    if (byPrompt !== 0) return byPrompt;
-    const byCompletion =
-      comparablePrice(left.pricing.completionUsdPerToken) -
-      comparablePrice(right.pricing.completionUsdPerToken);
-    if (byCompletion !== 0) return byCompletion;
+    const leftWindow = left.provider === "sail" ? (input.latencyTolerance === "asap" ? "ASAP" : input.latencyTolerance === "balanced" ? "Balanced" : "Flex") : undefined;
+    const rightWindow = right.provider === "sail" ? (input.latencyTolerance === "asap" ? "ASAP" : input.latencyTolerance === "balanced" ? "Balanced" : "Flex") : undefined;
+    const leftPrompt = priceForUnit(left.pricePoints, "token_in", leftWindow);
+    const rightPrompt = priceForUnit(right.pricePoints, "token_in", rightWindow);
+    const promptOrder = (leftPrompt === null ? 1 : rightPrompt === null ? -1 : compareExactDecimal(leftPrompt, rightPrompt));
+    if (promptOrder !== 0) return promptOrder;
+    const leftCompletion = priceForUnit(left.pricePoints, "token_out", leftWindow);
+    const rightCompletion = priceForUnit(right.pricePoints, "token_out", rightWindow);
+    const completionOrder = (leftCompletion === null ? 1 : rightCompletion === null ? -1 : compareExactDecimal(leftCompletion, rightCompletion));
+    if (completionOrder !== 0) return completionOrder;
     if (left.provider !== right.provider) {
       return left.provider.localeCompare(right.provider);
     }
@@ -903,7 +901,8 @@ export async function runModelEconomics(
   const observedProviders = candidates.map((model) => model.provider);
   const activeProviders =
     input.providers ?? [...new Set([...PROVIDER_IDS, ...observedProviders])].sort();
-  const providerReports = activeProviders.map((provider) => {
+  const selectedActiveProviders = allowedProviders === undefined ? activeProviders : activeProviders.filter((provider) => allowedProviders.includes(provider));
+  const providerReports = selectedActiveProviders.map((provider) => {
     const inCatalogue = candidates.filter((model) => model.provider === provider);
     const matchedForProvider = matched.filter(
       (model) => model.provider === provider,
@@ -926,13 +925,17 @@ export async function runModelEconomics(
         Object.entries(descriptor.publishes).map(([key, value]) => [key, value]),
       ),
       comparabilityNote: descriptor.comparabilityNote,
+      caveatResearch: descriptor.caveatResearch,
+      pitchResearch: descriptor.pitchResearch,
+      ...(descriptor.caveats ? { caveats: descriptor.caveats } : {}),
+      ...(descriptor.pitch ? { pitch: descriptor.pitch } : {}),
     };
   });
 
   for (const report of providerReports) {
     if (report.modelsInCatalogue === 0) {
       warnings.push(
-        `${report.displayName} contributed no models to this answer; its catalogue is empty upstream.`,
+        `${report.displayName} contributed no models to this token comparison; this does not establish an empty provider catalogue. Use dashboard_catalogue for media identities and source population coverage.`,
       );
     }
   }

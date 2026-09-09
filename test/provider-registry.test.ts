@@ -10,8 +10,8 @@ import {
 } from "../src/providers/registry.js";
 
 test("covers every provider this build normalises", () => {
-  // Nine as of 2026-09-08: the original four plus the five live-price
-  // catalogues. Asserted as a set with a stated reason rather than a bare
+  // The token catalogue providers plus WaveSpeed and fal media catalogues.
+  // Asserted as a set with a stated reason rather than a bare
   // literal, because the previous literal said "three" while listing four --
   // the name had already drifted from the assertion below it.
   assert.deepEqual(
@@ -19,13 +19,16 @@ test("covers every provider this build normalises", () => {
     [
       "cerebras",
       "chutes",
+      "crazyrouter",
       "deepinfra",
+      "fal",
       "groq",
       "novita",
       "openrouter",
       "qwencloud",
       "sail",
       "sambanova",
+      "wavespeed",
     ],
   );
 });
@@ -46,7 +49,7 @@ test("every provider declares each capability, so a null always has a stated cau
     const descriptor = providerDescriptor(id);
     for (const capability of required) {
       assert.ok(
-        ["always", "partial", "never"].includes(descriptor.publishes[capability]),
+        ["always", "partial", "never", "unknown"].includes(descriptor.publishes[capability]),
         `${id} must declare ${capability}`,
       );
     }
@@ -55,26 +58,35 @@ test("every provider declares each capability, so a null always has a stated cau
   }
 });
 
-test("records that no provider publishes a discount expiry", () => {
+test("does not assert a discount expiry where none has been established", () => {
   for (const id of PROVIDER_IDS) {
-    assert.equal(
-      PROVIDER_REGISTRY[id].publishes.discountExpiry,
-      "never",
-      `${id} must not claim an expiry that upstream does not publish`,
+    assert.ok(
+      ["never", "unknown"].includes(PROVIDER_REGISTRY[id].publishes.discountExpiry),
+      `${id} must distinguish observed absence from an unresearched expiry`,
     );
   }
+  assert.equal(PROVIDER_REGISTRY.crazyrouter.publishes.discountExpiry, "unknown");
 });
 
-test("records that only OpenRouter exposes a billing API", () => {
+test("distinguishes integrated spend from Sail's documented but unread API", () => {
   assert.equal(PROVIDER_REGISTRY.openrouter.spendVisibility, "api");
   assert.equal(PROVIDER_REGISTRY.groq.spendVisibility, "no_billing_api");
   assert.equal(PROVIDER_REGISTRY.cerebras.spendVisibility, "no_billing_api");
-  assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "no_billing_api");
+  assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "unknown");
 });
 
-test("phrases an unpriced model as a provider fact and never as free", () => {
-  assert.match(unpricedReason("cerebras"), /publishes no prices for any model/);
-  assert.match(unpricedReason("groq"), /only part of its catalogue/);
+test("does not advertise Sail context values the connector does not collect", () => {
+  assert.equal(PROVIDER_REGISTRY.sail.publishes.contextLength, "never");
+  assert.match(PROVIDER_REGISTRY.sail.comparabilityNote, /does not yet collect.*context/i);
+});
+
+test("keeps DeepInfra's published denominator consistent with its media evidence", () => {
+  assert.match(PROVIDER_REGISTRY.deepinfra.comparabilityNote, /219.*372|372.*219/);
+});
+
+test("phrases an unpriced model as a collection gap and never as free", () => {
+  assert.match(unpricedReason("cerebras"), /current Cerebras catalogue connector/);
+  assert.match(unpricedReason("groq"), /No comparable token price in the collected data/);
   for (const id of PROVIDER_IDS) {
     assert.match(
       unpricedReason(id),

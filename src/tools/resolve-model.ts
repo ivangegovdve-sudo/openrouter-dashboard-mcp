@@ -192,7 +192,7 @@ export const resolveModelOutputSchema = z.discriminatedUnion("status", [
 
 export type ResolveModelInput = z.input<typeof resolveModelInputSchema>;
 export type ResolveModelOutput = z.infer<typeof resolveModelOutputSchema>;
-export type ResolveModelDependencies = { client: DashboardClient };
+export type ResolveModelDependencies = { client: DashboardClient; allowedProviders?: string[] };
 
 type ParsedInput = z.output<typeof resolveModelInputSchema>;
 type ParsedConstraints = ParsedInput["constraints"];
@@ -314,8 +314,8 @@ function divideDecimalByTwo(value: string): string {
 }
 
 function knownPriceSum(model: LiveModel): string | null {
-  const prompt = model.pricing.promptUsdPerToken;
-  const completion = model.pricing.completionUsdPerToken;
+  const prompt = model.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)?.amount ?? null;
+  const completion = model.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)?.amount ?? null;
   if (prompt === null || completion === null) return null;
   return addExactDecimals(prompt, completion);
 }
@@ -639,7 +639,7 @@ function measurementFor(
 
 export async function runResolveModel(
   rawInput: ResolveModelInput,
-  { client }: ResolveModelDependencies,
+  { client, allowedProviders }: ResolveModelDependencies,
 ): Promise<ResolveModelOutput> {
   try {
     const input = normalizeInput(resolveModelInputSchema.parse(rawInput));
@@ -664,12 +664,17 @@ export async function runResolveModel(
     const auditQuery = new URLSearchParams({ availability: "available" });
     const eligibilityQuery = baseEligibilityQuery(input.constraints);
     const sort = upstreamSort(input.intent);
-    const [audit, ranking] = await Promise.all([
+    const [auditRead, rankingRead] = await Promise.all([
       scanUnranked(client, auditQuery),
       sort === null
         ? scanUnranked(client, eligibilityQuery)
         : scanRanked(client, eligibilityQuery, sort),
     ]);
+    const visible = (snapshot: Snapshot): Snapshot => allowedProviders === undefined
+      ? snapshot
+      : { ...snapshot, rows: snapshot.rows.filter((row) => allowedProviders.includes(row.provider)) };
+    const audit = visible(auditRead);
+    const ranking = visible(rankingRead);
 
     const excluded: ExcludedModel[] = [];
     const excludedSeen = new Set<string>();
