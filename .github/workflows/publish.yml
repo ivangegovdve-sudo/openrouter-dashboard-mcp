@@ -238,12 +238,26 @@ jobs:
             echo "$version carries a prerelease or build component: dist-tag next, not latest."
           fi
 
-      - name: Publish the verified tarball with provenance
+      # PROVENANCE REQUIRES A PUBLIC REPOSITORY. npm does not generate attestations from a
+      # private repo even for a public package, so passing --provenance unconditionally
+      # would fail here today: this repository is private, and cleared to go public but not
+      # yet flipped. The flag is therefore chosen from the repository's actual visibility
+      # rather than asserted, and the job SAYS which it did -- a release that quietly
+      # published without the attestation it advertises would be its own small dishonesty.
+      - name: Publish the verified tarball
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         env:
           TARBALL: ${{ steps.artifact.outputs.file }}
           DIST_TAG: ${{ steps.disttag.outputs.tag }}
-        run: npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
+          IS_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          if [ "$IS_PRIVATE" = "false" ]; then
+            echo "Public repository: publishing with a provenance attestation."
+            npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
+          else
+            echo "::warning::This repository is private, so npm cannot generate a provenance attestation. Publishing without one. Make the repository public to get provenance."
+            npm publish "$TARBALL" --access public --tag "$DIST_TAG"
+          fi
 
       - name: Dry run only, nothing published
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
