@@ -301,9 +301,13 @@ jobs:
           # sleep is up to ten minutes, so the previous loop advertised a five-minute bound
           # it could not keep -- the same defect as a comment describing behaviour the code
           # does not have, which is what this whole release is about. The clock now decides.
-          # Reserve the request budget so the LAST attempt still finishes inside the window:
-          # checking the clock only before each curl let an attempt started at 299s run to 309s.
-          deadline=$(( SECONDS + 300 - 10 ))
+          # TEN MINUTES, FROM MEASUREMENT RATHER THAN A ROUND NUMBER. Three publishes of
+          # this package took roughly 40s, 2min and 4.5min for the registry to resolve --
+          # the lag is growing, and a five-minute budget was already within striking
+          # distance of the last one. A gate that fails on a slow-but-successful publish
+          # teaches people to ignore it. The request budget is reserved so the final
+          # attempt still finishes inside the window.
+          deadline=$(( SECONDS + 600 - 10 ))
           attempt=0
           while [ "$SECONDS" -lt "$deadline" ]; do
             attempt=$(( attempt + 1 ))
@@ -318,5 +322,5 @@ jobs:
             fi
             [ "$SECONDS" -lt "$deadline" ] && sleep 5
           done
-          echo "::error::The registry did not resolve $expected within five minutes. The publish may have failed even though the CLI reported success."
+          echo "::error::The registry did not resolve $expected within ten minutes. The publish may have failed even though the CLI reported success."
           exit 1
