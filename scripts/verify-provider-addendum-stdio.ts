@@ -53,22 +53,34 @@ try {
     // A source limit is recorded honestly. Never turn unknown into a passing price assertion.
     return { ...check, actual: actual ?? null, status: actual === undefined ? "unobserved" : actual === check.value ? "matched" : "mismatch", reason: model.pricingNote ?? null };
   });
+  // THE ARTIFACT NOW CARRIES ITS OWN VERDICT, AND THE VERDICT IS COMPUTED BEFORE IT IS
+  // WRITTEN. The file used to be written here and asserted on the next line, so a failing
+  // run left an artifact full of "unobserved"/"mismatch" rows that looked exactly like a
+  // passing one -- and it had already overwritten whatever valid evidence was at that
+  // path. Withholding the file on failure is the wrong repair: the assertion message
+  // says "see sanitized evidence", so the artifact is meant to exist for diagnosis. It
+  // must simply never claim to be a passing record when it is not.
+  const failures: string[] = [];
+  for (const check of priceChecks) {
+    if (check.status !== "matched") failures.push(`fal price ${check.id} (${check.unit}) is ${check.status}`);
+  }
+  for (const id of sharedIds) {
+    const row = comparison.rows.find(row => row.id === id);
+    if (!row) { failures.push(`shared identity ${id} was not retained`); continue; }
+    if (row.status !== "comparable") failures.push(`shared identity ${id} is ${row.status}, not comparable`);
+    if (row.comparisons.input.status !== "comparable") failures.push(`shared identity ${id} input leg is ${row.comparisons.input.status}`);
+    if (row.comparisons.output.status !== "comparable") failures.push(`shared identity ${id} output leg is ${row.comparisons.output.status}`);
+    if (!row.comparisons.input.pairs[0]?.savingsPercent) failures.push(`shared identity ${id} has no input savings pair`);
+    if (!row.comparisons.output.pairs[0]?.savingsPercent) failures.push(`shared identity ${id} has no output savings pair`);
+    if (row.crazyrouter?.pricePoints[0]?.provenance !== "derived") failures.push(`shared identity ${id} Crazyrouter provenance is ${String(row.crazyrouter?.pricePoints[0]?.provenance)}, not derived`);
+    if (!row.crazyrouter?.pricePoints[0]?.derivedFrom) failures.push(`shared identity ${id} derived price does not name what it was derived from`);
+  }
   const evidence = { startedAt, finishedAt: new Date().toISOString(), version: client.getServerVersion()?.version,
+    verdict: failures.length === 0 ? "passed" : "failed", failures,
     tools: tools.map(tool => tool.name), catalogue, comparison, priceChecks, noInferenceRequested: true };
   const serialized = JSON.stringify(evidence, null, 2);
   assert.ok(!serialized.includes(falKey) && !serialized.includes(crazyKey), "Unsafe reflected metadata omitted");
   if (process.argv[2]) await writeFile(process.argv[2], serialized);
-  assert.ok(priceChecks.every(check => check.status === "matched"), "One or more selected fal prices are mismatched or unobserved; see sanitized evidence");
-  for (const id of sharedIds) {
-    const row = comparison.rows.find(row => row.id === id);
-    assert.ok(row, "Required shared identity was not retained");
-    assert.equal(row.status, "comparable");
-    assert.equal(row.comparisons.input.status, "comparable");
-    assert.equal(row.comparisons.output.status, "comparable");
-    assert.ok(row.comparisons.input.pairs[0]?.savingsPercent);
-    assert.ok(row.comparisons.output.pairs[0]?.savingsPercent);
-    assert.equal(row.crazyrouter?.pricePoints[0]?.provenance, "derived");
-    assert.ok(row.crazyrouter?.pricePoints[0]?.derivedFrom);
-  }
+  assert.equal(failures.length, 0, "Authenticated verification failed; the written evidence records verdict \"failed\": " + failures.join("; "));
   console.log(JSON.stringify({ version: evidence.version, tools: tools.length, catalogueProviders: catalogue.providers.map(p => ({ provider: p.provider, status: p.status, population: p.population, pricePopulation: p.requestParameters.pricePopulation })), priceChecks, sharedModels: comparison.rows.map(row => ({ id: row.id, status: row.status, inputSavingsPercent: row.comparisons.input.pairs[0]?.savingsPercent.value ?? null, outputSavingsPercent: row.comparisons.output.pairs[0]?.savingsPercent.value ?? null })), comparisonPopulation: comparison.population }));
 } finally { await client.close(); }

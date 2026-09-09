@@ -24,10 +24,16 @@ for (const provider of catalogue.providers) {
   assert.equal(provider.population.excluded, 0);
 }
 const comparisons: Array<Record<string, unknown>> = [];
-function price(provider: string, id: string) {
+// THE UNIT IS PART OF THE CHECK, NOT AN INCIDENTAL FIELD. This took pricePoints[0]
+// blind and the callers then compared only its amount against the published figure, so a
+// model whose first point sits on a different billing axis -- per image where the page
+// quotes per second, say -- would satisfy the assertion with the wrong number. A price is
+// only equal to another price under the same unit; that is the premise of this release.
+function price(provider: string, id: string, unit: string) {
   const model = catalogue.models.find(m => m.provider === provider && m.id === id);
   assert.ok(model, `${provider}/${id}: missing identity`);
-  const p = model.pricePoints[0]; assert.ok(p?.amount, `${provider}/${id}: no exact terminating price`);
+  const p = model.pricePoints.find(point => point.unit === unit);
+  assert.ok(p?.amount, `${provider}/${id}: no exact terminating price on unit ${unit}; found ${model.pricePoints.map(point => point.unit).join(", ") || "none"}`);
   return p;
 }
 const deepUrl = "https://deepinfra.com/pricing", deepHtml = await page(deepUrl);
@@ -36,7 +42,7 @@ assert.ok(deepRow, "DeepInfra model pricing row absent");
 const deepCells = [...deepRow[1]!.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)];
 const deepPublished = /^\$\s*(\d+(?:\.\d+)?)$/.exec(stripTags(deepCells[1]?.[1] ?? ""))?.[1];
 assert.ok(deepPublished, "DeepInfra published price missing");
-const deepPrice = price("deepinfra", "black-forest-labs/FLUX-1.1-pro");
+const deepPrice = price("deepinfra", "black-forest-labs/FLUX-1.1-pro", "image");
   assert.equal(deepPrice.amount, exactDecimalRatio(deepPublished).value);
 comparisons.push({ provider: "deepinfra", id: "black-forest-labs/FLUX-1.1-pro", native: catalogue.models.find(m => m.provider === "deepinfra" && m.id === "black-forest-labs/FLUX-1.1-pro")?.nativePricing ?? null, converted: deepPrice.amount, unit: deepPrice.unit, published: deepPublished, sourceUrl: deepUrl, match: true });
 
@@ -47,7 +53,7 @@ for (const id of DEFAULT_WAVESPEED_ENRICH_IDS) {
   const cells = [...row[1]!.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)];
   const published = /^\$\s*(\d+(?:\.\d+)?)$/.exec(stripTags(cells.at(-1)?.[1] ?? ""))?.[1];
   assert.ok(published, `WaveSpeed five-second price absent: ${id}`);
-  const p = price("wavespeed", id);
+  const p = price("wavespeed", id, "video_second");
   assert.equal(p.amount, exactDecimalRatio(published, "1", "5").value);
   comparisons.push({ provider: "wavespeed", id, native: catalogue.models.find(m => m.provider === "wavespeed" && m.id === id)?.nativePricing ?? null, converted: p.amount, unit: p.unit, publishedForFiveSeconds: published, sourceUrl: url, match: true });
 }
@@ -55,7 +61,7 @@ const falId = "fal-ai/bytedance/seedream/v4/text-to-image", falUrl = `https://fa
 const falText = stripTags(await page(falUrl));
 const falPublished = /Your request\s+will cost\s+\$\s*(\d+(?:\.\d+)?)\s+per image/.exec(falText)?.[1];
 assert.ok(falPublished, "Fal model page explicit per-image price absent");
-const falPrice = price("fal", falId);
+const falPrice = price("fal", falId, "image");
 assert.equal(falPrice.amount, exactDecimalRatio(falPublished).value);
 comparisons.push({ provider: "fal", id: falId, native: catalogue.models.find(m => m.provider === "fal" && m.id === falId)?.nativePricing ?? null, converted: falPrice.amount, unit: falPrice.unit, published: falPublished, sourceUrl: falUrl, match: true });
 
