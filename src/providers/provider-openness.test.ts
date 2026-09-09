@@ -91,8 +91,9 @@ test("an unknown provider's price absence is not blamed on the provider", () => 
   // The false claim this must never make again.
   assert.doesNotMatch(claim, /publishes no prices for any model/);
 
-  // A provider we HAVE looked at still gets the definite answer.
-  assert.match(unpricedReason("qwencloud"), /publishes no prices for any model/);
+  // A known provider can publish prices that this token comparison cannot quote.
+  assert.match(unpricedReason("qwencloud"), /No comparable token price in the collected data/);
+  assert.doesNotMatch(unpricedReason("qwencloud"), /publishes no prices|omits them/);
 });
 
 test("the five providers added on 2026-09-08 are described, not merely accepted", () => {
@@ -107,12 +108,44 @@ test("the five providers added on 2026-09-08 are described, not merely accepted"
   }
 });
 
-test("QwenCloud publishes nothing, and that is recorded as a fact", () => {
-  // 165 models carrying only {id, object, created, owned_by}, measured
-  // 2026-09-08. A null price here means silence, and must never read as free.
+test("QwenCloud describes the native catalogue and its usable metadata coverage", () => {
   const qwen = describeProvider("qwencloud");
-  assert.equal(qwen.publishes.pricing, "never");
-  assert.equal(qwen.publishes.contextLength, "never");
+  assert.equal(qwen.catalogueUrl, "https://dashscope-intl.aliyuncs.com/api/v1/models");
+  assert.equal(qwen.publishes.pricing, "partial");
+  assert.equal(qwen.publishes.contextLength, "partial");
+  assert.equal(qwen.publishes.outputModalities, "partial");
+  assert.equal(qwen.publishes.reasoningEfforts, "partial");
+  assert.match(qwen.comparabilityNote, /242 of 249/);
+  assert.match(qwen.comparabilityNote, /306 outer price blocks/);
+  assert.match(qwen.comparabilityNote, /255 identities/);
+  assert.match(qwen.comparabilityNote, /6 compatibility-only/);
+  assert.match(qwen.comparabilityNote, /59 comparable prompt\/completion pairs/);
+  assert.match(qwen.comparabilityNote, /134 usable context/);
+  assert.match(qwen.comparabilityNote, /247 nonempty response/);
+  assert.match(qwen.comparabilityNote, /155 non-token price entries/);
+  assert.match(qwen.comparabilityNote, /249 native/);
+  assert.match(qwen.comparabilityNote, /ranges and time bands/);
+  assert.match(qwen.comparabilityNote, /withheld/);
+  assert.match(qwen.comparabilityNote, /39 models/);
+  assert.match(qwen.comparabilityNote, /72/);
+});
+
+test("Cerebras publication claims are scoped to the current connector", () => {
+  const cerebras = describeProvider("cerebras");
+  assert.match(cerebras.comparabilityNote, /current \/v1\/models connector/);
+  assert.match(cerebras.comparabilityNote, /3 of 3/);
+  assert.match(cerebras.comparabilityNote, /pending/);
+  assert.match(unpricedReason("cerebras"), /current Cerebras catalogue connector/);
+  assert.doesNotMatch(unpricedReason("cerebras"), /publishes no prices/);
+});
+
+test("Sail acknowledges document metadata and its documented but unread billing route", () => {
+  const sail = describeProvider("sail");
+  assert.equal(sail.publishes.pricing, "partial");
+  assert.equal(sail.publishes.contextLength, "never");
+  assert.equal(sail.spendVisibility, "unknown");
+  assert.match(sail.comparabilityNote, /usage-endpoints\.md/);
+  assert.match(sail.comparabilityNote, /not probed or read/);
 });
 
 test("DeepInfra is the only one that publishes a retirement signal", () => {

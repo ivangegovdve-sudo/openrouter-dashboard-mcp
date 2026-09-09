@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "0.8.0",
-  "description": "Read-only MCP comparing models on OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova and Chutes by price, capability and retirement risk, plus GitHub trending; it refuses to quote Sail prices when its pinned document changes.",
+  "version": "0.9.0",
+  "description": "Read-only MCP: OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter; media and token prices, caveats, GitHub trending. It refuses to quote Sail prices if its document changes.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -30,13 +30,16 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run typecheck:harness",
+    "build": "tsc -p tsconfig.json && npm run typecheck:harness && npm run docs:generate",
     "test": "tsx --test",
     "test:watch": "tsx --test --watch",
     "typecheck:harness": "tsc -p tsconfig.harness.json",
     "verify:stdio": "tsx scripts/verify-stdio.ts",
     "verify:stdout": "tsx scripts/verify-stdout.ts",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run docs:check && npm run build && npm test",
+    "docs:generate": "tsx scripts/generate-docs.ts",
+    "docs:check": "tsx scripts/generate-docs.ts --check",
+    "verify:catalogue": "tsx scripts/verify-catalogue-stdio.ts"
   },
   "engines": {
     "node": ">=20"
