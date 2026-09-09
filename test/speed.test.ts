@@ -24,7 +24,11 @@ test("speed probe streams 700 tokens, discards run one, and reports median plus 
 test("speed metadata shows published and historical measured values separately", () => {
   const result = runSpeed({});
   const cerebras = result.observations.filter((observation) => observation.provider === "cerebras");
-  assert.deepEqual(cerebras.map((observation) => observation.state), ["published", "measured"]);
+  // WAS ["published", "measured"]. The "published" 3000 tokens/second was attributed to
+  // https://www.cerebras.ai/pricing, which was re-read on 2026-09-09 and carries no
+  // per-model rate at all. A claim its own cited source does not make is withdrawn, not
+  // re-dated, so the first observation is now explicitly unknown.
+  assert.deepEqual(cerebras.map((observation) => observation.state), ["unknown", "measured"]);
   // The record's rates were 867 / 1022 / 1108, but the tokens they counted were
   // never retained. A measured rate whose basis is unknown is not publishable,
   // so it is withheld rather than shown -- the figures stay in the note.
@@ -68,4 +72,31 @@ test("a real probe records the basis it actually used", async () => {
   // the response must say so rather than leaving the reader to assume.
   assert.equal(result.token_basis, "visible_output");
   assert.notEqual(result.sustained_tps, null);
+});
+
+test("no speed observation publishes a rate this package cannot source", () => {
+  // THE REGRESSION THIS EXISTS TO CATCH. dashboard_speed shipped Groq's 8,000
+  // tokens-per-MINUTE free-plan quota as 8,000 tokens per SECOND of throughput -- a 60x
+  // overstatement attributed to Groq by name, from https://groq.com/, a page that does
+  // not state it. src/providers/evidence.ts already stored the same number correctly as
+  // `unit: "tokens/minute"` with the scope "this is not tokens per second or an
+  // inference-speed ceiling", so the repository contradicted itself in two files.
+  // A rate may be emitted only in the `published` state, and that state requires a
+  // source URL and attribution; nothing here may carry a rate without both.
+  for (const observation of runSpeed({}).observations) {
+    if (observation.sustained_tps === null) continue;
+    assert.equal(observation.state, "published", `${observation.provider}: only a published claim may carry a rate`);
+    assert.ok(observation.sourceUrl, `${observation.provider}: a published rate must name the page it was read from`);
+    assert.ok(observation.attribution, `${observation.provider}: a published rate must name who published it`);
+  }
+});
+
+test("the withdrawn Groq throughput ceiling does not come back", () => {
+  const groq = runSpeed({}).observations.filter((observation) => observation.provider === "groq");
+  assert.equal(groq.length, 1);
+  assert.equal(groq[0]?.state, "unknown");
+  assert.equal(groq[0]?.sustained_tps, null);
+  // The note must keep saying WHY, so the next person to see "8000" in the provider
+  // registry does not restore it here as a speed.
+  assert.match(groq[0]?.note ?? "", /per MINUTE/);
 });
