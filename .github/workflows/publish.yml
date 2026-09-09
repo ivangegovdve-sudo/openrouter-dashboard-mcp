@@ -175,16 +175,26 @@ jobs:
             exit 1
           fi
           version="${{ steps.artifact.outputs.version }}"
-          if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "::error::No tag v$version exists. Tag the release first so the artifact is one a release names."
+          # BOTH TAG CONVENTIONS, because the release path above accepts both. It strips a
+          # leading "v" only when present, so a release tagged 1.0.0 passes there -- while
+          # this path hardcoded refs/tags/v$version and would then fail for the same
+          # release. A dry run that passes followed by a real dispatch that cannot succeed
+          # is worse than either outcome alone.
+          tag=""
+          for candidate in "v$version" "$version"; do
+            if git rev-parse -q --verify "refs/tags/$candidate" >/dev/null; then tag="$candidate"; break; fi
+          done
+          if [ -z "$tag" ]; then
+            echo "::error::Neither tag v$version nor $version exists. Tag the release first so the artifact is one a release names."
             exit 1
           fi
           # The tag must point at what was BUILT, not merely exist: main can advance past a
           # tag, and then this would publish a different tree under a tagged version.
-          if [ "$(git rev-parse "refs/tags/v$version^{commit}")" != "$(git rev-parse HEAD)" ]; then
-            echo "::error::Tag v$version does not point at HEAD. Publish from the tagged commit, or move the tag."
+          if [ "$(git rev-parse "refs/tags/$tag^{commit}")" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::Tag $tag does not point at HEAD. Publish from the tagged commit, or move the tag."
             exit 1
           fi
+          echo "main, tag $tag exists, and it points at HEAD."
 
       # A PRERELEASE MUST NOT BECOME `latest`, AND THE VERSION DECIDES THAT -- not the
       # release checkbox. Reading GitHub's `prerelease` flag was wrong twice: a manual
