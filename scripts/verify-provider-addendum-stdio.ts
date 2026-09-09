@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
@@ -11,6 +11,12 @@ import { EXPECTED_TOOL_NAMES } from "./verify-stdio.js";
 // generated evidence contain them; the MCP child receives only these keys.
 const falKey = process.env.FAL_API_KEY, crazyKey = process.env.CRAZYROUTER_API_KEY;
 assert.ok(falKey && crazyKey, "Both provider environment keys must be supplied for authenticated verification");
+// A STALE ARTIFACT MUST NOT SURVIVE A RUN THAT FAILS BEFORE WRITING. The evidence path
+// is cleared up front, so whatever is there afterwards is this run's or nothing. Without
+// this, a run that aborts early -- including the credential-safety abort below -- leaves
+// the PREVIOUS run's file in place, and a reader has no way to tell it is not current.
+if (process.argv[2]) await rm(process.argv[2], { force: true });
+
 const client = new Client({ name: "provider-addendum-release-verifier", version: "1" });
 const transport = new StdioClientTransport({ command: process.execPath, args: [resolve("build/index.js")],
   env: { FAL_API_KEY: falKey, CRAZYROUTER_API_KEY: crazyKey }, stderr: "pipe" });
@@ -79,6 +85,11 @@ try {
     verdict: failures.length === 0 ? "passed" : "failed", failures,
     tools: tools.map(tool => tool.name), catalogue, comparison, priceChecks, noInferenceRequested: true };
   const serialized = JSON.stringify(evidence, null, 2);
+  // THIS ASSERTION STAYS BEFORE THE WRITE AND MUST NOT BE FOLDED INTO `failures`. If the
+  // serialized evidence contains a provider key, the correct outcome is that NO file is
+  // written: recording the leak as a verdict would mean persisting the key to disk, which
+  // is the one thing that must never happen. A run that aborts here leaves no artifact at
+  // all, because the path was cleared at startup.
   assert.ok(!serialized.includes(falKey) && !serialized.includes(crazyKey), "Unsafe reflected metadata omitted");
   if (process.argv[2]) await writeFile(process.argv[2], serialized);
   assert.equal(failures.length, 0, "Authenticated verification failed; the written evidence records verdict \"failed\": " + failures.join("; "));
