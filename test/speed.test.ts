@@ -97,6 +97,15 @@ test("no speed observation publishes a rate this package cannot source", () => {
     assert.equal(observation.state, "published");
     assert.equal(observation.sourceUrl, listed.sourceUrl);
     assert.ok(observation.attribution);
+    // readOn is the whole point of the inventory and was declared but never checked --
+    // an unasserted field is documentation, not a control. The page must have been read
+    // on a real date, and the observation must not claim to have been observed before
+    // the page it came from was read.
+    assert.match(listed.readOn, /^\d{4}-\d{2}-\d{2}$/, `${listed.provider}: the inventory must record when the page was read`);
+    if (observation.observedAt !== "unknown") {
+      assert.ok(observation.observedAt.slice(0, 10) >= listed.readOn,
+        `${listed.provider}: an observation cannot predate the source read it cites`);
+    }
   }
 });
 

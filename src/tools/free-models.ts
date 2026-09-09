@@ -256,7 +256,15 @@ function cataloguePricePoints(model: CatalogueModel, observedAt: string, dropped
   };
   return Object.entries(model.pricing).flatMap(([name, amount]) => {
     const unit = units[name];
-    if (unit === undefined || amount === null) return [];
+    // THE SKIP BEFORE THE CATCH IS ALSO A SILENT DROP. Recording only the throw left two
+    // quieter paths open: a pricing key this map does not know -- exactly what happens
+    // when the source adds a billing axis -- and a non-string amount. Both vanished while
+    // the tool answered normally, which is the same defect one step earlier.
+    // An explicit null IS the source saying there is no price on this axis, so it alone
+    // stays silent.
+    if (unit === undefined) { dropped.push(`${model.id} (unmapped pricing field "${name}")`); return []; }
+    if (amount === null) return [];
+    if (typeof amount !== "string") { dropped.push(`${model.id} (${unit}: non-string amount)`); return []; }
     try {
       return [pricePoint({ id: `openrouter:${model.id}:${unit}`, amount, unit, condition: null, sourceUrl, readAt: observedAt, provenance: "published" })];
     } catch {

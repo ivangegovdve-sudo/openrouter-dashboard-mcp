@@ -185,3 +185,25 @@ test("an incomplete catalogue cannot report a requested model as absent", async 
     "and the caller is told why the list is empty rather than left to assume nothing was missing",
   );
 });
+
+test("an unrepresentable native price is reported even when it never reaches the parser", async () => {
+  // THE SECOND HALF OF THE SILENT-DROP FIX. Recording only the throw left the skip above
+  // it open: a price value that is not a string was dropped before any catch could see
+  // it, so the omission never reached the caller.
+  //
+  // The re-review of #22 illustrated this with a NUMERIC price, which is not reachable
+  // here: openrouterSource parses through parseNativeJson, which converts every JSON
+  // number lexeme to a string precisely so exact decimals survive. A non-scalar value is
+  // reachable, because parseNativeJson rewrites number lexemes and nothing else -- so
+  // that is what this exercises.
+  const { runPriceComparison } = await module();
+  const objectPrice = { id: "openai/gpt-4o", canonical_slug: "openai/gpt-4o-snapshot", pricing: { prompt: { amount: "0.0000025" }, completion: "0.00001" } };
+  const result: any = await runPriceComparison({}, {
+    apiKey: "synthetic-key", now,
+    fetchImpl: sources({ rows: [crazy("gpt-4o")], openrouter: [objectPrice] }),
+  });
+  const dropped = result.warnings.filter((warning: string) => /could not be represented/.test(warning));
+  assert.equal(dropped.length, 1, "a price skipped before the parser must still be reported");
+  assert.match(dropped[0], /non-string native price/);
+  assert.match(dropped[0], /token_in/);
+});

@@ -207,7 +207,10 @@ function comparisonLeg(left: PricePoint[], right: PricePoint[], unit: PriceUnit,
 function openrouterPrices(row: NativeRecord, observedAt: string, dropped: string[]): PricePoint[] {
   const native = record(row.pricing), points: PricePoint[] = [];
   for (const [field, unit] of [["prompt", "token_in"], ["completion", "token_out"]] as const) {
-    if (typeof native[field] !== "string") continue;
+    // A non-string native price was skipped before the catch could record it, so an
+    // unexpected numeric or object price disappeared without a word.
+    if (native[field] === undefined || native[field] === null) continue;
+    if (typeof native[field] !== "string") { dropped.push(`${String(row.id)} (${unit}: non-string native price)`); continue; }
     try { points.push(pricePoint({ id: `openrouter:${String(row.id)}:${unit}`, amount: native[field], unit, condition: null, sourceUrl: OPENROUTER_COMPARISON_URL, readAt: observedAt, provenance: "published" })); } catch { dropped.push(`${String(row.id)} (${unit})`); }
   }
   return points;

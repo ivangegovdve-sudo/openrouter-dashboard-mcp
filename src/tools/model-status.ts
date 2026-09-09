@@ -391,7 +391,12 @@ function trimOpenRouterDetail(
   };
   const pricePoints = Object.entries(detail.pricing).flatMap(([name, amount]) => {
     const unit = units[name];
-    if (unit === undefined || amount === null) return [];
+    // See free-models: an unmapped pricing field and a non-string amount were skipped
+    // before the catch could record anything. An explicit null is the source stating
+    // there is no price on that axis and stays silent; the other two do not.
+    if (unit === undefined) { dropped.push(`${detail.id} (unmapped pricing field "${name}")`); return []; }
+    if (amount === null) return [];
+    if (typeof amount !== "string") { dropped.push(`${detail.id} (${unit}: non-string amount)`); return []; }
     try {
       return [pricePoint({ id: `openrouter:${detail.id}:${unit}`, amount, unit, condition: null, sourceUrl: new URL(`${MODELS_ENDPOINT}/${encodeURIComponent(detail.id)}`, dashboardBaseUrl()).href, readAt: new Date().toISOString(), provenance: "published" })];
     } catch {
