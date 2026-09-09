@@ -8,8 +8,6 @@ import { withCache, type CachingClientOptions } from "./cache.js";
 import { DashboardRequestError } from "./errors.js";
 
 export interface DashboardClient {
-  /** Actual configured read origin for consumers that emit source citations. */
-  sourceUrl?(path: string): string;
   get<T>(
     path: string,
     query: URLSearchParams,
@@ -161,7 +159,6 @@ function createDirectDashboardClient(
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 
   return {
-    sourceUrl: (path: string) => requestUrl(path, new URLSearchParams(), options.baseUrl).href,
     async get<T>(
       path: string,
       query: URLSearchParams,
@@ -172,8 +169,7 @@ function createDirectDashboardClient(
       const maxResponseBytes = responseByteLimit(options.maxResponseBytes);
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
-      // Keep the deadline alive until this read settles. An unreferenced timer
-      // lets Node exit with a pending request when the transport owns no handle.
+      timer.unref?.();
       let response: Response | undefined;
 
       try {

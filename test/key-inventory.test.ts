@@ -114,33 +114,6 @@ test("reads OpenRouter spend and reports Groq spend as structurally unreadable",
   keyInventoryOutputSchema.parse(output);
 });
 
-test("Sail's documented billing API is unread rather than nonexistent, including failed probes", async () => {
-  for (const active of [true, false]) {
-    const requested: string[] = [];
-    const fetchImpl: typeof fetch = async (input) => {
-      requested.push(String(input));
-      if (!active) throw new Error("fixture network failure");
-      return modelsPayload();
-    };
-    const output = await runKeyInventory({}, {
-      env: { [KEY_SOURCES_ENV]: "sail:sail-primary=SAIL_TEST", SAIL_TEST: SECRET_A },
-      fetchImpl,
-      now: NOW,
-    });
-    if (output.status === "unconfigured") assert.fail("expected a report");
-    assert.deepEqual(requested, ["https://api.sailresearch.com/v1/models"]);
-    const sail = output.keys[0];
-    assert.ok(sail);
-    assert.equal(sail.spendReadability, "unread");
-    assert.equal(sail.usdSpent, null);
-    assert.equal(sail.alive, active ? true : null);
-    assert.doesNotMatch(JSON.stringify(output), /exposes no billing API|no_billing_api/);
-    assert.equal(output.providers[0]?.spendVisibility, "unknown");
-    if (active) assert.match(String(sail.note), /not read by this integration/);
-    keyInventoryOutputSchema.parse(output);
-  }
-});
-
 test("separates a Cloudflare edge block from a rejected credential", async () => {
   const fetchImpl: typeof fetch = async (input) => {
     if (String(input).includes("groq")) {

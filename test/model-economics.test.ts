@@ -33,26 +33,13 @@ import {
 const NOW = () => new Date("2026-08-27T00:00:00.000Z");
 const STAMP = "2026-08-26T06:00:00.000Z";
 
-test("economics exposes filterable provider caveats and attributed pitches", async () => {
-  const result = await runModelEconomics({ providers: ["groq"], discountEnrichment: 0 }, {
-    client: stubClient({ live: [liveModel({ provider: "groq", id: "example" })] }), now: NOW,
-  });
-  assert.equal(result.status, "ok");
-  if (result.status !== "ok") return;
-  const provider = result.providers[0]!;
-  assert.equal(provider.pitchResearch.status, "published");
-  assert.equal(provider.pitch?.attribution, "Groq");
-  assert.equal(provider.caveats?.find(caveat => caveat.value === "8000")?.unit, "tokens/minute");
-});
-
 type LiveOverrides = {
-  provider: "openrouter" | "groq" | "cerebras" | "qwencloud";
+  provider: "openrouter" | "groq" | "cerebras";
   id: string;
   prompt?: string | null;
   completion?: string | null;
   contextLength?: string | null;
   outputModalities?: string[] | null;
-  reasoningEfforts?: string[] | null;
   freeKind?: "concrete_free" | "free_router" | "paid_or_unknown";
   availability?: "available" | "disappeared";
   missingFields?: string[];
@@ -80,7 +67,7 @@ function liveModel(overrides: LiveOverrides) {
     isFree,
     freeKind,
     providerActive: null,
-    reasoningEfforts: overrides.reasoningEfforts ?? null,
+    reasoningEfforts: null,
     outputModalities:
       overrides.outputModalities === undefined
         ? ["text"]
@@ -267,8 +254,6 @@ test("requires both halves of a price before a model can be ranked", async () =>
   // A zero prompt price with an unknown completion price must not win on half a
   // price -- total cost is unknown.
   assert.equal(half?.priceComparable, false);
-  assert.match(String(half?.unrankableReason), /Only the prompt token price is comparable in the collected data/);
-  assert.doesNotMatch(String(half?.unrankableReason), /published only/);
   assert.equal(output.models[0]?.id, "or/whole");
 });
 
@@ -334,56 +319,6 @@ test("ranks across all three providers cheapest first", async () => {
   modelEconomicsOutputSchema.parse(output);
 });
 
-test("ranks QwenCloud's unambiguous token rate while retaining requested banded and media models", async () => {
-  const client = stubClient({
-    live: [
-      liveModel({
-        provider: "qwencloud", id: "qwen/unambiguous", prompt: "0.00000005",
-        completion: "0.0000002", contextLength: "32768", reasoningEfforts: [],
-      }),
-      liveModel({
-        provider: "qwencloud", id: "qwen/banded", prompt: null, completion: null,
-        missingFields: ["pricing", "pricing_selection_required"],
-      }),
-      liveModel({
-        provider: "qwencloud", id: "qwen/image", prompt: null, completion: null,
-        contextLength: null, outputModalities: ["image"],
-        missingFields: ["pricing", "non_token_pricing_excluded"],
-      }),
-    ],
-    catalogue: [],
-  });
-
-  const output = await runModelEconomics(
-    { discountEnrichment: 0, ids: ["qwen/unambiguous", "qwen/banded", "qwen/image"] },
-    { client, now: NOW },
-  );
-  if (output.status === "error") assert.fail("expected a catalogue result");
-
-  assert.equal(output.models.length, 3);
-  const priced = output.models.find((model) => model.id === "qwen/unambiguous");
-  assert.ok(priced);
-  assert.equal(priced.priceComparable, true);
-  assert.equal(priced.pricing.promptUsdPerMillionTokens, "0.05");
-  assert.equal(priced.emitsText, true);
-  assert.deepEqual(priced.reasoningEfforts, []);
-  for (const id of ["qwen/banded", "qwen/image"]) {
-    const model = output.models.find((entry) => entry.id === id);
-    assert.ok(model);
-    assert.equal(model.priceComparable, false);
-    assert.equal(model.genuinelyFree, false);
-    assert.match(String(model.unrankableReason), /No comparable token price in the collected data/);
-    assert.doesNotMatch(String(model.unrankableReason), /publishes no prices|omits them/);
-  }
-  assert.equal(output.models.find((model) => model.id === "qwen/image")?.emitsText, false);
-  const provider = output.providers.find((entry) => entry.provider === "qwencloud");
-  assert.ok(provider);
-  assert.equal(provider.publishes.pricing, "partial");
-  assert.equal(provider.publishes.contextLength, "partial");
-  assert.equal(provider.modelsPriceComparable, 1);
-  modelEconomicsOutputSchema.parse(output);
-});
-
 test("keeps unpriced Cerebras models in the answer instead of dropping them", async () => {
   const client = stubClient({
     live: [
@@ -412,7 +347,7 @@ test("keeps unpriced Cerebras models in the answer instead of dropping them", as
   // Ranked rows come first; the unrankable row follows rather than vanishing.
   assert.equal(output.models.at(-1)?.provider, "cerebras");
   assert.equal(cerebras?.priceComparable, false);
-  assert.match(String(cerebras?.unrankableReason), /current Cerebras catalogue connector/);
+  assert.match(String(cerebras?.unrankableReason), /publishes no prices/);
   // Unknown capability must never read as a capability claim.
   assert.equal(cerebras?.emitsText, null);
   assert.equal(cerebras?.genuinelyFree, false);

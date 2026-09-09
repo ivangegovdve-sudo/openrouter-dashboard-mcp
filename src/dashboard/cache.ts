@@ -119,7 +119,6 @@ export function withCache(
   const entries = new Map<string, Entry>();
 
   return {
-    ...(inner.sourceUrl ? { sourceUrl: (path: string) => inner.sourceUrl!(path) } : {}),
     async get<T>(
       path: string,
       query: URLSearchParams,

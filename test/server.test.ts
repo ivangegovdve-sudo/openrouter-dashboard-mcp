@@ -37,7 +37,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers exactly the fourteen tools without fetching during construction or tools/list", async () => {
+test("registers exactly the twelve tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -52,7 +52,6 @@ test("registers exactly the fourteen tools without fetching during construction 
       listed.tools.map((tool) => tool.name).sort(),
       [
         "dashboard_benchmarks",
-        "dashboard_catalogue",
         "dashboard_free_models",
         "dashboard_github_movers",
         "dashboard_github_trending",
@@ -60,7 +59,6 @@ test("registers exactly the fourteen tools without fetching during construction 
         "dashboard_matrix",
         "dashboard_model_economics",
         "dashboard_model_status",
-        "dashboard_price_comparison",
         "dashboard_resolve_model",
         "dashboard_source_health",
         "dashboard_usage_leaders",
@@ -128,7 +126,7 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
     }
 
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 14);
+    assert.equal(listed.tools.length, 12);
   } finally {
     await client.close();
   }

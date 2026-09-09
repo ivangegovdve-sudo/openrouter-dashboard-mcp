@@ -12,10 +12,11 @@ import {
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
 
 /**
- * Key inventory is opt-in. Native fal and Crazyrouter collectors separately use
- * optional provider environment keys; no tool requires a key at startup.
+ * Key inventory is the only tool in this server that touches a credential, and it
+ * is opt-in.
  *
- * The public dashboard tools work without credentials. Requiring a key at startup
+ * Everything else reads the zero-credential public dashboard, which is what lets
+ * the server ship inside a distributed desktop app. Requiring a key at startup
  * would destroy that property for every other tool, so this one stays dormant
  * unless a host explicitly configures it. An unconfigured inventory is a normal
  * outcome, not an error.
@@ -297,7 +298,7 @@ export const spendReadabilitySchema = z.enum([
    * means. Not a gap in this tool.
    */
   "no_billing_api",
-  /** Spend has not been read, including a documented route not integrated here. */
+  /** The provider has a billing API but it could not be read on this attempt. */
   "unread",
 ]);
 
@@ -400,13 +401,13 @@ type KeyReport = z.infer<typeof keyReportSchema>;
 function baseReport(source: KeySource): KeyReport {
   // No probe entry means this provider has no key to check here at all --
   // a different state from a probe that ran and failed.
-  const spendVisibility = describeProvider(source.provider).spendVisibility;
+  const readsSpend = KEY_PROBE[source.provider]?.readsSpend ?? false;
   return {
     provider: source.provider,
     secretName: source.secretName,
     state: "unreachable",
     alive: null,
-    spendReadability: spendVisibility === "no_billing_api" ? "no_billing_api" : "unread",
+    spendReadability: readsSpend ? "unread" : "no_billing_api",
     usdSpent: null,
     usdLimit: null,
     usdRemaining: null,
@@ -417,9 +418,6 @@ function baseReport(source: KeySource): KeyReport {
 }
 
 function noBillingNote(provider: ProviderId): string {
-  if (PROVIDER_REGISTRY[provider].spendVisibility === "unknown") {
-    return `${PROVIDER_REGISTRY[provider].displayName} spend is not read by this integration. Spend visibility has not been established here; unknown, not zero.`;
-  }
   return `${PROVIDER_REGISTRY[provider].displayName} exposes no billing API, so this key's spend cannot be read by any means. Unknown, not zero.`;
 }
 
@@ -441,12 +439,13 @@ async function readKey(
 
   const probe = KEY_PROBE[source.provider];
   if (!probe) {
-    // A missing inventory probe is an integration gap, not evidence that the
-    // provider requires no credential or that the configured key is dead.
+    // No probe exists for this provider -- its catalogue is public and needs no
+    // key. That is a fact about the provider, not a failed check, and it must
+    // not read as "the key is dead".
     return {
       ...report,
       alive: null,
-      note: `This inventory does not implement a key probe for ${describeProvider(source.provider).displayName}. Its credential state and spend are unknown here.`,
+      note: `${describeProvider(source.provider).displayName} needs no credential for the data this server reads, so there is no key to probe. Unknown, not dead.`,
     };
   }
   const controller = new AbortController();
@@ -508,6 +507,7 @@ async function readKey(
         ...report,
         state: "active",
         alive: true,
+        spendReadability: "no_billing_api",
         note: noBillingNote(source.provider),
       };
     }
@@ -583,11 +583,9 @@ export async function runKeyInventory(
   const readable = alive.filter((key) => key.spendReadability === "read");
   const uncapped = readable.filter((key) => key.uncapped === true);
   const capped = readable.filter((key) => key.uncapped === false);
-  const noBillingApi = alive.filter(
+  const spendUnreadable = alive.filter(
     (key) => key.spendReadability === "no_billing_api",
   );
-  const spendUnread = alive.filter((key) => key.spendReadability === "unread");
-  const spendUnreadable = [...noBillingApi, ...spendUnread];
   const unresolved = keys.filter((key) => key.state !== "active");
   const usdSpentWhereReadable = readable.reduce(
     (total, key) => total + (key.usdSpent ?? 0),
@@ -600,13 +598,10 @@ export async function runKeyInventory(
       `${uncapped.length} active key${uncapped.length === 1 ? " has" : "s have"} no spend ceiling: ${uncapped.map((key) => key.secretName).join(", ")}. An uncapped key can spend without bound if it leaks.`,
     );
   }
-  if (noBillingApi.length > 0) {
+  if (spendUnreadable.length > 0) {
     warnings.push(
-      `${noBillingApi.length} key${noBillingApi.length === 1 ? "'s spend is" : "s' spend is"} unreadable because their provider exposes no billing API: ${noBillingApi.map((key) => key.secretName).join(", ")}. Unknown, not zero, and not capped.`,
+      `${spendUnreadable.length} key${spendUnreadable.length === 1 ? "'s spend is" : "s' spend is"} unreadable because their provider exposes no billing API: ${spendUnreadable.map((key) => key.secretName).join(", ")}. Unknown, not zero, and not capped.`,
     );
-  }
-  if (spendUnread.length > 0) {
-    warnings.push(`${spendUnread.length} active key${spendUnread.length === 1 ? " has" : "s have"} spend not read by this integration. Unknown, not zero.`);
   }
   const edgeBlocked = keys.filter((key) => key.state === "edge_blocked");
   if (edgeBlocked.length > 0) {
