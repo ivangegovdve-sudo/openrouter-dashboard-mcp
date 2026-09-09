@@ -257,10 +257,21 @@ jobs:
           # that as an error would turn a correct, already-completed release into a red
           # pipeline and invite someone to "fix" it.
           version="$(node -p "require('./package.json').version")"
-          existing="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$version" || echo 000)"
-          if [ "$existing" = "200" ]; then
-            echo "::notice::$version is already on the registry; nothing to publish. The confirmation step below still verifies it resolves."
-            exit 0
+          published="$(curl -s --connect-timeout 5 --max-time 10 "https://registry.npmjs.org/open-dashboard-mcp/$version" || true)"
+          if printf '%s' "$published" | grep -q '"shasum"'; then
+            # THE VERSION EXISTING IS NOT ENOUGH. Skipping on a version match alone would
+            # report success when the registry holds a DIFFERENT artifact under the same
+            # number -- a silent success in the one place that must not have one. The
+            # shasum of what is already published has to equal the shasum of the tarball
+            # this run verified, or the run fails and a human looks at why.
+            remote="$(printf '%s' "$published" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).dist.shasum')"
+            local_sum="$(sha1sum "$TARBALL" | cut -d" " -f1)"
+            if [ "$remote" = "$local_sum" ]; then
+              echo "::notice::$version is already on the registry and is byte-identical to this run's artifact; nothing to publish."
+              exit 0
+            fi
+            echo "::error::$version is already published but its shasum ($remote) does not match this run's tarball ($local_sum). Refusing to report success for an artifact this run did not publish."
+            exit 1
           fi
           if [ "$IS_PRIVATE" = "false" ]; then
             echo "Public repository: publishing with a provenance attestation."
@@ -286,7 +297,14 @@ jobs:
           VERSION: ${{ steps.artifact.outputs.version }}
         run: |
           expected="$VERSION"
-          for attempt in $(seq 1 30); do
+          # A DEADLINE, NOT AN ATTEMPT COUNT. Thirty attempts of up to 10s each plus a 10s
+          # sleep is up to ten minutes, so the previous loop advertised a five-minute bound
+          # it could not keep -- the same defect as a comment describing behaviour the code
+          # does not have, which is what this whole release is about. The clock now decides.
+          deadline=$(( SECONDS + 300 ))
+          attempt=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
             # --connect-timeout/--max-time make the five-minute bound REAL. Without them a
             # stalled TCP or TLS handshake blocks forever and the job hangs after npm may
             # already have published -- a loop that claims a timeout it does not enforce.
@@ -296,7 +314,7 @@ jobs:
               echo "The registry resolves $expected."
               exit 0
             fi
-            sleep 10
+            [ "$SECONDS" -lt "$deadline" ] && sleep 5
           done
           echo "::error::The registry did not resolve $expected within five minutes. The publish may have failed even though the CLI reported success."
           exit 1
