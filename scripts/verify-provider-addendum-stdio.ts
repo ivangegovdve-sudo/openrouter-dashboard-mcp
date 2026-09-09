@@ -94,8 +94,12 @@ try {
   // THIS ASSERTION STAYS BEFORE THE WRITE AND MUST NOT BE FOLDED INTO `failures`. If the
   // serialized evidence contains a provider key, the correct outcome is that NO file is
   // written: recording the leak as a verdict would mean persisting the key to disk, which
-  // is the one thing that must never happen. A run that aborts here leaves no artifact at
-  // all, because the path was cleared at startup.
+  // is the one thing that must never happen. A run that aborts here writes nothing, so any
+  // file already at that path is a PREVIOUS run's and is left untouched -- deliberately.
+  // Clearing it up front was tried and reverted: process.argv[2] is a caller-supplied path
+  // and an unconditional rm destroys whatever is there on every failed invocation,
+  // including someone's unrelated file. A caller distinguishes runs by the exit code and
+  // by startedAt/finishedAt inside the artifact, not by our willingness to delete.
   assert.ok(!serialized.includes(falKey) && !serialized.includes(crazyKey), "Unsafe reflected metadata omitted");
   if (process.argv[2]) await writeFile(process.argv[2], serialized);
   assert.equal(failures.length, 0, "Authenticated verification failed; the written evidence records verdict \"failed\": " + failures.join("; "));
