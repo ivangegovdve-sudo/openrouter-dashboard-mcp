@@ -39,6 +39,7 @@ const ROUTES = [
   "/api/public/v2/models",
   "/api/public/v2/models/{id}/providers",
   "/api/public/v2/free-models",
+  "/api/public/v2/generation-costs",
   "/api/public/v2/free-frontiers",
   "/api/public/v2/history",
   "/api/public/v2/deprecations",
@@ -302,6 +303,86 @@ function freeModelsResponse() {
     ...collection([freeCatalogueModel]),
     router: null,
     concreteFreeCount: "1",
+  } as const;
+}
+
+function generationCostsResponse() {
+  const workload = {
+    name: "fixture smoke generation",
+    inputTokens: "10",
+    outputTokens: "3",
+    maxOutputTokens: "8",
+  } as const;
+  const observedAt = "2026-08-19T06:00:00.000Z";
+  return {
+    ...collection([
+      {
+        id: "fixture-generation-1",
+        provider: "openrouter",
+        upstreamProvider: "Azure",
+        model: "openai/gpt-4o-mini",
+        observedAt,
+        provenanceDate: observedAt,
+        workload,
+        vantagePoint: "loopback fixture",
+        tokenCounts: { input: "10", output: "3", total: "13" },
+        costUsd: "0.00000123",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://catalogue.test/generation-costs",
+        latency: {
+          ttftMs: "120",
+          roundTripMs: "450",
+          sustainedThroughputTps: "6.66",
+          workload,
+          vantagePoint: "loopback fixture",
+          tokenBudget: { inputTokens: "10", outputTokens: "8" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt,
+        },
+        note: "Captured from the provider response; no catalogue arithmetic used.",
+      },
+    ]),
+    summaries: [
+      {
+        provider: "openrouter",
+        model: "openai/gpt-4o-mini",
+        workload,
+        vantagePoint: "loopback fixture",
+        n: "1",
+        upstreamProviderCount: "1",
+        upstreamProviders: ["Azure"],
+        minimumN: "3",
+        minimumDistinctUpstreamProviders: "1",
+        measurementState: "INSUFFICIENT_EVIDENCE",
+        provenance: "UNKNOWN",
+        rangeUsd: null,
+        observedAt,
+        provenanceDate: observedAt,
+        note: "INSUFFICIENT EVIDENCE: need at least 3 observations.",
+      },
+    ],
+    policies: [
+      {
+        provider: "nous",
+        state: "BLOCKED",
+        reason: "Provider exposes no per-generation cost field.",
+        observedAt,
+        provenanceDate: observedAt,
+        note: "Published catalogue pricing is not substituted for a measured generation cost.",
+      },
+      {
+        provider: "sail",
+        state: "BLOCKED",
+        reason: "Provider exposes no per-generation cost field.",
+        observedAt,
+        provenanceDate: observedAt,
+        note: "A balance total divided by run count is DERIVED, not a per-call cost.",
+      },
+    ],
   } as const;
 }
 
@@ -775,6 +856,10 @@ function fixtureBody(path: string, query: URLSearchParams): unknown {
   if (path === "/api/public/v2/free-models") {
     assertExactQuery(query, { modality: "text", limit: "5" });
     return freeModelsResponse();
+  }
+  if (path === "/api/public/v2/generation-costs") {
+    assertExactQuery(query, {});
+    return generationCostsResponse();
   }
   if (path === "/api/public/v2/free-frontiers") {
     const x = query.get("x");

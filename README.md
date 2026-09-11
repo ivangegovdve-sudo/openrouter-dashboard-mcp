@@ -1,39 +1,12 @@
 # Open Dashboard MCP
 
-An agent can name model slugs that no longer exist, or reach for an expensive model when a cheaper one would do, because its context does not know which models are real or what anything costs. It cannot reliably distinguish a safe refusal from a missing fact.
+Agents need live model IDs and price provenance because stale slugs break prompts and catalogue prices cannot tell them what a routed generation will cost.
 
-Open Dashboard MCP gives the agent read-only, source-backed model and GitHub evidence: current slugs, provider-scoped prices with their conditions and provenance, explicit unknown and refusal states, and measured generation-cost evidence where the provider exposes an authoritative per-generation field. It keeps catalogue arithmetic separate from paid cost, so a routed aggregator does not look more certain than its evidence.
+open-dashboard-mcp is what I made for that. It gives your agent the model IDs that are actually live right now across OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, and Crazyrouter, with prices where the provider publishes them — text, image, video and audio. Each number carries its source and the date it was checked, so a published rate card doesn't get read as a measured cost.
 
-<!-- summary:begin generated-do-not-edit -->
+It also passes along GitHub trending repos. That isn't the point of it, but it seemed worth including for anyone already poking around free inference and running their own keys.
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.0** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
-
-<!-- summary:end -->
-
-**What you actually get:**
-
-- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
-  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
-  Crazyrouter.
-- **Prices you can compare, or a refusal.** Two prices are compared only when they share a
-  unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
-  number that looks right and is not.
-- **Every figure carries its provenance** — the page it was read from, the timestamp, and
-  whether it was published, derived, or parsed out of prose.
-- **Generation cost stays auditable.** Numeric per-generation cost is shown only when the
-  provider returns an authoritative field. OpenRouter observations retain `usage.cost`;
-  Nous Research and Sail remain `BLOCKED` when no such field exists, and short samples
-  remain `INSUFFICIENT EVIDENCE` rather than becoming a single-looking estimate.
-- **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
-  cannot source is not printed as a number.
-- **No credentials needed to start.** It reads public endpoints by default; keys only
-  widen what it can see.
-
-**What it is not:** not a proxy, not a router, not a billing dashboard. It answers
-questions about models and prices. It never sends inference traffic, and it never writes
-anything anywhere.
-
----
+Read only, free, no account.
 
 # Use it
 
@@ -132,6 +105,35 @@ An Electron host should spawn the compiled absolute `build/index.js` path with t
 The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOARD_KEY_SOURCES` unset and it reports `unconfigured`. The zero-credential default is what makes embedding possible at all — OpenRouter's own MCP server mints a real API key over OAuth and therefore cannot ship inside a distributed desktop app.
 
 # What it covers
+
+<!-- summary:begin generated-do-not-edit -->
+
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.0** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+
+<!-- summary:end -->
+
+**What you actually get:**
+
+- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
+  Crazyrouter.
+- **Prices you can compare, or a refusal.** Two prices are compared only when they share a
+  unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
+  number that looks right and is not.
+- **Every figure carries its provenance** — the page it was read from, the timestamp, and
+  whether it was published, derived, or parsed out of prose.
+- **Generation cost stays auditable.** Numeric per-generation cost is shown only when the
+  provider returns an authoritative field. OpenRouter observations retain `usage.cost`;
+  Nous Research and Sail remain `BLOCKED` when no such field exists, and short samples
+  remain `INSUFFICIENT EVIDENCE` rather than becoming a single-looking estimate.
+- **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
+  cannot source is not printed as a number.
+- **No credentials needed to start.** It reads public endpoints by default; keys only
+  widen what it can see.
+
+**What it is not:** not a proxy, not a router, not a billing dashboard. It answers
+questions about models and prices. It never sends inference traffic, and it never writes
+anything anywhere.
 
 ## Tools
 

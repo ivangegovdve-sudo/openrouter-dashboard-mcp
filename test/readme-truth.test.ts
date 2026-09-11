@@ -130,11 +130,15 @@ test("the opening line's tool count matches the number of tools actually served"
     `the tool count reached ${live.length}, past this list of number words. ` +
       `Extend the list rather than deleting the claim.`,
   );
-  // Bounded to the opening paragraph so an unrelated or historical sentence
-  // elsewhere in the document cannot satisfy it.
-  const opening = readme.slice(0, 600);
+  // Bounded to the generated summary block so an unrelated or historical sentence
+  // elsewhere in the document cannot satisfy it. The marketing opening is intentionally
+  // followed immediately by installation and no longer carries generated facts.
+  const summaryStart = readme.indexOf("<!-- summary:begin generated-do-not-edit -->");
+  const summaryEnd = readme.indexOf("<!-- summary:end -->", summaryStart);
+  assert.ok(summaryStart >= 0 && summaryEnd > summaryStart, "the generated summary block is missing");
+  const summary = readme.slice(summaryStart, summaryEnd);
   assert.match(
-    opening,
+    summary,
     new RegExp(`\\b${word} bounded tools\\b`),
     `the opening line should say "${word} bounded tools" for ${live.length} served tools`,
   );
