@@ -219,9 +219,9 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 
 **Nous Research**
 
-> “Published API rate: $0.072/M” — [Nous Research published pricing claim](https://nousresearch.com/), observed 2026-09-08.
+> “Published API rate: $0.072/M” — [Nous Research published pricing claim](https://nousresearch.com/), observed 2026-09-11.
 
-Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://nousresearch.com/); checked 2026-09-08.
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://nousresearch.com/); checked 2026-09-11.
 
 **QwenCloud**
 
