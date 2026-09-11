@@ -6,6 +6,7 @@ import {
   publicCollectionSchema,
 } from "./common.js";
 import { pricePointSchema } from "../../contract.js";
+import { generationCostObservationSchema } from "../../generation-cost.js";
 import { dashboardBaseUrl } from "../../config.js";
 
 /**
@@ -93,9 +94,23 @@ const liveModelObjectSchema = z
         latencyMsP50: exactDecimalStringSchema.nullable(),
         fastestProvider: z.string().nullable(),
         observedAt: z.string().datetime({ offset: true }),
+        ttftMsP50: exactDecimalStringSchema.nullable().default(null),
+        roundTripMsP50: exactDecimalStringSchema.nullable().default(null),
+        sustainedThroughputTpsP50: exactDecimalStringSchema.nullable().default(null),
+        workload: z.object({
+          name: z.string().min(1),
+          inputTokens: exactIntegerStringSchema.nullable(),
+          outputTokens: exactIntegerStringSchema.nullable(),
+          maxOutputTokens: exactIntegerStringSchema.nullable(),
+        }).strict().nullable().default(null),
+        vantagePoint: z.string().min(1).nullable().default(null),
+        tokenBudget: z.object({ inputTokens: exactIntegerStringSchema.nullable(), outputTokens: exactIntegerStringSchema.nullable() }).strict().nullable().default(null),
+        n: exactIntegerStringSchema.nullable().default(null),
+        percentileMethod: z.enum(["single_observation", "median", "median_and_range_of_remaining_three", "published", "unknown"]).nullable().default(null),
       })
       .strict()
       .nullable(),
+    generationCosts: z.array(generationCostObservationSchema).default([]),
     availability: availabilitySchema,
     firstSeenAt: z.string().datetime({ offset: true }),
     lastSeenAt: z.string().datetime({ offset: true }),

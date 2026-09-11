@@ -142,6 +142,19 @@ export const contractEnvelopeSchema = z
   .strict();
 export type ContractEnvelope = z.infer<typeof contractEnvelopeSchema>;
 
+export {
+  costProvenanceSchema,
+  costStateSchema,
+  generationCostCollectionSchema,
+  generationCostObservationSchema,
+} from "./generation-cost.js";
+export type {
+  CostProvenance,
+  CostState,
+  GenerationCostCollection,
+  GenerationCostObservation,
+} from "./generation-cost.js";
+
 const DEPRECATIONS: DeprecationNotice[] = [
   { field: "catalogueModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },
   { field: "catalogueModel.pricing.prices", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },

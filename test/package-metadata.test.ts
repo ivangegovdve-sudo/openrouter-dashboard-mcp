@@ -29,7 +29,7 @@ test("the description still carries the behaviour the package is for", () => {
   // Shortening to fit the limit must not quietly drop the Sail refusal. That
   // would be the same defect by another route: the clause npm cut, removed on
   // purpose instead of by accident.
-  assert.match(manifest.description ?? "", /refuses to quote Sail prices/);
+  assert.match(manifest.description ?? "", /refuses to quote Sail prices/i);
 });
 
 test("the description names what 0.6.0 actually added", () => {

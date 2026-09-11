@@ -24,6 +24,7 @@ import { registerCatalogue } from "./tools/catalogue.js";
 import { registerPriceComparison } from "./tools/price-comparison.js";
 import { registerContract } from "./tools/contract.js";
 import { registerSpeed } from "./tools/speed.js";
+import { registerGenerationCosts } from "./tools/generation-costs.js";
 
 export type CreateServerOptions = DashboardClientOptions & {
   /** Install-time allowlist. Omitted means the complete built-in tool set. */
@@ -66,5 +67,6 @@ export function createServer(
   if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   if (enabled("dashboard_contract")) registerContract(server);
   if (enabled("dashboard_speed")) registerSpeed(server);
+  if (enabled("dashboard_generation_costs")) registerGenerationCosts(server, { client });
   return server;
 }

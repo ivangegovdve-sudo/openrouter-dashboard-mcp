@@ -2,7 +2,7 @@
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.0.2** registers **12 providers** and exposes sixteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.0** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -139,7 +139,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- tools:begin generated-do-not-edit -->
 
-**16 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**17 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
@@ -147,6 +147,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 | `dashboard_catalogue` | Provider model catalogue and comparable media prices |
 | `dashboard_contract` | MCP schema and deprecation contract |
 | `dashboard_free_models` | Dashboard usable free models |
+| `dashboard_generation_costs` | Measured generation costs |
 | `dashboard_github_movers` | Dashboard public GitHub momentum movers |
 | `dashboard_github_trending` | GitHub trending repositories |
 | `dashboard_key_inventory` | Open Dashboard key inventory |
@@ -170,7 +171,7 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **12 providers** in **open-dashboard-mcp 1.0.2**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -178,6 +179,7 @@ Generated from the package registry: **12 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="nous">Nous Research</span><br>Model provider | [Catalogue](https://nousresearch.com/) · [Documentation](https://nousresearch.com/) | Some collected models | Not established | Not established | Not established | Not established | Not established |
 | <span data-provider-id="qwencloud">QwenCloud</span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="deepinfra">DeepInfra</span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
 | <span data-provider-id="novita">Novita</span> | [Catalogue](https://api.novita.ai/v3/openai/models) · [Documentation](https://novita.ai/docs/api-reference/model-apis-llm-list-models) | Some collected models | All collected models | All collected models | Not published in this connector | Some collected models | No billing API |
@@ -214,6 +216,12 @@ Quotations are the providers' words. Caveats record published limits, including 
 > “Sail is the most cost-efficient API for the best open-source models.” — [Sail Research](https://www.sailresearch.com/), observed 2026-09-08.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://www.sailresearch.com/); checked 2026-09-08.
+
+**Nous Research**
+
+> “Published API rate: $0.072/M” — [Nous Research published pricing claim](https://nousresearch.com/), observed 2026-09-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://nousresearch.com/); checked 2026-09-08.
 
 **QwenCloud**
 

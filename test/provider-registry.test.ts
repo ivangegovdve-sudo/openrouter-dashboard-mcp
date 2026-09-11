@@ -5,6 +5,7 @@ import {
   classifyProviderBlock,
   PROVIDER_IDS,
   PROVIDER_REGISTRY,
+  GENERATION_COST_POLICY,
   providerDescriptor,
   unpricedReason,
 } from "../src/providers/registry.js";
@@ -23,6 +24,7 @@ test("covers every provider this build normalises", () => {
       "deepinfra",
       "fal",
       "groq",
+      "nous",
       "novita",
       "openrouter",
       "qwencloud",
@@ -73,6 +75,13 @@ test("distinguishes integrated spend from Sail's documented but unread API", () 
   assert.equal(PROVIDER_REGISTRY.groq.spendVisibility, "no_billing_api");
   assert.equal(PROVIDER_REGISTRY.cerebras.spendVisibility, "no_billing_api");
   assert.equal(PROVIDER_REGISTRY.sail.spendVisibility, "unknown");
+});
+
+test("keeps per-generation cost visibility distinct from catalogue pricing", () => {
+  assert.equal(GENERATION_COST_POLICY.openrouter.state, "MEASURED");
+  assert.equal(GENERATION_COST_POLICY.nous.state, "BLOCKED");
+  assert.equal(GENERATION_COST_POLICY.sail.state, "BLOCKED");
+  assert.match(GENERATION_COST_POLICY.sail.note, /DERIVED/);
 });
 
 test("does not advertise Sail context values the connector does not collect", () => {

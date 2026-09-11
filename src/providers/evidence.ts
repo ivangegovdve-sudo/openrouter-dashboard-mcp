@@ -66,6 +66,7 @@ const quotes: Record<string, { text: string; attribution: string; sourceUrl: str
   groq: { text: "Groq makes inference work at scale.", attribution: "Groq", sourceUrl: "https://groq.com/" },
   cerebras: { text: "Build Products that Others Can't", attribution: "Cerebras", sourceUrl: "https://www.cerebras.ai/" },
   sail: { text: "Sail is the most cost-efficient API for the best open-source models.", attribution: "Sail Research", sourceUrl: "https://www.sailresearch.com/" },
+  nous: { text: "Published API rate: $0.072/M", attribution: "Nous Research published pricing claim", sourceUrl: "https://nousresearch.com/" },
   qwencloud: { text: "Foundation for AI Innovation", attribution: "Alibaba Cloud Model Studio", sourceUrl: "https://modelstudio.alibabacloud.com/" },
   deepinfra: { text: "Accelerate your AI with developer-friendly APIs designed for performance and cost-efficiency.", attribution: "DeepInfra", sourceUrl: "https://deepinfra.com/" },
   novita: { text: "Run models, scale GPUs, and build AI agents, all on one platform.", attribution: "Novita AI", sourceUrl: "https://novita.ai/" },

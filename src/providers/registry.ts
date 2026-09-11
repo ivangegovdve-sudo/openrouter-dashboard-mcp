@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { providerEvidence, providerEvidenceShape } from "./evidence.js";
+import type { CostState } from "../generation-cost.js";
 
 /**
  * The provider layer of the Open Dashboard.
@@ -41,6 +42,7 @@ export const providerIdSchema = z.enum([
   "groq",
   "cerebras",
   "sail",
+  "nous",
   "qwencloud",
   "deepinfra",
   "novita",
@@ -51,6 +53,22 @@ export const providerIdSchema = z.enum([
   "crazyrouter",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
+
+export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note: string }> = {
+  openrouter: { state: "MEASURED", note: "OpenRouter exposes an authoritative per-generation cost field in the response usage object." },
+  sail: { state: "BLOCKED", note: "Sail exposes no per-generation cost endpoint; balance divided by runs is DERIVED, not a call cost." },
+  nous: { state: "BLOCKED", note: "Nous has no reachable balance, credits, usage, or per-generation cost endpoint; its published rate is unverifiable." },
+  groq: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  cerebras: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  qwencloud: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  deepinfra: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  novita: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  sambanova: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  chutes: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  wavespeed: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  fal: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  crazyrouter: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+};
 
 export const publicationSchema = z.enum([
   /** The provider publishes this for every model it lists. */
@@ -208,6 +226,27 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "Sail publishes prices and context information in public documents. This MCP quotes prices only after checking its pinned pricing document and carries the chosen completion window; it does not yet collect the documented context values. The billing routes at https://docs.sailresearch.com/usage-endpoints.md are documented but not probed or read by this integration, so spend visibility is unknown here.",
+  },
+  nous: {
+    id: "nous",
+    ...providerEvidence("nous"),
+    displayName: "Nous Research",
+    providerKind: "model_provider",
+    catalogueUrl: "https://nousresearch.com/",
+    citationUrl: "https://nousresearch.com/",
+    publishes: {
+      pricing: "partial",
+      contextLength: "unknown",
+      outputModalities: "unknown",
+      reasoningEfforts: "unknown",
+      activeFlag: "unknown",
+      discounts: "unknown",
+      discountExpiry: "unknown",
+      lifecycle: "unknown",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "Nous Research is registered as a named provider, but its published rate is not verifiable here: 15 checked paths across three hosts returned 404 and no balance, credits, usage, or per-generation cost endpoint was found. Generation cost is BLOCKED, not zero.",
   },
   qwencloud: {
     id: "qwencloud",
