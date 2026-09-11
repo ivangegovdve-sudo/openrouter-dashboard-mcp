@@ -1,31 +1,29 @@
 # Open Dashboard MCP
 
+An agent can name model slugs that no longer exist, or reach for an expensive model when a cheaper one would do, because its context does not know which models are real or what anything costs. It cannot reliably distinguish a safe refusal from a missing fact.
+
+Open Dashboard MCP gives the agent read-only, source-backed model and GitHub evidence: current slugs, provider-scoped prices with their conditions and provenance, explicit unknown and refusal states, and measured generation-cost evidence where the provider exposes an authoritative per-generation field. It keeps catalogue arithmetic separate from paid cost, so a routed aggregator does not look more certain than its evidence.
+
 <!-- summary:begin generated-do-not-edit -->
 
 Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.0** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
-**Ask which model to use, and get an answer you can check.**
-
-You hold keys with several inference providers. Prices differ, they change, and each
-provider quotes them in its own shape — per token, per image, per second of video, per
-GPU hour, sometimes three different prices for the same model depending on how fast you
-want it served. Answering "what is the cheapest capable option for this job, right now"
-means reading a dozen pages and trusting your own arithmetic.
-
-This is a read-only MCP server that reads those public sources at query time and returns
-them in one comparable shape, with every figure carrying where it came from and when.
-
 **What you actually get:**
 
-- **One catalogue across twelve providers** — OpenRouter, Groq, Cerebras, Sail, QwenCloud,
-  DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and Crazyrouter.
+- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
+  Crazyrouter.
 - **Prices you can compare, or a refusal.** Two prices are compared only when they share a
   unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
   number that looks right and is not.
 - **Every figure carries its provenance** — the page it was read from, the timestamp, and
   whether it was published, derived, or parsed out of prose.
+- **Generation cost stays auditable.** Numeric per-generation cost is shown only when the
+  provider returns an authoritative field. OpenRouter observations retain `usage.cost`;
+  Nous Research and Sail remain `BLOCKED` when no such field exists, and short samples
+  remain `INSUFFICIENT EVIDENCE` rather than becoming a single-looking estimate.
 - **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
   cannot source is not printed as a number.
 - **No credentials needed to start.** It reads public endpoints by default; keys only
@@ -53,7 +51,7 @@ claude mcp add open-dashboard -- npx -y open-dashboard-mcp
 
 ### Installing only the tools you want
 
-All sixteen tools are enabled by default. To install a subset, set
+All seventeen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
