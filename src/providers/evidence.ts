@@ -104,16 +104,17 @@ export function providerEvidence(id: string): ProviderEvidence {
   const quote = Object.hasOwn(quotes, id) ? quotes[id] : undefined;
   if (!quote) return { caveatResearch: { status: "not_researched" }, pitchResearch: { status: "not_researched" } };
   const caveats = numericCaveats[id];
+  const evidenceObservedAt = id === "nous" ? "2026-09-11" : observedAt;
   return providerEvidenceSchema.parse({
-    pitch: { ...quote, observedAt },
+    pitch: { ...quote, observedAt: evidenceObservedAt },
     pitchResearch: {
-      status: "published", observedAt, checkedSources: [quote.sourceUrl],
+      status: "published", observedAt: evidenceObservedAt, checkedSources: [quote.sourceUrl],
       scope: "Provider-owned platform marketing copy; quoted as a provider claim, not endorsed as a comparison result.",
     },
     ...(caveats ? { caveats } : {}),
     caveatResearch: {
       status: caveats ? "published" : "not_found_in_checked_sources",
-      observedAt,
+      observedAt: evidenceObservedAt,
       checkedSources: caveats ? [...new Set(caveats.map((caveat) => caveat.sourceUrl))] : [quote.sourceUrl],
       scope: caveats
         ? "Only the numeric policies listed in caveats were checked. No inference benchmark or account-specific limit was measured."
