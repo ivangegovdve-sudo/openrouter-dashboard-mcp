@@ -8,7 +8,12 @@ import {
   generationCostPolicySchema,
 } from "../generation-cost.js";
 import type { DashboardClient } from "../dashboard/client.js";
-import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
+import {
+  READ_ONLY_TOOL_ANNOTATIONS,
+  safeDashboardError,
+  safeDashboardErrorSchema,
+  toolResult,
+} from "./shared.js";
 
 const GENERATION_COSTS_ENDPOINT = "/api/public/v2/generation-costs";
 
@@ -17,7 +22,7 @@ export const generationCostsInputSchema = z.object({
   model: z.string().min(1).optional(),
 }).strict();
 
-export const generationCostsOutputSchema = z.object({
+const generationCostsSuccessSchema = z.object({
   status: z.literal("ok"),
   endpoint: z.literal(GENERATION_COSTS_ENDPOINT),
   observations: z.array(generationCostObservationSchema),
@@ -32,37 +37,67 @@ export const generationCostsOutputSchema = z.object({
   note: z.string(),
 }).strict();
 
+const generationCostsErrorSchema = z.object({
+  status: z.literal("error"),
+  endpoint: z.literal(GENERATION_COSTS_ENDPOINT),
+  observations: z.null(),
+  summaries: z.null(),
+  policies: z.null(),
+  evidence: z.null(),
+  note: z.string(),
+  error: safeDashboardErrorSchema,
+}).strict();
+
+export const generationCostsOutputSchema = z.discriminatedUnion("status", [
+  generationCostsSuccessSchema,
+  generationCostsErrorSchema,
+]);
+
 export async function runGenerationCosts(
   rawInput: z.input<typeof generationCostsInputSchema>,
   args: { client: DashboardClient },
 ): Promise<z.infer<typeof generationCostsOutputSchema>> {
-  const input = generationCostsInputSchema.parse(rawInput);
-  const query = new URLSearchParams();
-  if (input.provider) query.set("provider", input.provider);
-  if (input.model) query.set("model", input.model);
-  const page = await args.client.get(GENERATION_COSTS_ENDPOINT, query, generationCostCollectionSchema);
-  const observations = page.data.filter((row) =>
-    (input.provider === undefined || row.provider === input.provider) &&
-    (input.model === undefined || row.model === input.model),
-  );
-  const summaries = page.summaries.filter((row) =>
-    (input.provider === undefined || row.provider === input.provider) &&
-    (input.model === undefined || row.model === input.model),
-  );
-  return generationCostsOutputSchema.parse({
-    status: "ok",
-    endpoint: GENERATION_COSTS_ENDPOINT,
-    observations,
-    summaries,
-    policies: page.policies,
-    evidence: {
+  try {
+    const input = generationCostsInputSchema.parse(rawInput);
+    const query = new URLSearchParams();
+    if (input.provider) query.set("provider", input.provider);
+    if (input.model) query.set("model", input.model);
+    const page = await args.client.get(GENERATION_COSTS_ENDPOINT, query, generationCostCollectionSchema);
+    const observations = page.data.filter((row) =>
+      (input.provider === undefined || row.provider === input.provider) &&
+      (input.model === undefined || row.model === input.model),
+    );
+    const summaries = page.summaries.filter((row) =>
+      (input.provider === undefined || row.provider === input.provider) &&
+      (input.model === undefined || row.model === input.model),
+    );
+    return generationCostsOutputSchema.parse({
+      status: "ok",
       endpoint: GENERATION_COSTS_ENDPOINT,
-      sourceUrl: args.client.sourceUrl?.(GENERATION_COSTS_ENDPOINT) ?? null,
-      stale: page.stale,
-      provenance: page.provenance,
-    },
-    note: "Measured costs come only from an authoritative provider response field. Published catalogue arithmetic is not a generation cost; blocked and unknown values remain non-numeric.",
-  });
+      observations,
+      summaries,
+      policies: page.policies,
+      evidence: {
+        endpoint: GENERATION_COSTS_ENDPOINT,
+        sourceUrl: args.client.sourceUrl?.(GENERATION_COSTS_ENDPOINT) ?? null,
+        stale: page.stale,
+        provenance: page.provenance,
+      },
+      note: "Measured costs come only from an authoritative provider response field. Published catalogue arithmetic is not a generation cost; blocked and unknown values remain non-numeric.",
+    });
+  } catch (error) {
+    const safeError = safeDashboardError(error);
+    return {
+      status: "error",
+      endpoint: GENERATION_COSTS_ENDPOINT,
+      observations: null,
+      summaries: null,
+      policies: null,
+      evidence: null,
+      note: "Generation costs are unavailable; no catalogue arithmetic is substituted for a missing authoritative cost.",
+      error: safeError,
+    };
+  }
 }
 
 export function registerGenerationCosts(server: McpServer, args: { client: DashboardClient }): void {

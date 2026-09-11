@@ -33,6 +33,7 @@ import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
 import { whatsChangedOutputSchema } from "../src/tools/whats-changed.js";
 import { contractOutputSchema } from "../src/tools/contract.js";
 import { speedOutputSchema } from "../src/tools/speed.js";
+import { generationCostsOutputSchema } from "../src/tools/generation-costs.js";
 
 import {
   allocateDeadDashboardUrl,
@@ -77,6 +78,7 @@ export const EXPECTED_TOOL_NAMES = [
   "dashboard_catalogue",
   "dashboard_contract",
   "dashboard_free_models",
+  "dashboard_generation_costs",
   "dashboard_github_movers",
   "dashboard_github_trending",
   "dashboard_key_inventory",
@@ -114,6 +116,7 @@ export const STANDARD_CALLS = [
     name: "dashboard_free_models",
     arguments: { outputModality: "text", limit: 5 },
   },
+  { name: "dashboard_generation_costs", arguments: {} },
   {
     name: "dashboard_usage_leaders",
     arguments: { windowDays: 7, limit: 5 },
@@ -164,6 +167,7 @@ export const DIAGNOSTIC_CALLS = [
     name: "dashboard_free_models",
     arguments: { outputModality: "text", limit: 5 },
   },
+  { name: "dashboard_generation_costs", arguments: {} },
   {
     name: "dashboard_usage_leaders",
     arguments: { windowDays: 7, limit: 3 },
@@ -236,6 +240,7 @@ const OUTPUT_SCHEMAS_BY_TOOL = new Map<string, ZodType>([
   ["dashboard_matrix", matrixOutputSchema],
   ["dashboard_contract", contractOutputSchema],
   ["dashboard_speed", speedOutputSchema],
+  ["dashboard_generation_costs", generationCostsOutputSchema],
 ]);
 
 const CREDENTIAL_FIELD_ALLOWLIST = new Set([
@@ -244,6 +249,8 @@ const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   "completionusdpertoken",
   "ecosystemtokenvolume",
   "ecosystemtokenvolumemovement",
+  "inputtokens",
+  "outputtokens",
   "previousecosystemtokenvolume",
   "promptusdpermilliontokens",
   "promptusdpertoken",
@@ -253,7 +260,11 @@ const CREDENTIAL_FIELD_ALLOWLIST = new Set([
   "secretname",
   "tokenizer",
   "maxtokens",
+  "maxoutputtokens",
   "tokencount",
+  "tokencounts",
+  "tokenbasis",
+  "tokenbudget",
   "totaltokens",
 ]);
 
@@ -677,6 +688,53 @@ export function assertFixtureResult(name: string, structuredContent: unknown): v
     }
     if (!containsFieldValue(output, "stale", true)) {
       throw new Error("fixture source health omitted stale evidence");
+    }
+  }
+  if (name === "dashboard_generation_costs") {
+    const observations = Array.isArray(output.observations) ? output.observations : [];
+    if (observations.length !== 1) {
+      throw new Error("fixture generation costs changed the observation count");
+    }
+    const observation = asRecord(observations[0], "fixture generation cost observation");
+    if (
+      observation.provider !== "openrouter" ||
+      observation.upstreamProvider !== "Azure" ||
+      observation.costState !== "MEASURED" ||
+      observation.provenance !== "MEASURED" ||
+      observation.costUsd !== "0.00000123" ||
+      observation.authoritativeField !== "usage.cost"
+    ) {
+      throw new Error("fixture generation costs lost authoritative measured evidence");
+    }
+    const summaries = Array.isArray(output.summaries) ? output.summaries : [];
+    if (summaries.length !== 1) {
+      throw new Error("fixture generation costs changed the summary count");
+    }
+    const summary = asRecord(summaries[0], "fixture generation cost summary");
+    if (
+      summary.measurementState !== "INSUFFICIENT_EVIDENCE" ||
+      summary.n !== "1" ||
+      summary.rangeUsd !== null ||
+      summary.provenance !== "UNKNOWN"
+    ) {
+      throw new Error("fixture generation costs invented a range from one observation");
+    }
+    const policies = Array.isArray(output.policies) ? output.policies : [];
+    const policyByProvider = new Map(
+      policies.map((entry) => {
+        const policy = asRecord(entry, "fixture generation cost policy");
+        return [String(policy.provider), policy];
+      }),
+    );
+    for (const provider of ["nous", "sail"]) {
+      const policy = policyByProvider.get(provider);
+      if (
+        policy === undefined ||
+        policy.state !== "BLOCKED" ||
+        policy.reason !== "Provider exposes no per-generation cost field."
+      ) {
+        throw new Error(`fixture generation costs omitted the ${provider} blocked reason`);
+      }
     }
   }
 }
