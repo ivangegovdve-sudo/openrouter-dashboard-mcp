@@ -2,9 +2,11 @@
 
 Agents need live model IDs and price provenance because stale slugs break prompts and catalogue prices cannot tell them what a routed generation will cost.
 
-open-dashboard-mcp is what I made for that. It gives your agent the model IDs that are actually live right now across OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, and Crazyrouter, with prices where the provider publishes them — text, image, video and audio. Each number carries its source and the date it was checked, so a published rate card doesn't get read as a measured cost.
+Read-only MCP access to live model catalogues, published media prices, and GitHub trending repositories.
 
-It also passes along GitHub trending repos. That isn't the point of it, but it seemed worth including for anyone already poking around free inference and running their own keys.
+open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, and Nous Research. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
+
+It also surfaces daily trending GitHub repos.
 
 Read only, free, no account.
 
