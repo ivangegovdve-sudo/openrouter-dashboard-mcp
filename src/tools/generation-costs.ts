@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   generationCostCollectionSchema,
   generationCostObservationSchema,
+  generationCostCellSummarySchema,
+  generationCostPolicySchema,
 } from "../generation-cost.js";
 import type { DashboardClient } from "../dashboard/client.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -19,6 +21,8 @@ export const generationCostsOutputSchema = z.object({
   status: z.literal("ok"),
   endpoint: z.literal(GENERATION_COSTS_ENDPOINT),
   observations: z.array(generationCostObservationSchema),
+  summaries: z.array(generationCostCellSummarySchema),
+  policies: z.array(generationCostPolicySchema),
   evidence: z.object({
     endpoint: z.string(),
     sourceUrl: z.string().url().nullable(),
@@ -41,10 +45,16 @@ export async function runGenerationCosts(
     (input.provider === undefined || row.provider === input.provider) &&
     (input.model === undefined || row.model === input.model),
   );
+  const summaries = page.summaries.filter((row) =>
+    (input.provider === undefined || row.provider === input.provider) &&
+    (input.model === undefined || row.model === input.model),
+  );
   return generationCostsOutputSchema.parse({
     status: "ok",
     endpoint: GENERATION_COSTS_ENDPOINT,
     observations,
+    summaries,
+    policies: page.policies,
     evidence: {
       endpoint: GENERATION_COSTS_ENDPOINT,
       sourceUrl: args.client.sourceUrl?.(GENERATION_COSTS_ENDPOINT) ?? null,

@@ -31,8 +31,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run typecheck:harness && npm run docs:generate",
-    "test": "tsx --test",
-    "test:watch": "tsx --test --watch",
+    "test": "tsx --test --test-concurrency=1",
+    "test:watch": "tsx --test --test-concurrency=1 --watch",
     "typecheck:harness": "tsc -p tsconfig.harness.json",
     "verify:stdio": "tsx scripts/verify-stdio.ts",
     "verify:stdout": "tsx scripts/verify-stdout.ts",
