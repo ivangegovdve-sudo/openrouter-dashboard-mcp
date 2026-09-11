@@ -4,7 +4,7 @@ Agents need live model IDs and price provenance because stale slugs break prompt
 
 Read-only MCP access to live model catalogues, published media prices, and GitHub trending repositories.
 
-open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, and Nous Research. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
+open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Crazyrouter, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, and Chutes. Its separate media-generation group covers WaveSpeedAI and fal. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
 
 It also surfaces daily trending GitHub repos.
 
