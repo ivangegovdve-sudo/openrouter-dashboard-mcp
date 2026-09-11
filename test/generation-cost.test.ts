@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { generationCostObservationSchema } from "../src/generation-cost.js";
+import { generationCostCellSummarySchema, generationCostObservationSchema } from "../src/generation-cost.js";
 
 const base = {
   id: "generation-1",
@@ -49,4 +49,33 @@ test("blocked providers carry no numeric generation cost", () => {
     () => generationCostObservationSchema.parse({ ...base, provider: "nous", upstreamProvider: "nous", costState: "BLOCKED", costUsd: "0.072", provenance: "PUBLISHED", authoritativeField: null }),
     /Blocked cost/,
   );
+});
+
+test("a cell needs three observations before it can expose a measured range", () => {
+  const baseSummary = {
+    provider: "openrouter",
+    model: "example/model",
+    workload: base.workload,
+    vantagePoint: base.vantagePoint,
+    n: "2",
+    upstreamProviderCount: "1",
+    upstreamProviders: ["ExampleProvider"],
+    minimumN: "3",
+    minimumDistinctUpstreamProviders: "1",
+    measurementState: "INSUFFICIENT_EVIDENCE" as const,
+    provenance: "UNKNOWN" as const,
+    rangeUsd: null,
+    observedAt: base.observedAt,
+    provenanceDate: base.provenanceDate,
+    note: "INSUFFICIENT EVIDENCE: need at least 3 observations.",
+  };
+  assert.equal(generationCostCellSummarySchema.parse(baseSummary).measurementState, "INSUFFICIENT_EVIDENCE");
+  assert.equal(generationCostCellSummarySchema.parse({
+    ...baseSummary,
+    n: "3",
+    measurementState: "MEASURED_RANGE",
+    provenance: "MEASURED" as const,
+    rangeUsd: { min: "0.00000100", max: "0.00000400" },
+    note: "Measured range across routed upstream providers; no single cost is representative.",
+  }).measurementState, "MEASURED_RANGE");
 });

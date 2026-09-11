@@ -138,6 +138,8 @@ test("serializes the measured generation-cost observation through the registered
   const collection = generationCostCollectionSchema.parse({
     schemaVersion: "2.0",
     data: [observation],
+    summaries: [],
+    policies: [],
     cursor: null,
     window: { start: "2026-09-11", end: "2026-09-11", timezone: "UTC", inclusive: true, basis: "observed" },
     completeness: { acquisitionComplete: true, populationCompleteness: "full", missingFields: [] },
@@ -157,6 +159,8 @@ test("serializes the measured generation-cost observation through the registered
     assert.equal(parsed.observations[0]?.upstreamProvider, "Azure");
     assert.equal(parsed.observations[0]?.costUsd, "0.00000123");
     assert.equal(parsed.observations[0]?.provenance, "MEASURED");
+    assert.deepEqual(parsed.summaries, []);
+    assert.deepEqual(parsed.policies, []);
     const text = result.content.find((item) => item.type === "text");
     assert.ok(text && text.type === "text");
     assert.deepEqual(JSON.parse(text.text), result.structuredContent);

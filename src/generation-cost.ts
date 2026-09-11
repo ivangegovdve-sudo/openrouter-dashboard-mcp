@@ -25,7 +25,7 @@ export const costProvenanceSchema = z.enum([
 ]);
 export type CostProvenance = z.infer<typeof costProvenanceSchema>;
 
-const workloadSchema = z
+export const workloadSchema = z
   .object({
     name: z.string().min(1),
     inputTokens: exactIntegerStringSchema.nullable(),
@@ -97,5 +97,59 @@ export const generationCostObservationSchema = z
   });
 
 export type GenerationCostObservation = z.infer<typeof generationCostObservationSchema>;
-export const generationCostCollectionSchema = publicCollectionSchema(generationCostObservationSchema);
+export const generationCostMeasurementStateSchema = z.enum([
+  "MEASURED_RANGE",
+  "INSUFFICIENT_EVIDENCE",
+]);
+
+export const generationCostCellSummarySchema = z
+  .object({
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    workload: workloadSchema,
+    vantagePoint: z.string().min(1),
+    n: exactIntegerStringSchema,
+    upstreamProviderCount: exactIntegerStringSchema,
+    upstreamProviders: z.array(z.string().min(1)),
+    minimumN: z.literal("3"),
+    minimumDistinctUpstreamProviders: z.literal("1"),
+    measurementState: generationCostMeasurementStateSchema,
+    provenance: costProvenanceSchema,
+    rangeUsd: z.object({ min: exactDecimalStringSchema, max: exactDecimalStringSchema }).strict().nullable(),
+    observedAt: z.string().datetime({ offset: true }),
+    provenanceDate: z.string().datetime({ offset: true }),
+    note: z.string().min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const enoughEvidence = Number(value.n) >= 3 && Number(value.upstreamProviderCount) >= 1;
+    if (value.measurementState === "MEASURED_RANGE" && (!enoughEvidence || value.rangeUsd === null)) {
+      context.addIssue({ code: "custom", path: ["measurementState"], message: "A measured range requires at least three observations" });
+    }
+    if (value.measurementState === "MEASURED_RANGE" && value.provenance !== "MEASURED") {
+      context.addIssue({ code: "custom", path: ["provenance"], message: "A measured range must carry MEASURED provenance" });
+    }
+    if (value.measurementState === "INSUFFICIENT_EVIDENCE" && value.rangeUsd !== null) {
+      context.addIssue({ code: "custom", path: ["rangeUsd"], message: "Insufficient evidence cannot carry a numeric range" });
+    }
+    if (value.measurementState === "INSUFFICIENT_EVIDENCE" && value.provenance !== "UNKNOWN") {
+      context.addIssue({ code: "custom", path: ["provenance"], message: "Insufficient evidence must carry UNKNOWN provenance" });
+    }
+  });
+
+export const generationCostPolicySchema = z
+  .object({
+    provider: z.string().min(1),
+    state: z.literal("BLOCKED"),
+    reason: z.string().min(1),
+    observedAt: z.string().datetime({ offset: true }),
+    provenanceDate: z.string().datetime({ offset: true }),
+    note: z.string().min(1),
+  })
+  .strict();
+
+export const generationCostCollectionSchema = publicCollectionSchema(generationCostObservationSchema).extend({
+  summaries: z.array(generationCostCellSummarySchema),
+  policies: z.array(generationCostPolicySchema),
+});
 export type GenerationCostCollection = z.infer<typeof generationCostCollectionSchema>;
