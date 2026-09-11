@@ -12,15 +12,15 @@ Read only, free, no account.
 
 ## Install
 
-```bash
-npx -y open-dashboard-mcp
-```
+### Claude Code
 
-That runs the server directly with no install step. To add it to Claude Code:
+To register the MCP with Claude Code:
 
 ```bash
 claude mcp add open-dashboard -- npx -y open-dashboard-mcp
 ```
+
+Claude Code starts the server when it needs it and connects over MCP.
 
 ### Installing only the tools you want
 
@@ -59,6 +59,24 @@ For Claude Desktop, add this to `claude_desktop_config.json`:
   }
 }
 ```
+
+### Run directly
+
+For manual testing or another MCP client, run:
+
+```bash
+npx -y open-dashboard-mcp
+```
+
+This starts the MCP server and waits for an MCP client over stdin/stdout. An
+apparently idle terminal is expected: the command is not an interactive CLI and
+does not register the MCP with Claude or another agent. `npx -y` uses npx's
+package handling and does not perform a permanent global install.
+
+Without `@version`, npx resolves the latest published package available. While
+1.1.0 is unpublished, this command can therefore run the older published
+release. After 1.1.0 is published, pin that release explicitly with
+`npx -y open-dashboard-mcp@1.1.0`.
 
 Requires Node.js 20 or newer. No API key is needed for any tool except the optional key inventory.
 
