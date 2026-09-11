@@ -122,7 +122,7 @@ test("the opening line's tool count matches the number of tools actually served"
   const live = await liveToolNames();
   const words = [
     "zero", "one", "two", "three", "four", "five", "six", "seven", "eight",
-    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
   ];
   const word = words[live.length];
   assert.ok(

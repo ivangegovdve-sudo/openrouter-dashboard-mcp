@@ -19,7 +19,15 @@ export const speedObservationSchema = z.object({
   discardedRuns: z.literal(1),
   retainedRuns: z.literal(3),
   ttft_ms: decimalMeasurement.nullable(),
+  round_trip_ms: decimalMeasurement.nullable().default(null),
   sustained_tps: decimalMeasurement.nullable(),
+  workload: z.object({
+    name: z.string().min(1),
+    inputTokens: z.string().regex(/^(0|[1-9]\d*)$/).nullable(),
+    outputTokens: z.string().regex(/^(0|[1-9]\d*)$/).nullable(),
+  }).strict().nullable().default(null),
+  sampleSize: z.number().int().positive().nullable().default(null),
+  percentileMethod: z.enum(["median", "median_and_range_of_remaining_three", "published", "unknown"]).nullable().default("unknown"),
   /**
    * Which tokens sustained_tps counted. Required, never optional: an
    * optional basis is omitted by exactly the producers who do not know it.
@@ -35,6 +43,7 @@ export const speedObservationSchema = z.object({
   if (value.state === "published" && value.attribution === null) context.addIssue({ code: "custom", message: "Published speed claims require attribution", path: ["attribution"] });
   if (value.state === "measured" && value.sourceUrl !== null) context.addIssue({ code: "custom", message: "Measured speed is ours and does not use a publisher source URL", path: ["sourceUrl"] });
   if (value.state === "unknown" && (value.ttft_ms !== null || value.sustained_tps !== null)) context.addIssue({ code: "custom", message: "Unknown speed cannot carry a numeric measurement", path: ["state"] });
+  if ((value.ttft_ms !== null || value.round_trip_ms !== null || value.sustained_tps !== null) && (value.workload === null || value.sampleSize === null || value.percentileMethod === null)) context.addIssue({ code: "custom", message: "Numeric performance requires workload, n, and percentile method", path: ["workload"] });
   // A vendor claim may honestly have an unstated basis; that is the disclosure.
   // Our own measurement counted the tokens, so publishing the rate without
   // saying which ones is the defect this field exists to close.
@@ -82,19 +91,23 @@ export async function probeSpeed(args: {
     token_basis: "visible_output",
     requestedRuns: 4, discardedRuns: 1, retainedRuns: 3,
     ttft_ms: statistic(retained.map((run) => run.ttftMs)),
+    round_trip_ms: statistic(retained.map((run) => run.elapsedMs)),
     sustained_tps: statistic(retained.map((run) => run.outputTokens * 1000 / run.elapsedMs)),
+    workload: { name: "speed probe", inputTokens: null, outputTokens: "700" },
+    sampleSize: 3,
+    percentileMethod: "median_and_range_of_remaining_three",
     attribution: null, sourceUrl: null, note: "Streaming probe; the first run was discarded before calculating median and range.",
   });
 }
 
 export function unknownSpeed(provider: string, model: string, observedAt: string, note: string): SpeedObservation {
-  return speedObservationSchema.parse({ state: "unknown", provider, model, observedAt, vantagePoint: "unknown", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: null, attribution: null, sourceUrl: null, note });
+  return speedObservationSchema.parse({ state: "unknown", provider, model, observedAt, vantagePoint: "unknown", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, round_trip_ms: null, sustained_tps: null, workload: null, sampleSize: null, percentileMethod: "unknown", attribution: null, sourceUrl: null, note });
 }
 
 export function publishedSpeed(args: {
   provider: string; model: string; sustainedTps: string; sourceUrl: string; observedAt: string; attribution: string; note: string;
 }): SpeedObservation {
-  return speedObservationSchema.parse({ state: "published", provider: args.provider, model: args.model, observedAt: args.observedAt, vantagePoint: "provider-published", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, sustained_tps: { median: args.sustainedTps, min: args.sustainedTps, max: args.sustainedTps }, attribution: args.attribution, sourceUrl: args.sourceUrl, note: args.note });
+  return speedObservationSchema.parse({ state: "published", provider: args.provider, model: args.model, observedAt: args.observedAt, vantagePoint: "provider-published", promptHash: null, tokenCount: null, token_basis: "unknown", requestedRuns: 4, discardedRuns: 1, retainedRuns: 3, ttft_ms: null, round_trip_ms: null, sustained_tps: { median: args.sustainedTps, min: args.sustainedTps, max: args.sustainedTps }, workload: { name: "provider-published workload", inputTokens: null, outputTokens: null }, sampleSize: 1, percentileMethod: "published", attribution: args.attribution, sourceUrl: args.sourceUrl, note: args.note });
 }
 
 /**
@@ -116,11 +129,15 @@ export function historicalMeasuredSpeed(): SpeedObservation {
     discardedRuns: 1,
     retainedRuns: 3,
     ttft_ms: null,
+    round_trip_ms: null,
     // The record's three rates were 867 / 1022 / 1108, but which tokens they
     // counted was never retained. A rate whose basis is unknown is not a
     // publishable rate, so it is not offered as one; the figures stay in the
     // note as history rather than being read as a measurement.
     sustained_tps: null,
+    workload: null,
+    sampleSize: null,
+    percentileMethod: "unknown",
     token_basis: "unknown",
     attribution: null,
     sourceUrl: null,

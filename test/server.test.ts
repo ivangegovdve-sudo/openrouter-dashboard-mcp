@@ -5,7 +5,9 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import type { McpServer } from "@modelcontextprotocol/server";
 
 import { createServer } from "../src/server.js";
+import { generationCostCollectionSchema, generationCostObservationSchema } from "../src/generation-cost.js";
 import { contractOutputSchema } from "../src/tools/contract.js";
+import { generationCostsOutputSchema } from "../src/tools/generation-costs.js";
 import { githubMoversOutputSchema } from "../src/tools/github-movers.js";
 import { githubTrendingOutputSchema } from "../src/tools/github-trending.js";
 import { usageLeadersOutputSchema } from "../src/tools/usage-leaders.js";
@@ -38,7 +40,7 @@ async function connectTestClient(server: McpServer): Promise<Client> {
   return client;
 }
 
-test("registers exactly the sixteen tools without fetching during construction or tools/list", async () => {
+test("registers exactly the seventeen tools without fetching during construction or tools/list", async () => {
   const fetchImpl = failIfCalled();
   const server = createServer({ fetchImpl });
 
@@ -56,6 +58,7 @@ test("registers exactly the sixteen tools without fetching during construction o
         "dashboard_catalogue",
         "dashboard_contract",
         "dashboard_free_models",
+        "dashboard_generation_costs",
         "dashboard_github_movers",
         "dashboard_github_trending",
         "dashboard_key_inventory",
@@ -97,6 +100,66 @@ test("install-time selection removes deselected tools and provider comparisons",
     const result = await client.callTool({ name: "dashboard_contract", arguments: {} });
     assert.equal(result.isError, undefined);
     contractOutputSchema.parse(result.structuredContent);
+  } finally {
+    await client.close();
+  }
+});
+
+test("serializes the measured generation-cost observation through the registered MCP tool", async () => {
+  const observation = generationCostObservationSchema.parse({
+    id: "generation-1",
+    provider: "openrouter",
+    upstreamProvider: "Azure",
+    model: "openai/gpt-4o-mini",
+    observedAt: "2026-09-11T10:00:00.000Z",
+    provenanceDate: "2026-09-11T10:00:00.000Z",
+    workload: { name: "smoke generation", inputTokens: "10", outputTokens: "3", maxOutputTokens: "8" },
+    vantagePoint: "Windows workstation / Sofia public internet",
+    tokenCounts: { input: "10", output: "3", total: "13" },
+    costUsd: "0.00000123",
+    costState: "MEASURED",
+    provenance: "MEASURED",
+    balanceDeltaUsd: null,
+    authoritativeField: "usage.cost",
+    sourceUrl: "https://openrouter.ai/api/v1/chat/completions",
+    latency: {
+      ttftMs: "120",
+      roundTripMs: "450",
+      sustainedThroughputTps: "6.66",
+      workload: { name: "smoke generation", inputTokens: "10", outputTokens: "3", maxOutputTokens: "8" },
+      vantagePoint: "Windows workstation / Sofia public internet",
+      tokenBudget: { inputTokens: "10", outputTokens: "8" },
+      n: "1",
+      percentileMethod: "single_observation",
+      observedAt: "2026-09-11T10:00:00.000Z",
+    },
+    note: "Captured from the provider response; no catalogue arithmetic used.",
+  });
+  const collection = generationCostCollectionSchema.parse({
+    schemaVersion: "2.0",
+    data: [observation],
+    cursor: null,
+    window: { start: "2026-09-11", end: "2026-09-11", timezone: "UTC", inclusive: true, basis: "observed" },
+    completeness: { acquisitionComplete: true, populationCompleteness: "full", missingFields: [] },
+    stale: false,
+    rank: null,
+    provenance: [{ sourceId: "test", sourceTier: "best_effort", runId, fetchedAt: "2026-09-11T10:00:00.000Z", sourceAsOf: "2026-09-11T10:00:00.000Z", transformVersion: "test", citation: "/api/public/v2/generation-costs" }],
+  });
+  const server = createServer({
+    baseUrl: "https://catalogue.test/",
+    fetchImpl: async () => new Response(JSON.stringify(collection), { headers: { "content-type": "application/json" } }),
+  });
+  const client = await connectTestClient(server);
+  try {
+    const result = await client.callTool({ name: "dashboard_generation_costs", arguments: { provider: "openrouter", model: "openai/gpt-4o-mini" } });
+    assert.equal(result.isError, undefined);
+    const parsed = generationCostsOutputSchema.parse(result.structuredContent);
+    assert.equal(parsed.observations[0]?.upstreamProvider, "Azure");
+    assert.equal(parsed.observations[0]?.costUsd, "0.00000123");
+    assert.equal(parsed.observations[0]?.provenance, "MEASURED");
+    const text = result.content.find((item) => item.type === "text");
+    assert.ok(text && text.type === "text");
+    assert.deepEqual(JSON.parse(text.text), result.structuredContent);
   } finally {
     await client.close();
   }
@@ -149,7 +212,7 @@ test("serializes and validates both new Task 6 handlers while keeping the connec
     }
 
     const listed = await client.listTools();
-    assert.equal(listed.tools.length, 16);
+    assert.equal(listed.tools.length, 17);
   } finally {
     await client.close();
   }
