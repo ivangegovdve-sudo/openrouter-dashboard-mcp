@@ -115,6 +115,27 @@ test("live-model schema rejects favourable freeness markers with contradictory m
   );
 });
 
+test("live-model schema accepts conservative media pricing with zero token placeholders", () => {
+  const mediaModel = {
+    ...liveModelFixture,
+    id: "openrouter/audio-priced-elsewhere",
+    pricing: {
+      promptUsdPerToken: "0",
+      completionUsdPerToken: "0",
+    },
+    isFree: null,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["text", "audio"],
+    missingFields: ["native_output_pricing"],
+  } as const;
+
+  assert.equal(
+    liveModelSchema.safeParse(mediaModel).success,
+    true,
+    "zero token placeholders do not make a separately priced media model free",
+  );
+});
+
 function liveModelsResponse(
   data: readonly LiveModel[],
   cursor: string | null = null,

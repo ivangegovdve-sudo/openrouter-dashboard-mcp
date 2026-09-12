@@ -39,6 +39,8 @@ type FreenessMetadata = {
   pricePoints: Array<{ unit: string; amount: string; condition: unknown }>;
   isFree: boolean | null;
   freeKind: z.infer<typeof freeKindSchema>;
+  outputModalities?: string[] | null;
+  missingFields?: string[];
 };
 
 function tokenAmount(
@@ -63,6 +65,14 @@ export function hasConsistentLiveModelFreeness(
       isSemanticZeroDecimal(output)
     );
   }
+  const conservativeNonTokenPrice =
+    value.freeKind === "paid_or_unknown" &&
+    value.isFree === null &&
+    isSemanticZeroDecimal(input) &&
+    isSemanticZeroDecimal(output) &&
+    value.missingFields?.includes("native_output_pricing") === true &&
+    value.outputModalities?.some((modality) => modality !== "text") === true;
+  if (conservativeNonTokenPrice) return true;
   return value.isFree === (pricesComplete ? false : null);
 }
 
