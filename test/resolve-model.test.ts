@@ -422,6 +422,15 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
     freeKind: "paid_or_unknown",
     pricing: { promptUsdPerToken: null, completionUsdPerToken: null },
   });
+  const nativeMediaPriceUnknown = liveModel({
+    id: "openrouter/native-media-price-unknown",
+    provider: "openrouter",
+    isFree: null,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["audio"],
+    pricing: { promptUsdPerToken: "0", completionUsdPerToken: "0" },
+    missingFields: ["native_output_pricing"],
+  });
   const larger = liveModel({
     id: "groq/larger",
     isFree: false,
@@ -440,7 +449,12 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
       completionUsdPerToken: "0",
     },
   });
-  const { client, requests } = snapshotClient([unknown, larger, smaller]);
+  const { client, requests } = snapshotClient([
+    nativeMediaPriceUnknown,
+    unknown,
+    larger,
+    smaller,
+  ]);
 
   const result = await runResolveModel(
     { intent: "cheapest_capable", fallbackDepth: 2 },
@@ -456,6 +470,13 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
   assert.ok(
     result.excluded.some(
       (row) => row.id === "groq/unknown" && row.reason === "pricing_not_published",
+    ),
+  );
+  assert.ok(
+    result.excluded.some(
+      (row) =>
+        row.id === "openrouter/native-media-price-unknown" &&
+        row.reason === "pricing_not_published",
     ),
   );
   assert.equal(
