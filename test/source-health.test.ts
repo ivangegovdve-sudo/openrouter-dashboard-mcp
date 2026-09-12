@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { DashboardClient } from "../src/dashboard/client.js";
 import { DashboardRequestError } from "../src/dashboard/errors.js";
+import { sourceStatusResponseSchema } from "../src/dashboard/schemas/openrouter.js";
 import {
   runSourceHealth,
   SOURCE_STATUS_LIMIT,
@@ -53,6 +54,35 @@ const sourceStatusResponse = {
   rank: null,
   provenance: publicProvenance,
 } as const;
+
+test("accepts the live dashboard source-health fields", () => {
+  const deployedSourceStatusRow = {
+    ...sourceStatusFixture,
+    lastSuccessAt: "2026-09-11T06:13:27.967Z",
+    consecutiveFailureCount: "0",
+    failureEscalationThreshold: 3,
+    failureEscalated: false,
+    aliasRegistryDrift: {
+      status: "clear",
+      checkedAt: "2026-09-12T11:36:40.519Z",
+      rankingAsOf: "2026-09-10T00:00:00Z",
+      registryPublishedAt: "2026-09-10T06:10:59.046Z",
+      uncovered: [],
+      dropped: [],
+      uncoveredCount: 0,
+      droppedCount: 0,
+      errorCode: null,
+    },
+  } as const;
+
+  const parsed = sourceStatusResponseSchema.parse({
+    ...sourceStatusResponse,
+    data: [deployedSourceStatusRow],
+  });
+
+  assert.equal(parsed.data[0]?.lastSuccessAt, deployedSourceStatusRow.lastSuccessAt);
+  assert.equal(parsed.data[0]?.aliasRegistryDrift?.status, "clear");
+});
 
 function sourceHealthClient(): {
   client: DashboardClient;
