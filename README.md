@@ -6,7 +6,7 @@ Read-only MCP access to live model catalogues, published media generation models
 
 open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, Crazyrouter, fal, and WaveSpeedAI. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
 
-Read only, free, no account.
+Read-only, free, no account. Choose only the tools and providers you need.
 
 # Use it
 
@@ -73,10 +73,9 @@ apparently idle terminal is expected: the command is not an interactive CLI and
 does not register the MCP with Claude or another agent. `npx -y` uses npx's
 package handling and does not perform a permanent global install.
 
-Without `@version`, npx resolves the latest published package available. While
-1.1.0 is unpublished, this command can therefore run the older published
-release. After 1.1.0 is published, pin that release explicitly with
-`npx -y open-dashboard-mcp@1.1.0`.
+Without `@version`, npx resolves the latest published release. That is the point:
+the catalogue this package reports on changes underneath you, so an unpinned
+command keeps reading the current one instead of freezing to a snapshot.
 
 Requires Node.js 20 or newer. No API key is needed for any tool except the optional key inventory.
 
@@ -126,7 +125,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.0** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.3** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -189,7 +188,7 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.3**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -543,9 +542,9 @@ That is not hypothetical. Between two captures the document grew about 10% and S
 
 The fixture used in tests is byte-identical to the live document and is marked `-text` in `.gitattributes`, because `core.autocrlf` will otherwise rewrite its line endings on checkout and change the hash — which looks precisely like an upstream price change and is not one.
 
-## 1.0.0 skips 0.9.0
+## Gaps in the version numbers
 
-**There is no 0.9.0 on npm and there never was.** The previously published release is **0.8.0**, so 1.0.0 is the next version you can install and the breaking changes below are the 0.8.0 → 1.0.0 jump. 0.9.0 was built and verified in the repository but never published; if you track version numbers, you have not missed a release. See [the 1.0.0 release notes](docs/release-1.0.0.md).
+**There is no 0.9.0 on npm and there never was.** It was built and verified in the repository and never published, so the 0.8.0 → 1.0.0 jump is not a release you missed; the breaking changes in that jump are in [the 1.0.0 release notes](docs/release-1.0.0.md). **There is no 1.1.1 either.** If you track version numbers, these gaps are bookkeeping, not releases that came and went.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
