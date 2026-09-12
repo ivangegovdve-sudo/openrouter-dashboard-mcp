@@ -485,6 +485,37 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
   );
 });
 
+test("uses published token prices when only separate native output pricing is missing", async () => {
+  const mixedModality = liveModel({
+    id: "openrouter/mixed-modality-priced-text",
+    provider: "openrouter",
+    isFree: false,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["text", "audio"],
+    pricing: {
+      promptUsdPerToken: "0.00000025",
+      completionUsdPerToken: "0.00000097",
+    },
+    missingFields: ["native_output_pricing"],
+  });
+  const { client } = snapshotClient([mixedModality]);
+
+  const result = await runResolveModel(
+    {
+      intent: "cheapest_capable",
+      constraints: { outputModality: "text" },
+    },
+    { client },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.unsatisfiable, false);
+  assert.deepEqual(result.resolved.map((row) => row.id), [mixedModality.id]);
+  assert.equal(result.resolved[0]?.value, "0.61");
+  assert.equal(result.resolved[0]?.measurement, "measured");
+});
+
 test("orders any-available by requested provider order then id and truncates fallbacks", async () => {
   const rows = [
     liveModel({ provider: "openrouter", id: "openrouter/a" }),
