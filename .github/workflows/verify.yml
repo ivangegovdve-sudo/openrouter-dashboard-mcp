@@ -1,7 +1,13 @@
 name: Verify package and generated documentation
 on:
   push:
+    branches:
+      - main
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 concurrency:
   group: verify-${{ github.ref }}
