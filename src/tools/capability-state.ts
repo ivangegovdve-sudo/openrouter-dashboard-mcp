@@ -6,6 +6,7 @@ import { liveModelSchema, liveModelsResponseSchema } from "../dashboard/schemas/
 import { manifestSchema } from "../dashboard/schemas/openrouter.js";
 import { pricePointSchema } from "../contract.js";
 import { generationCostObservationSchema } from "../generation-cost.js";
+import { measurementManifestSchema, WEEKLY_MEASUREMENT_MANIFEST } from "../measurement-manifest.js";
 import { PROVIDER_IDS } from "../providers/registry.js";
 import {
   READ_ONLY_TOOL_ANNOTATIONS,
@@ -184,6 +185,7 @@ const capabilitySuccessSchema = z
       })
       .strict(),
     workload: workloadSchema,
+    measurement: measurementManifestSchema,
     providers: z.array(providerCoverageSchema),
     rows: z.array(capabilityRowSchema),
     queries: z
@@ -479,6 +481,7 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
       sampleSize: 0,
       note: "No inference workload was run by this read; measured charges, reachability, latency, and functionality stay explicit UNKNOWN values.",
     },
+    measurement: WEEKLY_MEASUREMENT_MANIFEST,
     providers: providerIds.sort().map((id) => {
       const count = rows.filter((row) => row.provider === id).length;
       return {

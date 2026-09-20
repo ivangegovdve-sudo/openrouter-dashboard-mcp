@@ -63,6 +63,12 @@ test("emits one explicit state row with evidence-shaped fields", () => {
   assert.equal(item.functionality.semanticQuality.state, "unknown");
   assert.equal(item.selection.publicCouncil.state, "unknown");
   assert.equal(item.selection.innerObserver.state, "unknown");
+  assert.equal(parsed.measurement.version, "basket-v1");
+  assert.equal(parsed.measurement.basket.length, 8);
+  assert.equal(parsed.measurement.workload.sampleSize, 8);
+  assert.equal(parsed.measurement.workload.p95Policy, "withheld_at_n_8");
+  assert.equal(parsed.measurement.vantagePoints.length, 3);
+  assert.equal(parsed.measurement.resultSnapshots.state, "BLOCKED");
   assert.equal(parsed.queries.publicCouncil.decisionState, "blocked");
   assert.equal(parsed.queries.innerObserver.decisionState, "blocked");
   assert.ok(parsed.queries.publicCouncil.missingFields.includes("costPerGeneration"));

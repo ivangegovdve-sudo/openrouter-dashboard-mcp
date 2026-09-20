@@ -187,6 +187,8 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 `dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live slug, provider coverage, per-field observation timestamps, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functionally tested model. The state keeps catalogue price separate from actual per-generation charges, carries live/rate-limited/unknown reachability, and marks expired observations instead of reusing them. Each response includes the fixed selection workload, source evidence, pagination completeness, and exact `queries.publicCouncil` / `queries.innerObserver` JSON. A decision is `blocked` with named missing fields until its required cost, reachability, tool-calling, structured-output, latency, and semantic-quality evidence is current.
 
+The response also carries the locked `basket-v1` weekly measurement manifest. It names the eight model/provider rows, the exact workload, three vantage points, the published-price lower-bound cost estimate, and the signed-result snapshot fields. The current plan uses `n=8`: p50 and `max of 8` are publishable, while p95 is explicitly withheld until a larger sample exists. No Vercel job is allowed to claim a Bulgarian, European KVM, or US Oracle vantage point, and no missing snapshot is silently pooled.
+
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
 
 ## Providers
