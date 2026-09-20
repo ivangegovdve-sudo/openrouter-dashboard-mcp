@@ -125,7 +125,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.4** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.4** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -156,11 +156,12 @@ anything anywhere.
 
 <!-- tools:begin generated-do-not-edit -->
 
-**17 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**18 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
 | `dashboard_benchmarks` | Dashboard benchmark observations |
+| `dashboard_capability_state` | Capability state for deterministic model selection |
 | `dashboard_catalogue` | Provider model catalogue and comparable media prices |
 | `dashboard_contract` | MCP schema and deprecation contract |
 | `dashboard_free_models` | Dashboard usable free models |
@@ -181,6 +182,10 @@ anything anywhere.
 <!-- tools:end -->
 
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
+
+### Deterministic capability state
+
+`dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live slug, provider coverage, per-field observation timestamps, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functionally tested model. The state keeps catalogue price separate from actual per-generation charges, carries live/rate-limited/unknown reachability, and marks expired observations instead of reusing them. Each response includes the fixed selection workload, source evidence, pagination completeness, and exact `queries.publicCouncil` / `queries.innerObserver` JSON. A decision is `blocked` with named missing fields until its required cost, reachability, tool-calling, structured-output, latency, and semantic-quality evidence is current.
 
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
 

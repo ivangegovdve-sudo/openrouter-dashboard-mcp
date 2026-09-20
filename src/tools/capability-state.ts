@@ -5,6 +5,8 @@ import type { DashboardClient } from "../dashboard/client.js";
 import { liveModelSchema, liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
 import { manifestSchema } from "../dashboard/schemas/openrouter.js";
 import { pricePointSchema } from "../contract.js";
+import { generationCostObservationSchema } from "../generation-cost.js";
+import { PROVIDER_IDS } from "../providers/registry.js";
 import {
   READ_ONLY_TOOL_ANNOTATIONS,
   safeDashboardError,
@@ -50,15 +52,7 @@ const stringObservationSchema = observationSchema(z.string());
 const modalitiesObservationSchema = observationSchema(z.array(z.string()));
 const priceObservationSchema = observationSchema(z.array(pricePointSchema));
 
-const costValueSchema = z
-  .object({
-    currency: z.literal("USD"),
-    inputPerGeneration: decimalStringSchema,
-    outputPerGeneration: decimalStringSchema,
-    inputTokens: z.string().regex(/^(0|[1-9]\d*)$/),
-    outputTokens: z.string().regex(/^(0|[1-9]\d*)$/),
-  })
-  .strict();
+const costValueSchema = z.array(generationCostObservationSchema);
 const costObservationSchema = observationSchema(costValueSchema);
 
 const reachabilitySchema = z
@@ -165,6 +159,15 @@ const paginationSchema = z
     nextCursor: z.string().nullable(),
   })
   .strict();
+const providerCoverageSchema = z
+  .object({
+    id: z.string().min(1),
+    directAdapter: z.boolean(),
+    liveRows: z.number().int().nonnegative(),
+    state: z.enum(["observed", "no_live_rows"]),
+    note: z.string(),
+  })
+  .strict();
 
 const capabilitySuccessSchema = z
   .object({
@@ -181,6 +184,7 @@ const capabilitySuccessSchema = z
       })
       .strict(),
     workload: workloadSchema,
+    providers: z.array(providerCoverageSchema),
     rows: z.array(capabilityRowSchema),
     queries: z
       .object({
@@ -291,8 +295,11 @@ function selectionFor(row: z.infer<typeof capabilityRowSchema>, kind: "public" |
   const missing: string[] = [];
   const ineligible: string[] = [];
   if (row.catalogueAvailability.state !== "known" || row.catalogueAvailability.value !== "available") missing.push("catalogueAvailability");
-  if (row.costPerGeneration.state !== "known") missing.push("costPerGeneration");
+  const measuredCost = row.costPerGeneration.state === "known" && row.costPerGeneration.value?.some((observation) => observation.costState === "MEASURED" && observation.costUsd !== null) === true;
+  if (!measuredCost) missing.push("costPerGeneration");
   if (row.reachability.state !== "live") missing.push("reachability");
+  const measuredValues = row.costPerGeneration.value?.filter((observation) => observation.costState === "MEASURED" && observation.costUsd !== null).map((observation) => observation.costUsd!) ?? [];
+  if (kind === "public" && measuredValues.length > 0 && measuredValues.every((value) => value === "0")) ineligible.push("free_model");
   if (kind === "private") {
     if (row.toolCalling.state === "known" && row.toolCalling.value === false) ineligible.push("toolCalling=false");
     else if (row.toolCalling.state !== "known") missing.push("toolCalling");
@@ -312,7 +319,7 @@ function queryFor(rows: z.infer<typeof capabilityRowSchema>[], kind: "public" | 
   const rule = kind === "public" ? "literal_cheapest_paid" as const : "cheapest_functional" as const;
   const candidates = rows.filter((row) => row.selection[kind === "public" ? "publicCouncil" : "innerObserver"].state === "eligible");
   if (candidates.length > 0) {
-    const selected = [...candidates].sort((a, b) => a.key.localeCompare(b.key))[0]!;
+    const selected = [...candidates].sort((a, b) => compareMeasuredCost(a, b) || a.key.localeCompare(b.key))[0]!;
     return {
       rule,
       decisionState: "decidable" as const,
@@ -335,6 +342,29 @@ function queryFor(rows: z.infer<typeof capabilityRowSchema>[], kind: "public" | 
   };
 }
 
+function compareDecimal(left: string, right: string): number {
+  const [leftWhole = "0", leftFraction = ""] = left.split(".", 2);
+  const [rightWhole = "0", rightFraction = ""] = right.split(".", 2);
+  const leftDigits = leftWhole.replace(/^0+(?=\d)/, "");
+  const rightDigits = rightWhole.replace(/^0+(?=\d)/, "");
+  if (leftDigits.length !== rightDigits.length) return leftDigits.length < rightDigits.length ? -1 : 1;
+  if (leftDigits !== rightDigits) return leftDigits < rightDigits ? -1 : 1;
+  const scale = Math.max(leftFraction.length, rightFraction.length);
+  const leftPadded = leftFraction.padEnd(scale, "0");
+  const rightPadded = rightFraction.padEnd(scale, "0");
+  return leftPadded === rightPadded ? 0 : leftPadded < rightPadded ? -1 : 1;
+}
+
+function compareMeasuredCost(left: z.infer<typeof capabilityRowSchema>, right: z.infer<typeof capabilityRowSchema>): number {
+  const cost = (row: z.infer<typeof capabilityRowSchema>) => row.costPerGeneration.value?.find((observation) => observation.costState === "MEASURED" && observation.costUsd !== null)?.costUsd ?? null;
+  const leftCost = cost(left);
+  const rightCost = cost(right);
+  if (leftCost === null && rightCost === null) return 0;
+  if (leftCost === null) return 1;
+  if (rightCost === null) return -1;
+  return compareDecimal(leftCost, rightCost);
+}
+
 export type CapabilityStateBuildInput = {
   rows: LiveModel[];
   sourceStale: boolean;
@@ -355,6 +385,8 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
     .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
   const rows = liveRows.map((row) => {
     const options = optionFor(row, input.sourceStale, input.now, input.freshnessTtlSeconds);
+    const successfulProbe = row.generationCosts?.find((observation) => observation.costState === "MEASURED" && observation.httpStatus === 200) ?? null;
+    const limitedProbe = row.generationCosts?.find((observation) => observation.httpStatus === 429 || observation.errorBucket === "rate_limit") ?? null;
     const contextWindow = row.contextLength === null ? unknown<string>("The live-model source did not publish a context window.", options) : known(row.contextLength, options);
     const modalities = row.outputModalities === null ? unknown<string[]>("The live-model source did not publish output modalities.", options) : known(row.outputModalities, options);
     const cataloguePrice = row.pricingState === "published" && row.pricePoints.length > 0 ? known(row.pricePoints, options) : unknown<z.infer<typeof pricePointSchema>[]>("The catalogue did not publish a complete price for this row.", options);
@@ -369,16 +401,27 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
       modalities,
       modelFamily: unknown<string>("No model-family or base-weights lineage was published for this slug.", options),
       cataloguePrice,
-      costPerGeneration: unknown<z.infer<typeof costValueSchema>>("No usage record with an actual per-generation charge was published for this slug.", options),
+      costPerGeneration: row.generationCosts?.length > 0
+        ? known(row.generationCosts, options)
+        : unknown<z.infer<typeof costValueSchema>>("No usage record with an actual per-generation charge was published for this slug.", options),
       routedProvider: unknown<string>("No routed provider observation was published for this slug.", options),
-      reachability: {
-        state: "unknown" as const,
-        httpStatus: null,
-        errorBucket: null,
-        observedAt: null,
-        source: null,
-        reason: "Catalogue presence is not an inference probe; no per-slug HTTP result is published.",
-      },
+      reachability: successfulProbe === null && limitedProbe === null
+        ? {
+          state: "unknown" as const,
+          httpStatus: null,
+          errorBucket: null,
+          observedAt: null,
+          source: null,
+          reason: "Catalogue presence is not an inference probe; no per-slug HTTP result is published.",
+        }
+        : (() => {
+          const probe = successfulProbe ?? limitedProbe!;
+          const probeOptions = { ...options, observedAt: probe.observedAt, source: probe.sourceUrl ?? "/api/public/v2/generation-costs" };
+          const expired = isExpired(probe.observedAt, probeOptions);
+          if (expired) return { state: "unknown" as const, httpStatus: probe.httpStatus, errorBucket: probe.errorBucket, observedAt: probe.observedAt, source: probeOptions.source, reason: "The retained reachability probe is outside its freshness window." };
+          if (successfulProbe !== null) return { state: "live" as const, httpStatus: probe.httpStatus, errorBucket: null, observedAt: probe.observedAt, source: probeOptions.source, reason: null };
+          return { state: "rate_limited" as const, httpStatus: probe.httpStatus, errorBucket: probe.errorBucket ?? "rate_limit", observedAt: probe.observedAt, source: probeOptions.source, reason: "The last inference probe was rate limited." };
+        })(),
       functionality: {
         resolves: unknown<boolean>("No functional resolution probe has been run for this slug.", options),
         structuredOutputOk: unknown<boolean>("No structured-output probe has been run for this slug.", options),
@@ -406,6 +449,7 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
     capped: false,
     nextCursor: null,
   };
+  const providerIds = unique([...PROVIDER_IDS, ...liveRows.map((row) => row.provider)]);
   const missingFields = unique([
     ...(pagination.capped ? ["rows"] : []),
     ...rows.flatMap((row) => row.selection.publicCouncil.missingFields),
@@ -431,6 +475,16 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
       sampleSize: 0,
       note: "No inference workload was run by this read; measured charges, reachability, latency, and functionality stay explicit UNKNOWN values.",
     },
+    providers: providerIds.sort().map((id) => {
+      const count = rows.filter((row) => row.provider === id).length;
+      return {
+        id,
+        directAdapter: (PROVIDER_IDS as readonly string[]).includes(id),
+        liveRows: count,
+        state: count > 0 ? "observed" as const : "no_live_rows" as const,
+        note: count > 0 ? "At least one available live-model row was observed." : "No available live-model row is present in this snapshot; this does not establish an empty provider catalogue.",
+      };
+    }),
     rows,
     queries: {
       publicCouncil: queryFor(rows, "public"),
@@ -488,7 +542,7 @@ export async function runCapabilityState(
     const now = (dependencies.now ?? (() => new Date()))().toISOString();
     const built = buildCapabilityState({
       rows: scan.rows,
-      sourceStale: scan.stale,
+      sourceStale: scan.stale || manifest.stale === true,
       observedAt: now,
       now,
       freshnessTtlSeconds: parsed.freshnessTtlSeconds,
