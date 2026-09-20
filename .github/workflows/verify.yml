@@ -9,7 +9,10 @@ concurrency:
 
 jobs:
   verify:
-    timeout-minutes: 5
+    # The self-hosted Windows runner has no hosted-image warm cache. Keep a
+    # bounded but realistic envelope for npm install, the clean build, the
+    # 364-test suite, and package validation.
+    timeout-minutes: 10
     runs-on: [self-hosted, Windows, X64, local-gpu, jan]
     steps:
       - uses: actions/checkout@v4
