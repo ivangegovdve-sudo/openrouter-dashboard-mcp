@@ -79,7 +79,7 @@ export const generationCostObservationSchema = z
     /** HTTP result captured by the probe; null preserves older ledger rows that did not retain it. */
     httpStatus: z.number().int().min(100).max(599).nullable().default(null),
     /** Bucketed transport outcome for non-success probes; the raw error is never persisted. */
-    errorBucket: z.enum(["rate_limit", "authentication", "not_found", "server_error", "timeout", "transport"]).nullable().default(null),
+    errorBucket: z.enum(["rate_limit", "authentication", "not_found", "dead_model", "server_error", "timeout", "transport"]).nullable().default(null),
     balanceDeltaUsd: exactDecimalStringSchema.nullable(),
     authoritativeField: z.string().min(1).nullable(),
     sourceUrl: z.string().url().nullable(),

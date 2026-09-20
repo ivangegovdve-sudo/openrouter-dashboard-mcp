@@ -125,7 +125,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.4** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.5** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -185,7 +185,9 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 ### Deterministic capability state
 
-`dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live slug, provider coverage, per-field observation timestamps, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functionally tested model. The state keeps catalogue price separate from actual per-generation charges, carries live/rate-limited/unknown reachability, and marks expired observations instead of reusing them. Each response includes the fixed selection workload, source evidence, pagination completeness, and exact `queries.publicCouncil` / `queries.innerObserver` JSON. A decision is `blocked` with named missing fields until its required cost, reachability, tool-calling, structured-output, latency, and semantic-quality evidence is current.
+`dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live model slug, provider coverage, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functional model. Every decision field has its own `checked_at`, `observed_at`, `expires_at`, and `age_seconds`; expired values are cleared and labelled `expired`, never reused as current values. The row carries `billing_class`, `context_window`, `catalogue_price`, measured `generation_cost` (including input/output token counts), `routed_provider`, three-state `reachability`, input/output modalities, `supports_tool_calling`, explicit `model_family` and `base_weights_lineage`, and the cached functionality ledger (`resolves`, `structured_output_ok`, `p50_latency`, `p95_latency`, `last_functionally_tested`, plus the external semantic-quality hook). Unknown is a value, not an omission.
+
+The two policies are deliberately different: `queries.public_council` is eligible on current paid classification plus authoritative per-generation cost only, while `queries.private_council` additionally requires live reachability, tool-calling support, the re-testable mechanical functionality gates, the 60-second p95 bound, and a separate semantic judgment. Catalogue price is never substituted for generation cost. Vendor identity is never used as model-family or base-weight lineage. See [`docs/jev-routing-example.json`](docs/jev-routing-example.json) for the exact one-row Jev request: with the currently deployed source it deterministically returns `block` because `/api/public/v2/generation-costs` and the three dated ledgers are not published, so `billing_class`, `generation_cost`, and the private-only fields remain explicit UNKNOWN.
 
 The response also carries the locked `basket-v1` weekly measurement manifest. It names the eight model/provider rows, the exact workload, three vantage points, the published-price lower-bound cost estimate, and the signed-result snapshot fields. The current plan uses `n=8`: p50 and `max of 8` are publishable, while p95 is explicitly withheld until a larger sample exists. No Vercel job is allowed to claim a Bulgarian, European KVM, or US Oracle vantage point, and no missing snapshot is silently pooled.
 
@@ -195,7 +197,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.4**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.5**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|

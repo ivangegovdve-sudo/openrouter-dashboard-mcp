@@ -4,17 +4,25 @@ import test from "node:test";
 import {
   buildCapabilityState,
   capabilityStateOutputSchema,
+  functionalityLedgerEntrySchema,
+  modelCapabilityLedgerEntrySchema,
+  modelLineageLedgerEntrySchema,
   runCapabilityState,
 } from "../src/tools/capability-state.js";
 import { generationCostObservationSchema } from "../src/generation-cost.js";
 import { liveModelFixture, manifestFixture, publicCompleteness, publicProvenance, publicWindow } from "./fixtures.js";
 
 const observedAt = "2026-09-20T08:00:00.000Z";
+const checkedAt = "2026-09-20T09:00:00.000Z";
 const liveModelsEndpoint = "/api/public/v2/live-models";
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
     ...liveModelFixture,
+    pricePoints: liveModelFixture.pricePoints.map((point) => ({
+      ...point,
+      source: { ...point.source, readAt: observedAt },
+    })),
     lastSeenAt: observedAt,
     lastConfirmedAt: observedAt,
     ...overrides,
@@ -34,48 +42,144 @@ function collection(data: unknown[], cursor: string | null = null) {
   };
 }
 
-test("emits one explicit state row with evidence-shaped fields", () => {
+function measured(id: string, costUsd: string, extra: Record<string, unknown> = {}) {
+  return generationCostObservationSchema.parse({
+    id: "observation-" + id,
+    provider: "openrouter",
+    upstreamProvider: "routed-provider",
+    model: id,
+    observedAt,
+    provenanceDate: observedAt,
+    workload: {
+      name: "selection probe",
+      inputTokens: "10",
+      outputTokens: "5",
+      maxOutputTokens: "8",
+    },
+    vantagePoint: "test workstation",
+    tokenCounts: { input: "10", output: "5", total: "15" },
+    costUsd,
+    costState: "MEASURED",
+    provenance: "MEASURED",
+    httpStatus: null,
+    errorBucket: null,
+    balanceDeltaUsd: null,
+    authoritativeField: "usage.cost",
+    sourceUrl: "https://provider.test/generation",
+    latency: {
+      ttftMs: "10",
+      roundTripMs: "20",
+      sustainedThroughputTps: "1",
+      workload: {
+        name: "selection probe",
+        inputTokens: "10",
+        outputTokens: "5",
+        maxOutputTokens: "8",
+      },
+      vantagePoint: "test workstation",
+      tokenBudget: { inputTokens: "10", outputTokens: "8" },
+      n: "3",
+      percentileMethod: "median",
+      observedAt,
+    },
+    note: "Measured in the test fixture.",
+    ...extra,
+  });
+}
+
+function fact<T>(value: T, source = "https://ledger.test/state") {
+  return {
+    state: "known" as const,
+    value,
+    observed_at: observedAt,
+    checked_at: checkedAt,
+    expires_at: "2026-09-21T08:00:00.000Z",
+    age_seconds: 3_600,
+    source,
+    reason: null,
+  };
+}
+
+function functionalityEntry(slug = liveModelFixture.id) {
+  return functionalityLedgerEntrySchema.parse({
+    slug,
+    catalogue_provider: "openrouter",
+    resolves: fact(true),
+    structured_output_ok: fact(true),
+    p50_latency: fact("25000"),
+    p95_latency: fact("50000"),
+    latency_bound_ms: fact("60000"),
+    last_functionally_tested: fact(observedAt),
+    semantic_quality: { ...fact("pass" as const), judge_hook: "reserved_for_external_semantic_judge" },
+    probe_http_status: 200,
+    probe_error_bucket: null,
+    note: "Mechanical probe and external semantic judgment fixture.",
+  });
+}
+
+function capabilityEntry(slug = liveModelFixture.id) {
+  return modelCapabilityLedgerEntrySchema.parse({
+    slug,
+    catalogue_provider: "openrouter",
+    supports_tool_calling: fact(true),
+    input_modalities: fact(["text"]),
+    note: "Explicit capability evidence fixture.",
+  });
+}
+
+function lineageEntry(slug = liveModelFixture.id) {
+  return modelLineageLedgerEntrySchema.parse({
+    slug,
+    catalogue_provider: "openrouter",
+    model_family: fact("qwen3"),
+    base_weights_lineage: fact("qwen3-base"),
+    note: "Explicit lineage evidence fixture.",
+  });
+}
+
+test("emits one explicit snake_case row and preserves the five empty adapters", () => {
   const state = buildCapabilityState({
     rows: [row()],
     sourceStale: false,
     observedAt,
-    now: "2026-09-20T09:00:00.000Z",
+    now: checkedAt,
     freshnessTtlSeconds: 86_400,
   });
 
   const parsed = capabilityStateOutputSchema.parse(state);
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;
+  assert.equal(parsed.schema_version, "1.1");
   assert.equal(parsed.rows.length, 1);
-  assert.ok(parsed.providers.some((provider) => provider.id === "openrouter" && provider.directAdapter));
-  const item = parsed.rows[0]!;
-  assert.equal(item.key, "openrouter:example/very-large-model");
-  assert.equal(item.contextWindow.state, "known");
-  assert.equal(item.contextWindow.value, "90071992547409930001");
-  assert.equal(item.toolCalling.state, "unknown");
-  assert.equal(item.modelFamily.state, "unknown");
-  assert.equal(item.costPerGeneration.state, "unknown");
-  assert.equal(item.reachability.state, "unknown");
-  assert.equal(item.functionality.resolves.state, "unknown");
-  assert.equal(item.functionality.structuredOutputOk.state, "unknown");
-  assert.equal(item.functionality.p50Latency.state, "unknown");
-  assert.equal(item.functionality.p95Latency.state, "unknown");
-  assert.equal(item.functionality.semanticQuality.state, "unknown");
-  assert.equal(item.selection.publicCouncil.state, "unknown");
-  assert.equal(item.selection.innerObserver.state, "unknown");
+  assert.equal(parsed.rows[0]!.slug, "example/very-large-model");
+  assert.equal(parsed.rows[0]!.catalogue_provider, "openrouter");
+  assert.equal(parsed.rows[0]!.context_window.state, "known");
+  assert.equal(parsed.rows[0]!.context_window.value, "90071992547409930001");
+  assert.equal(parsed.rows[0]!.billing_class.value, "paid");
+  assert.equal(parsed.rows[0]!.supports_tool_calling.state, "unknown");
+  assert.equal(parsed.rows[0]!.input_modalities.state, "unknown");
+  assert.equal(parsed.rows[0]!.model_family.state, "unknown");
+  assert.equal(parsed.rows[0]!.base_weights_lineage.state, "unknown");
+  assert.equal(parsed.rows[0]!.generation_cost.state, "unknown");
+  assert.equal(parsed.rows[0]!.reachability.state, "unknown");
+  assert.equal(parsed.rows[0]!.functionality.resolves.state, "unknown");
+  assert.equal(parsed.rows[0]!.functionality.structured_output_ok.state, "unknown");
+  assert.equal(parsed.rows[0]!.functionality.semantic_quality.state, "unknown");
+  assert.equal(parsed.rows[0]!.selection.public_council.state, "unknown");
+  assert.equal(parsed.rows[0]!.selection.private_council.state, "unknown");
+  assert.equal(parsed.functionality_ledger.state, "unavailable");
+  assert.equal(parsed.model_lineage_ledger.state, "unavailable");
+  assert.equal(parsed.capability_ledger.state, "unavailable");
   assert.equal(parsed.measurement.version, "basket-v1");
-  assert.equal(parsed.measurement.basket.length, 8);
-  assert.equal(parsed.measurement.workload.sampleSize, 8);
-  assert.equal(parsed.measurement.workload.p95Policy, "withheld_at_n_8");
-  assert.equal(parsed.measurement.vantagePoints.length, 3);
   assert.equal(parsed.measurement.resultSnapshots.state, "BLOCKED");
-  assert.equal(parsed.queries.publicCouncil.decisionState, "blocked");
-  assert.equal(parsed.queries.innerObserver.decisionState, "blocked");
-  assert.ok(parsed.queries.publicCouncil.missingFields.includes("costPerGeneration"));
-  assert.ok(parsed.queries.innerObserver.missingFields.includes("functionality.semanticQuality"));
+  for (const provider of ["crazyrouter", "fal", "nous", "sail", "wavespeed"]) {
+    assert.equal(parsed.providers.find((item) => item.id === provider)?.state, "no_live_rows");
+  }
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
+  assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
 
-test("marks retained observations expired instead of using them for selection", () => {
+test("marks retained values expired and clears the expired value", () => {
   const state = buildCapabilityState({
     rows: [row()],
     sourceStale: false,
@@ -88,28 +192,16 @@ test("marks retained observations expired instead of using them for selection", 
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;
   const item = parsed.rows[0]!;
-  assert.equal(item.contextWindow.state, "expired");
-  assert.equal(item.catalogueAvailability.state, "expired");
-  assert.equal(item.selection.publicCouncil.state, "unknown");
+  assert.equal(item.context_window.state, "expired");
+  assert.equal(item.context_window.value, null);
+  assert.equal(item.context_window.observed_at, observedAt);
+  assert.equal(item.context_window.age_seconds, 176_400);
+  assert.equal(item.catalogue_price.state, "expired");
+  assert.equal(item.catalogue_price.value, null);
+  assert.equal(item.selection.public_council.state, "unknown");
 });
 
 test("does not call catalogue prices real generation cost", () => {
-  const state = buildCapabilityState({
-    rows: [row()],
-    sourceStale: false,
-    observedAt,
-    now: "2026-09-20T09:00:00.000Z",
-    freshnessTtlSeconds: 86_400,
-  });
-  const parsed = capabilityStateOutputSchema.parse(state);
-  assert.equal(parsed.status, "ok");
-  if (parsed.status !== "ok") return;
-  const item = parsed.rows[0]!;
-  assert.equal(item.cataloguePrice.state, "known");
-  assert.equal(item.costPerGeneration.state, "unknown");
-});
-
-test("keeps published or lagging usage records out of actual cost state", () => {
   const publishedEstimate = generationCostObservationSchema.parse({
     id: "published-estimate",
     provider: "openrouter",
@@ -143,65 +235,145 @@ test("keeps published or lagging usage records out of actual cost state", () => 
     rows: [row({ generationCosts: [publishedEstimate] })],
     sourceStale: false,
     observedAt,
-    now: "2026-09-20T09:00:00.000Z",
+    now: checkedAt,
     freshnessTtlSeconds: 86_400,
   });
   const parsed = capabilityStateOutputSchema.parse(state);
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;
-  assert.equal(parsed.rows[0]!.costPerGeneration.state, "unknown");
-  assert.equal(parsed.queries.publicCouncil.decisionState, "blocked");
+  assert.equal(parsed.rows[0]!.catalogue_price.state, "known");
+  assert.equal(parsed.rows[0]!.generation_cost.state, "unknown");
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
 });
 
-test("public council ranks measured generation charges, never catalogue prices", () => {
-  const measured = (id: string, costUsd: string) => generationCostObservationSchema.parse({
-    id: `observation-${id}`,
-    provider: "openrouter",
-    upstreamProvider: "upstream",
-    model: id,
-    observedAt,
-    provenanceDate: observedAt,
-    workload: { name: "selection probe", inputTokens: "10", outputTokens: "5", maxOutputTokens: "8" },
-    vantagePoint: "test workstation",
-    tokenCounts: { input: "10", output: "5", total: "15" },
-    costUsd,
-    costState: "MEASURED",
-    provenance: "MEASURED",
-    httpStatus: 200,
-    balanceDeltaUsd: null,
-    authoritativeField: "usage.cost",
-    sourceUrl: "https://provider.test/generation",
-    latency: {
-      ttftMs: "10",
-      roundTripMs: "20",
-      sustainedThroughputTps: "1",
-      workload: { name: "selection probe", inputTokens: "10", outputTokens: "5", maxOutputTokens: "8" },
-      vantagePoint: "test workstation",
-      tokenBudget: { inputTokens: "10", outputTokens: "8" },
-      n: "3",
-      percentileMethod: "median",
-      observedAt,
-    },
-    note: "Measured in the test fixture.",
-  });
+test("public council is literally cheapest paid and does not add a reachability criterion", () => {
+  const cheap = measured("cheap", "0.02");
+  const expensive = measured("expensive", "0.20");
   const state = buildCapabilityState({
     rows: [
-      row({ id: "expensive", generationCosts: [measured("expensive", "0.20")] }),
-      row({ id: "cheap", generationCosts: [measured("cheap", "0.02")] }),
+      row({ id: "expensive", generationCosts: [expensive] }),
+      row({ id: "cheap", generationCosts: [cheap] }),
     ],
     sourceStale: false,
     observedAt,
-    now: "2026-09-20T09:00:00.000Z",
+    now: checkedAt,
     freshnessTtlSeconds: 86_400,
   });
   const parsed = capabilityStateOutputSchema.parse(state);
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;
-  assert.equal(parsed.queries.publicCouncil.decisionState, "decidable");
-  assert.equal(parsed.queries.publicCouncil.selected?.id, "cheap");
+  assert.equal(parsed.rows.find((item) => item.slug === "cheap")!.reachability.state, "unknown");
+  assert.equal(parsed.queries.public_council.decision_state, "decidable");
+  assert.equal(parsed.queries.public_council.selected?.slug, "cheap");
+  assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
 
-test("the registered state read scans live rows and carries source evidence", async () => {
+test("private council requires the full functionality and lineage/capability ledgers", () => {
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+    functionalityLedger: [functionalityEntry()],
+    modelCapabilityLedger: [capabilityEntry()],
+    modelLineageLedger: [lineageEntry()],
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  const item = parsed.rows[0]!;
+  assert.equal(item.supports_tool_calling.value, true);
+  assert.deepEqual(item.input_modalities.value, ["text"]);
+  assert.equal(item.model_family.value, "qwen3");
+  assert.equal(item.base_weights_lineage.value, "qwen3-base");
+  assert.equal(item.reachability.state, "live");
+  assert.equal(parsed.queries.private_council.decision_state, "decidable");
+  assert.equal(parsed.queries.private_council.selected?.slug, liveModelFixture.id);
+});
+
+test("dead or stale probes retain bucketed evidence without becoming live", () => {
+  const deadProbe = generationCostObservationSchema.parse({
+    ...measured("dead", "0.00"),
+    id: "dead-probe",
+    model: liveModelFixture.id,
+    costUsd: null,
+    costState: "UNKNOWN",
+    provenance: "UNKNOWN",
+    httpStatus: 404,
+    errorBucket: "not_found",
+    authoritativeField: null,
+  });
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [deadProbe] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.reachability.state, "unknown");
+  assert.equal(parsed.rows[0]!.reachability.http_status, 404);
+  assert.equal(parsed.rows[0]!.reachability.error_bucket, "not_found");
+  assert.equal(parsed.rows[0]!.generation_cost.state, "unknown");
+});
+
+test("functionality probe supplies reachability when no generation charge is readable", () => {
+  const state = buildCapabilityState({
+    rows: [row()],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+    functionalityLedger: [{
+      ...functionalityEntry(),
+      probe_http_status: 429,
+      probe_error_bucket: "rate_limit",
+    }],
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.generation_cost.state, "unknown");
+  assert.equal(parsed.rows[0]!.reachability.state, "rate_limited");
+  assert.equal(parsed.rows[0]!.reachability.http_status, 429);
+  assert.equal(parsed.rows[0]!.reachability.error_bucket, "rate_limit");
+});
+
+test("the registered state reads a generation-cost source when the manifest advertises it", async () => {
+  const cost = measured(liveModelFixture.id, "0.02");
+  const client = {
+    async get(path: string, _query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
+      if (path === "/api/public/v2/manifest") {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [...manifestFixture.routes, "/api/public/v2/generation-costs"],
+        });
+      }
+      if (path === liveModelsEndpoint) return schema.parse(collection([row()]));
+      assert.equal(path, "/api/public/v2/generation-costs");
+      return schema.parse({
+        ...collection([cost]),
+        summaries: [],
+        policies: [],
+      });
+    },
+  } as never;
+  const result = await runCapabilityState({}, {
+    client,
+    now: () => new Date(checkedAt),
+  });
+  const parsed = capabilityStateOutputSchema.parse(result);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.deepEqual(parsed.source_endpoints, [liveModelsEndpoint, "/api/public/v2/generation-costs"]);
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.costUsd, "0.02");
+  assert.equal(parsed.rows[0]!.routed_provider.value, "routed-provider");
+});
+
+test("the registered state scans live rows and carries source evidence", async () => {
   const client = {
     async get(path: string, _query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
       if (path === "/api/public/v2/manifest") return schema.parse(manifestFixture);
@@ -209,7 +381,7 @@ test("the registered state read scans live rows and carries source evidence", as
       return schema.parse(collection([row()]));
     },
   } as never;
-  const result = await runCapabilityState({}, { client, now: () => new Date("2026-09-20T09:00:00.000Z") });
+  const result = await runCapabilityState({}, { client, now: () => new Date(checkedAt) });
   const parsed = capabilityStateOutputSchema.parse(result);
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;

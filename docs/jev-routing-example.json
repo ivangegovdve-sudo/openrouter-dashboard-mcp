@@ -1,0 +1,269 @@
+{
+  "judgment": {
+    "kind": "Choice",
+    "choices": ["select_model", "block"],
+    "question": "For the PUBLIC council, choose literally the cheapest paid model."
+  },
+  "state": {
+    "schema_version": "1.1",
+    "generated_at": "2026-09-20T20:30:00.000Z",
+    "source_endpoint": "https://openrouter-github-dashboard.vercel.app/api/public/v2/live-models",
+    "source_stale": false,
+    "scope": {
+      "definition": "one row per available live model slug",
+      "completeness": "partial_or_unknown",
+      "missing_fields": ["rows", "billing_class", "generation_cost"]
+    },
+    "rows": [
+      {
+        "key": "cerebras:gpt-oss-120b",
+        "slug": "gpt-oss-120b",
+        "catalogue_provider": "cerebras",
+        "display_name": null,
+        "billing_class": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/live-models",
+          "reason": "The catalogue did not establish whether this slug is paid or free."
+        },
+        "supports_tool_calling": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/model-capabilities",
+          "reason": "No tool-calling capability was published for this slug; vendor or model naming is not inferred."
+        },
+        "context_window": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/live-models",
+          "reason": "The live-model source did not publish a context window."
+        },
+        "input_modalities": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/model-capabilities",
+          "reason": "The capability ledger did not publish input modalities for this slug."
+        },
+        "output_modalities": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/live-models",
+          "reason": "The live-model source did not publish output modalities."
+        },
+        "model_family": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/model-lineage",
+          "reason": "No model-family or base-weights lineage was published for this slug; vendor identity is not used as a lineage inference."
+        },
+        "base_weights_lineage": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/model-lineage",
+          "reason": "No model-family or base-weights lineage was published for this slug; vendor identity is not used as a lineage inference."
+        },
+        "catalogue_price": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/live-models",
+          "reason": "The catalogue did not publish a complete price for this row."
+        },
+        "generation_cost": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/generation-costs",
+          "reason": "No authoritative per-generation charge was published for this slug; catalogue rates, derived rates, blocked probes, and zero-delta lag are not substituted."
+        },
+        "routed_provider": {
+          "state": "unknown",
+          "value": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/generation-costs",
+          "reason": "No routed-provider observation was published for this slug."
+        },
+        "reachability": {
+          "state": "unknown",
+          "freshness_state": "unknown",
+          "http_status": null,
+          "error_bucket": null,
+          "observed_at": null,
+          "checked_at": "2026-09-20T20:30:00.000Z",
+          "expires_at": null,
+          "age_seconds": null,
+          "source": "/api/public/v2/generation-costs",
+          "reason": "Catalogue presence is not an inference probe; no per-slug HTTP result is published."
+        },
+        "functionality": {
+          "resolves": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "No cached functionality-ledger entry has been supplied for this slug."
+          },
+          "structured_output_ok": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "No cached functionality-ledger entry has been supplied for this slug."
+          },
+          "p50_latency": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "No cached functionality-ledger entry has been supplied for this slug."
+          },
+          "p95_latency": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "No cached functionality-ledger entry has been supplied for this slug."
+          },
+          "latency_bound_ms": {
+            "state": "known",
+            "value": "60000",
+            "observed_at": "2026-09-20T20:30:00.000Z",
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": 0,
+            "source": "selection-policy",
+            "reason": "This is a selection policy bound, not a provider measurement."
+          },
+          "last_functionally_tested": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "No cached functionality-ledger entry has been supplied for this slug."
+          },
+          "semantic_quality": {
+            "state": "unknown",
+            "value": null,
+            "observed_at": null,
+            "checked_at": "2026-09-20T20:30:00.000Z",
+            "expires_at": null,
+            "age_seconds": null,
+            "source": "/api/public/v2/functionality-ledger",
+            "reason": "Semantic quality is a Jev/external-judge hook; openDashboard does not implement the judge.",
+            "judge_hook": "reserved_for_external_semantic_judge"
+          }
+        },
+        "selection": {
+          "public_council": {
+            "state": "unknown",
+            "reason": "Required evidence is missing or expired.",
+            "missing_fields": ["billing_class", "generation_cost"]
+          },
+          "private_council": {
+            "state": "unknown",
+            "reason": "Required evidence is missing or expired.",
+            "missing_fields": [
+              "billing_class",
+              "generation_cost",
+              "supports_tool_calling",
+              "reachability",
+              "functionality.resolves",
+              "functionality.structured_output_ok",
+              "functionality.p50_latency",
+              "functionality.p95_latency",
+              "functionality.last_functionally_tested",
+              "functionality.semantic_quality"
+            ]
+          }
+        }
+      }
+    ],
+    "queries": {
+      "public_council": {
+        "rule": "literal_cheapest_paid",
+        "decision_state": "blocked",
+        "selected": null,
+        "missing_fields": ["billing_class", "generation_cost"],
+        "considered_rows": 1,
+        "basis": "The literal cheapest paid model requires a current paid classification and an authoritative per-generation charge."
+      },
+      "private_council": {
+        "rule": "cheapest_functional",
+        "decision_state": "blocked",
+        "selected": null,
+        "missing_fields": [
+          "billing_class",
+          "generation_cost",
+          "supports_tool_calling",
+          "reachability",
+          "functionality.resolves",
+          "functionality.structured_output_ok",
+          "functionality.p50_latency",
+          "functionality.p95_latency",
+          "functionality.last_functionally_tested",
+          "functionality.semantic_quality"
+        ],
+        "considered_rows": 1,
+        "basis": "The cheapest functional model requires all mechanical gates, a current live probe, an actual tool-calling capability, and a separate semantic judgment."
+      }
+    },
+    "warnings": [
+      "The manifest does not publish /api/public/v2/generation-costs; generation_cost, routed_provider, and reachability remain UNKNOWN.",
+      "The manifest does not publish /api/public/v2/functionality-ledger; mechanical functionality remains UNKNOWN.",
+      "The manifest does not publish /api/public/v2/model-lineage; model_family and base_weights_lineage remain UNKNOWN.",
+      "The manifest does not publish /api/public/v2/model-capabilities; supports_tool_calling and input_modalities remain UNKNOWN."
+    ]
+  }
+}
