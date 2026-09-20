@@ -305,6 +305,24 @@ test("private council requires the full functionality and lineage/capability led
   assert.equal(parsed.queries.private_council.selected?.slug, liveModelFixture.id);
 });
 
+test("private council keeps UNKNOWN lineage out of an otherwise functional row", () => {
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+    functionalityLedger: [functionalityEntry()],
+    modelCapabilityLedger: [capabilityEntry()],
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.queries.private_council.decision_state, "blocked");
+  assert.ok(parsed.queries.private_council.missing_fields.includes("model_family"));
+  assert.ok(parsed.queries.private_council.missing_fields.includes("base_weights_lineage"));
+});
+
 test("dead or stale probes retain bucketed evidence without becoming live", () => {
   const deadProbe = generationCostObservationSchema.parse({
     ...measured("dead", "0.00"),

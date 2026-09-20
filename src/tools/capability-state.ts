@@ -808,6 +808,10 @@ function selectionFor(
   }
 
   if (kind === "private") {
+    for (const field of ["model_family", "base_weights_lineage"] as const) {
+      const observation = row[field];
+      if (observation.state !== "known") missing.push(field);
+    }
     if (row.supports_tool_calling.state === "known" && row.supports_tool_calling.value === false) {
       ineligible.push("supports_tool_calling=false");
     } else if (row.supports_tool_calling.state !== "known") {
@@ -892,7 +896,7 @@ function queryFor(
       considered_rows: candidates.length,
       basis: kind === "public"
         ? "Authoritative measured generation cost, ascending; paid is the only eligibility policy and catalogue price is never substituted."
-        : "Authoritative measured generation cost among rows that pass every mechanical functionality gate and the external semantic-quality hook.",
+        : "Authoritative measured generation cost among rows that pass lineage diversity, every mechanical functionality gate, and the external semantic-quality hook.",
     };
   }
   const required = kind === "public"
@@ -901,6 +905,8 @@ function queryFor(
       "generation_cost",
       "supports_tool_calling",
       "reachability",
+      "model_family",
+      "base_weights_lineage",
       "functionality.resolves",
       "functionality.structured_output_ok",
       "functionality.p50_latency",
@@ -916,7 +922,7 @@ function queryFor(
     considered_rows: rows.length,
     basis: kind === "public"
       ? "The literal cheapest paid model requires a current paid classification and an authoritative per-generation charge."
-      : "The cheapest functional model requires all mechanical gates, a current live probe, an actual tool-calling capability, and a separate semantic judgment.",
+      : "The cheapest functional model requires explicit model-family/base-weight lineage, all mechanical gates, a current live probe, an actual tool-calling capability, and a separate semantic judgment.",
   };
 }
 
