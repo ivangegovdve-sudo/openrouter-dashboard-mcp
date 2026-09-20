@@ -401,7 +401,11 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
       modalities,
       modelFamily: unknown<string>("No model-family or base-weights lineage was published for this slug.", options),
       cataloguePrice,
-      costPerGeneration: row.generationCosts?.length > 0
+      // Keep the complete ledger as evidence, but expose it as known only when
+      // at least one observation contains an authoritative measured charge.
+      // Published estimates, derived rates, blocked probes, and zero-delta lag
+      // records must not masquerade as an actual per-generation cost.
+      costPerGeneration: row.generationCosts?.some((observation) => observation.costState === "MEASURED" && observation.costUsd !== null)
         ? known(row.generationCosts, options)
         : unknown<z.infer<typeof costValueSchema>>("No usage record with an actual per-generation charge was published for this slug.", options),
       routedProvider: unknown<string>("No routed provider observation was published for this slug.", options),
@@ -542,7 +546,9 @@ export async function runCapabilityState(
     const now = (dependencies.now ?? (() => new Date()))().toISOString();
     const built = buildCapabilityState({
       rows: scan.rows,
-      sourceStale: scan.stale || manifest.stale === true,
+      // The manifest schema does not expose a top-level stale flag; the live
+      // collection pages are the freshness authority for this state object.
+      sourceStale: scan.stale,
       observedAt: now,
       now,
       freshnessTtlSeconds: parsed.freshnessTtlSeconds,

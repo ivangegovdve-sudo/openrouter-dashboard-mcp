@@ -103,6 +103,50 @@ test("does not call catalogue prices real generation cost", () => {
   assert.equal(item.costPerGeneration.state, "unknown");
 });
 
+test("keeps published or lagging usage records out of actual cost state", () => {
+  const publishedEstimate = generationCostObservationSchema.parse({
+    id: "published-estimate",
+    provider: "openrouter",
+    upstreamProvider: "upstream",
+    model: "example/very-large-model",
+    observedAt,
+    provenanceDate: observedAt,
+    workload: { name: "catalogue estimate", inputTokens: "10", outputTokens: "5", maxOutputTokens: "8" },
+    vantagePoint: "published rate card",
+    tokenCounts: { input: "10", output: "5", total: "15" },
+    costUsd: "0.02",
+    costState: "PUBLISHED_ESTIMATE",
+    provenance: "PUBLISHED",
+    balanceDeltaUsd: null,
+    authoritativeField: null,
+    sourceUrl: "https://provider.test/pricing",
+    latency: {
+      ttftMs: null,
+      roundTripMs: null,
+      sustainedThroughputTps: null,
+      workload: { name: "catalogue estimate", inputTokens: "10", outputTokens: "5", maxOutputTokens: "8" },
+      vantagePoint: "published rate card",
+      tokenBudget: { inputTokens: "10", outputTokens: "8" },
+      n: "0",
+      percentileMethod: "published",
+      observedAt,
+    },
+    note: "Published estimate; no inference charge was observed.",
+  });
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [publishedEstimate] })],
+    sourceStale: false,
+    observedAt,
+    now: "2026-09-20T09:00:00.000Z",
+    freshnessTtlSeconds: 86_400,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.costPerGeneration.state, "unknown");
+  assert.equal(parsed.queries.publicCouncil.decisionState, "blocked");
+});
+
 test("public council ranks measured generation charges, never catalogue prices", () => {
   const measured = (id: string, costUsd: string) => generationCostObservationSchema.parse({
     id: `observation-${id}`,
