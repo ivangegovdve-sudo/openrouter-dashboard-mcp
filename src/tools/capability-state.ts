@@ -259,12 +259,63 @@ const paginationSchema = z
   })
   .strict();
 
+const noLiveRowsReasonSchema = z.enum([
+  "no_key",
+  "key_unentitled",
+  "endpoint_changed",
+  "adapter_broken",
+  "genuinely_empty",
+]);
+
+/**
+ * A missing row is a finding about this capability feed, never proof that a
+ * provider has no catalogue. Keep the reason beside the count so a router
+ * cannot silently turn an absent adapter into a free/empty provider.
+ *
+ * These are dated adapter findings, not provider-wide claims:
+ * - Crazyrouter's authenticated catalogue was not configured (the public
+ *   pricing reader remains a separate surface).
+ * - fal is exposed by the media catalogue endpoint, not this text live feed.
+ * - Nous's catalogue credential authenticated but its inference probe was
+ *   rejected (HTTP 401), so it is not admitted as live.
+ * - Sail's previous live read was an invalid payload and the current manifest
+ *   exposes no usable live source.
+ * - WaveSpeed has a populated media catalogue but no text row in this feed;
+ *   empty here is scoped to the feed, not the provider catalogue.
+ */
+const NO_LIVE_ROWS_FINDINGS: Record<string, {
+  reason: z.infer<typeof noLiveRowsReasonSchema>;
+  note: string;
+}> = {
+  crazyrouter: {
+    reason: "no_key",
+    note: "No authenticated Crazyrouter catalogue key was configured for this capability feed; its public pricing reader is a separate catalogue surface.",
+  },
+  fal: {
+    reason: "endpoint_changed",
+    note: "fal is exposed by the media catalogue endpoint, not by this text live-model feed; no row is manufactured from the separate endpoint.",
+  },
+  nous: {
+    reason: "key_unentitled",
+    note: "The Nous catalogue credential authenticated, but the recorded inference probe returned HTTP 401; catalogue presence is not treated as live reachability.",
+  },
+  sail: {
+    reason: "adapter_broken",
+    note: "The previous Sail live-model read returned an invalid payload and the current manifest exposes no usable Sail live source; no row is manufactured.",
+  },
+  wavespeed: {
+    reason: "genuinely_empty",
+    note: "WaveSpeed's public media catalogue is populated, but this text capability feed has no WaveSpeed row; empty is scoped to this feed, not the provider catalogue.",
+  },
+};
+
 const providerCoverageSchema = z
   .object({
     id: z.string().min(1),
     direct_adapter: z.boolean(),
     live_rows: z.number().int().nonnegative(),
     state: z.enum(["observed", "no_live_rows"]),
+    no_live_rows_reason: noLiveRowsReasonSchema.nullable(),
     note: z.string(),
   })
   .strict();
@@ -1013,14 +1064,16 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
     measurement: WEEKLY_MEASUREMENT_MANIFEST,
     providers: providerIds.sort().map((id) => {
       const count = parsedRows.filter((row) => row.catalogue_provider === id).length;
+      const noLiveRowsFinding = count === 0 ? NO_LIVE_ROWS_FINDINGS[id] : undefined;
       return {
         id,
         direct_adapter: (PROVIDER_IDS as readonly string[]).includes(id),
         live_rows: count,
         state: count > 0 ? "observed" as const : "no_live_rows" as const,
+        no_live_rows_reason: noLiveRowsFinding?.reason ?? null,
         note: count > 0
           ? "At least one available live-model row was observed."
-          : "No available live-model row is present in this dated snapshot; this does not establish an empty provider catalogue.",
+          : noLiveRowsFinding?.note ?? "No available live-model row is present in this dated snapshot; no provider-wide emptiness claim is established.",
       };
     }),
     rows: parsedRows,

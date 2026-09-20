@@ -167,6 +167,7 @@ test("emits one explicit snake_case row and preserves the five empty adapters", 
   assert.equal(parsed.rows[0]!.functionality.semantic_quality.state, "unknown");
   assert.equal(parsed.rows[0]!.selection.public_council.state, "unknown");
   assert.equal(parsed.rows[0]!.selection.private_council.state, "unknown");
+  assert.equal(parsed.providers.find((item) => item.id === "openrouter")?.no_live_rows_reason, null);
   assert.equal(parsed.functionality_ledger.state, "unavailable");
   assert.equal(parsed.model_lineage_ledger.state, "unavailable");
   assert.equal(parsed.capability_ledger.state, "unavailable");
@@ -175,6 +176,18 @@ test("emits one explicit snake_case row and preserves the five empty adapters", 
   for (const provider of ["crazyrouter", "fal", "nous", "sail", "wavespeed"]) {
     assert.equal(parsed.providers.find((item) => item.id === provider)?.state, "no_live_rows");
   }
+  assert.deepEqual(
+    parsed.providers
+      .filter((item) => ["crazyrouter", "fal", "nous", "sail", "wavespeed"].includes(item.id))
+      .map((item) => [item.id, item.no_live_rows_reason]),
+    [
+      ["crazyrouter", "no_key"],
+      ["fal", "endpoint_changed"],
+      ["nous", "key_unentitled"],
+      ["sail", "adapter_broken"],
+      ["wavespeed", "genuinely_empty"],
+    ],
+  );
   assert.equal(parsed.queries.public_council.decision_state, "blocked");
   assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
