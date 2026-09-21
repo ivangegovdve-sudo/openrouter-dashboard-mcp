@@ -188,6 +188,46 @@ export const publicDeprecationsResponseSchema = publicCollectionSchema(
   publicDeprecationSchema,
 );
 
+export const publicAppAliasDriftSchema = z
+  .object({
+    status: z.enum([
+      "clear",
+      "registry_stale",
+      "collection_not_run",
+      "collection_running",
+      "collection_failed",
+      "check_failed",
+    ]),
+    checkedAt: z.string().datetime({ offset: true }),
+    rankingAsOf: z.string().datetime({ offset: true }).nullable(),
+    registryPublishedAt: z.string().datetime({ offset: true }).nullable(),
+    uncovered: z
+      .array(
+        z
+          .object({
+            appId: exactIntegerStringSchema,
+            appName: z.string(),
+            rank: z.number().int().positive(),
+          })
+          .strict(),
+      )
+      .max(10),
+    dropped: z
+      .array(
+        z
+          .object({
+            appId: exactIntegerStringSchema,
+            appName: z.string(),
+          })
+          .strict(),
+      )
+      .max(10),
+    uncoveredCount: z.number().int().nonnegative(),
+    droppedCount: z.number().int().nonnegative(),
+    errorCode: z.string().nullable(),
+  })
+  .strict();
+
 export const publicSourceStatusSchema = z
   .object({
     sourceId: z.string(),
@@ -219,6 +259,11 @@ export const publicSourceStatusSchema = z
         "partial_or_unknown",
       ])
       .nullable(),
+    lastSuccessAt: z.string().datetime({ offset: true }).nullable().optional(),
+    consecutiveFailureCount: exactIntegerStringSchema.optional(),
+    failureEscalationThreshold: z.number().int().positive().optional(),
+    failureEscalated: z.boolean().optional(),
+    aliasRegistryDrift: publicAppAliasDriftSchema.nullable().optional(),
   })
   .strict();
 export const publicSourceStatusResponseSchema = publicCollectionSchema(

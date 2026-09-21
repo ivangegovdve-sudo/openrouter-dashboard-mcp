@@ -115,6 +115,27 @@ test("live-model schema rejects favourable freeness markers with contradictory m
   );
 });
 
+test("live-model schema accepts conservative media pricing with zero token placeholders", () => {
+  const mediaModel = {
+    ...liveModelFixture,
+    id: "openrouter/audio-priced-elsewhere",
+    pricing: {
+      promptUsdPerToken: "0",
+      completionUsdPerToken: "0",
+    },
+    isFree: null,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["text", "audio"],
+    missingFields: ["native_output_pricing"],
+  } as const;
+
+  assert.equal(
+    liveModelSchema.safeParse(mediaModel).success,
+    true,
+    "zero token placeholders do not make a separately priced media model free",
+  );
+});
+
 function liveModelsResponse(
   data: readonly LiveModel[],
   cursor: string | null = null,
@@ -401,6 +422,15 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
     freeKind: "paid_or_unknown",
     pricing: { promptUsdPerToken: null, completionUsdPerToken: null },
   });
+  const nativeMediaPriceUnknown = liveModel({
+    id: "openrouter/native-media-price-unknown",
+    provider: "openrouter",
+    isFree: null,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["audio"],
+    pricing: { promptUsdPerToken: "0", completionUsdPerToken: "0" },
+    missingFields: ["native_output_pricing"],
+  });
   const larger = liveModel({
     id: "groq/larger",
     isFree: false,
@@ -419,7 +449,12 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
       completionUsdPerToken: "0",
     },
   });
-  const { client, requests } = snapshotClient([unknown, larger, smaller]);
+  const { client, requests } = snapshotClient([
+    nativeMediaPriceUnknown,
+    unknown,
+    larger,
+    smaller,
+  ]);
 
   const result = await runResolveModel(
     { intent: "cheapest_capable", fallbackDepth: 2 },
@@ -437,10 +472,48 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
       (row) => row.id === "groq/unknown" && row.reason === "pricing_not_published",
     ),
   );
+  assert.ok(
+    result.excluded.some(
+      (row) =>
+        row.id === "openrouter/native-media-price-unknown" &&
+        row.reason === "pricing_not_published",
+    ),
+  );
   assert.equal(
     requests.some((request) => request.query.get("sort") === "price-asc"),
     false,
   );
+});
+
+test("uses published token prices when only separate native output pricing is missing", async () => {
+  const mixedModality = liveModel({
+    id: "openrouter/mixed-modality-priced-text",
+    provider: "openrouter",
+    isFree: false,
+    freeKind: "paid_or_unknown",
+    outputModalities: ["text", "audio"],
+    pricing: {
+      promptUsdPerToken: "0.00000025",
+      completionUsdPerToken: "0.00000097",
+    },
+    missingFields: ["native_output_pricing"],
+  });
+  const { client } = snapshotClient([mixedModality]);
+
+  const result = await runResolveModel(
+    {
+      intent: "cheapest_capable",
+      constraints: { outputModality: "text" },
+    },
+    { client },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(result.unsatisfiable, false);
+  assert.deepEqual(result.resolved.map((row) => row.id), [mixedModality.id]);
+  assert.equal(result.resolved[0]?.value, "0.61");
+  assert.equal(result.resolved[0]?.measurement, "measured");
 });
 
 test("orders any-available by requested provider order then id and truncates fallbacks", async () => {

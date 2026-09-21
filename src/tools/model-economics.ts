@@ -7,6 +7,7 @@ import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
 import { normalizePricePoint } from "../catalogue/price-set.js";
 import { exactDecimalRatio } from "../catalogue/decimal.js";
 import { pricePointSchema, type PricePoint } from "../contract.js";
+import { generationCostObservationSchema } from "../generation-cost.js";
 import { providerEvidenceShape } from "../providers/evidence.js";
 import {
   providerListResponseSchema,
@@ -265,9 +266,18 @@ const economicsModelSchema = z
         latencyMsP50: z.string().nullable(),
         fastestProvider: z.string().nullable(),
         observedAt: z.string(),
+        ttftMsP50: z.string().nullable().default(null),
+        roundTripMsP50: z.string().nullable().default(null),
+        sustainedThroughputTpsP50: z.string().nullable().default(null),
+        workload: z.object({ name: z.string(), inputTokens: z.string().nullable(), outputTokens: z.string().nullable(), maxOutputTokens: z.string().nullable() }).strict().nullable().default(null),
+        vantagePoint: z.string().nullable().default(null),
+        tokenBudget: z.object({ inputTokens: z.string().nullable(), outputTokens: z.string().nullable() }).strict().nullable().default(null),
+        n: z.string().nullable().default(null),
+        percentileMethod: z.enum(["single_observation", "median", "median_and_range_of_remaining_three", "published", "unknown"]).nullable().default(null),
       })
       .strict()
       .nullable(),
+    generationCosts: z.array(generationCostObservationSchema).default([]),
     availability: z.enum(["available", "disappeared"]),
     lastConfirmedAt: z.string(),
     absenceStreak: z.string(),
@@ -598,6 +608,7 @@ export async function runModelEconomics(
               reasoningEfforts: null,
               outputModalities: null,
               performance: null,
+              generationCosts: [],
               availability: "available",
               firstSeenAt: asOfIso,
               lastSeenAt: asOfIso,
@@ -683,6 +694,7 @@ export async function runModelEconomics(
       freeKind: row.freeKind,
       genuinelyFree: row.freeKind === "concrete_free",
       performance: row.performance,
+      generationCosts: row.generationCosts,
       availability: row.availability,
       lastConfirmedAt: row.lastConfirmedAt,
       absenceStreak: row.absenceStreak,
@@ -1006,7 +1018,7 @@ export async function runModelEconomics(
 
   return {
     status: warnings.length > 0 ? "partial" : "ok",
-    summary: `${models.length} of ${matchedBeforeLimit} matching models across ${providerReports.length} providers (${providerNames}), cheapest priced first; ${modelsDiscounted} carry a published discount.`,
+    summary: `${models.length} of ${matchedBeforeLimit} matching models across ${providerReports.length} providers (${providerNames}), lowest published rates first; ${modelsDiscounted} carry a published discount. Generation cost is reported separately from catalogue rates.`,
     checkedAt: asOfIso,
     models,
     missingIds,
@@ -1044,7 +1056,7 @@ export function registerModelEconomics(
     {
       title: "Open Dashboard model economics",
       description:
-        "Compare live models across OpenRouter, Groq and Cerebras on the facts a router decides with: input and output price per token and per million tokens, published discounts, context length, output modality, tool and reasoning support, measured throughput and latency, availability, and retirement risk. Cheapest priced first. Models whose provider publishes no price are reported as cost-unknown and listed after the ranked rows rather than dropped, and every null is explained as a fact about the provider that withheld it.",
+        "Compare live models across OpenRouter, Groq and Cerebras using published input/output rates, discounts, context, modality, tool and reasoning support, separately measured performance, availability, retirement risk, and any recorded per-generation cost evidence. Lowest published rates are listed first; catalogue rates are not the price paid for an aggregator-routed generation. Models without a published rate remain cost-unknown rather than being treated as free.",
       inputSchema: modelEconomicsInputSchema,
       outputSchema: modelEconomicsOutputSchema,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,

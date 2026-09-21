@@ -1,59 +1,30 @@
 # Open Dashboard MCP
 
-<!-- summary:begin generated-do-not-edit -->
+Agents need live model IDs and price provenance because stale slugs break prompts.
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.0.2** registers **12 providers** and exposes sixteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to live model catalogues, published media generation models and prices, and daily trending GitHub repos.
 
-<!-- summary:end -->
+open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, Crazyrouter, fal, and WaveSpeedAI. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
 
-**Ask which model to use, and get an answer you can check.**
-
-You hold keys with several inference providers. Prices differ, they change, and each
-provider quotes them in its own shape — per token, per image, per second of video, per
-GPU hour, sometimes three different prices for the same model depending on how fast you
-want it served. Answering "what is the cheapest capable option for this job, right now"
-means reading a dozen pages and trusting your own arithmetic.
-
-This is a read-only MCP server that reads those public sources at query time and returns
-them in one comparable shape, with every figure carrying where it came from and when.
-
-**What you actually get:**
-
-- **One catalogue across twelve providers** — OpenRouter, Groq, Cerebras, Sail, QwenCloud,
-  DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and Crazyrouter.
-- **Prices you can compare, or a refusal.** Two prices are compared only when they share a
-  unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
-  number that looks right and is not.
-- **Every figure carries its provenance** — the page it was read from, the timestamp, and
-  whether it was published, derived, or parsed out of prose.
-- **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
-  cannot source is not printed as a number.
-- **No credentials needed to start.** It reads public endpoints by default; keys only
-  widen what it can see.
-
-**What it is not:** not a proxy, not a router, not a billing dashboard. It answers
-questions about models and prices. It never sends inference traffic, and it never writes
-anything anywhere.
-
----
+Read-only, free, no account. Choose only the tools and providers you need.
 
 # Use it
 
 ## Install
 
-```bash
-npx -y open-dashboard-mcp
-```
+### Claude Code
 
-That runs the server directly with no install step. To add it to Claude Code:
+To register the MCP with Claude Code:
 
 ```bash
 claude mcp add open-dashboard -- npx -y open-dashboard-mcp
 ```
 
+Claude Code starts the server when it needs it and connects over MCP.
+
 ### Installing only the tools you want
 
-All sixteen tools are enabled by default. To install a subset, set
+All seventeen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
@@ -72,9 +43,9 @@ so a client never sees a tool it cannot use:
 }
 ```
 
-`OPEN_DASHBOARD_PROVIDERS` does the same for providers: deselected ones are absent from
-provider-bearing responses rather than appearing as empty catalogues. Leave either unset
-to get everything.
+`OPEN_DASHBOARD_PROVIDERS` lets an installation allowlist providers: deselected ones are
+omitted from provider-bearing responses, reducing unnecessary context. Leave it unset to
+get everything.
 
 For Claude Desktop, add this to `claude_desktop_config.json`:
 
@@ -88,6 +59,23 @@ For Claude Desktop, add this to `claude_desktop_config.json`:
   }
 }
 ```
+
+### Run directly
+
+For manual testing or another MCP client, run:
+
+```bash
+npx -y open-dashboard-mcp
+```
+
+This starts the MCP server and waits for an MCP client over stdin/stdout. An
+apparently idle terminal is expected: the command is not an interactive CLI and
+does not register the MCP with Claude or another agent. `npx -y` uses npx's
+package handling and does not perform a permanent global install.
+
+Without `@version`, npx resolves the latest published release. That is the point:
+the catalogue this package reports on changes underneath you, so an unpinned
+command keeps reading the current one instead of freezing to a snapshot.
 
 Requires Node.js 20 or newer. No API key is needed for any tool except the optional key inventory.
 
@@ -135,18 +123,49 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 # What it covers
 
+<!-- summary:begin generated-do-not-edit -->
+
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.5** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+
+<!-- summary:end -->
+
+**What you actually get:**
+
+- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
+  Crazyrouter.
+- **Prices you can compare, or a refusal.** Two prices are compared only when they share a
+  unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
+  number that looks right and is not.
+- **Every figure carries its provenance** — the page it was read from, the timestamp, and
+  whether it was published, derived, or parsed out of prose.
+- **Generation cost stays auditable.** Numeric per-generation cost is shown only when the
+  provider returns an authoritative field. OpenRouter observations retain `usage.cost`;
+  Nous Research and Sail remain `BLOCKED` when no such field exists, and short samples
+  remain `INSUFFICIENT EVIDENCE` rather than becoming a single-looking estimate.
+- **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
+  cannot source is not printed as a number.
+- **No credentials needed to start.** It reads public endpoints by default; keys only
+  widen what it can see.
+
+**What it is not:** not a proxy, not a router, not a billing dashboard. It answers
+questions about models and prices. It never sends inference traffic, and it never writes
+anything anywhere.
+
 ## Tools
 
 <!-- tools:begin generated-do-not-edit -->
 
-**16 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**18 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
 | `dashboard_benchmarks` | Dashboard benchmark observations |
+| `dashboard_capability_state` | Capability state for deterministic model selection |
 | `dashboard_catalogue` | Provider model catalogue and comparable media prices |
 | `dashboard_contract` | MCP schema and deprecation contract |
 | `dashboard_free_models` | Dashboard usable free models |
+| `dashboard_generation_costs` | Measured generation costs |
 | `dashboard_github_movers` | Dashboard public GitHub momentum movers |
 | `dashboard_github_trending` | GitHub trending repositories |
 | `dashboard_key_inventory` | Open Dashboard key inventory |
@@ -164,13 +183,21 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
 
+### Deterministic capability state
+
+`dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live model slug, provider coverage, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functional model. Every decision field has its own `checked_at`, `observed_at`, `expires_at`, and `age_seconds`; expired values are cleared and labelled `expired`, never reused as current values. The row carries `billing_class`, `context_window`, `catalogue_price`, measured `generation_cost` (including input/output token counts), `routed_provider`, three-state `reachability`, input/output modalities, `supports_tool_calling`, explicit `model_family` and `base_weights_lineage`, and the cached functionality ledger (`resolves`, `structured_output_ok`, `p50_latency`, `p95_latency`, `last_functionally_tested`, plus the external semantic-quality hook). Unknown is a value, not an omission.
+
+The two policies are deliberately different: `queries.public_council` is eligible on current paid classification plus authoritative per-generation cost only, while `queries.private_council` additionally requires live reachability, tool-calling support, the re-testable mechanical functionality gates, the 60-second p95 bound, and a separate semantic judgment. Catalogue price is never substituted for generation cost. Vendor identity is never used as model-family or base-weight lineage. By default the live-model cursor is exhausted; `max_rows` is an explicit degraded read, and `pagination.capped`, `scope.completeness`, `considered_rows`, `candidate_rows`, and `elimination_breakdown` expose the denominator and every measured gate. Family collision is explicitly reported as not evaluated until the caller supplies the already-seated council roster. See [`docs/jev-routing-example.json`](docs/jev-routing-example.json) for a full-scan Jev projection: with the currently deployed source it deterministically returns `block` after the complete live set is considered because `/api/public/v2/generation-costs` and the three dated ledgers are not published, so `billing_class`, `generation_cost`, and the private-only fields remain explicit UNKNOWN.
+
+The response also carries the locked `basket-v1` weekly measurement manifest. It names the eight model/provider rows, the exact workload, three vantage points, the published-price lower-bound cost estimate, and the signed-result snapshot fields. The current plan uses `n=8`: p50 and `max of 8` are publishable, while p95 is explicitly withheld until a larger sample exists. No Vercel job is allowed to claim a Bulgarian, European KVM, or US Oracle vantage point, and no missing snapshot is silently pooled.
+
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
 
 ## Providers
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **12 providers** in **open-dashboard-mcp 1.0.2**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.5**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -178,6 +205,7 @@ Generated from the package registry: **12 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="nous">Nous Research</span><br>Model provider | [Catalogue](https://nousresearch.com/) · [Documentation](https://nousresearch.com/) | Some collected models | Not established | Not established | Not established | Not established | Not established |
 | <span data-provider-id="qwencloud">QwenCloud</span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="deepinfra">DeepInfra</span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
 | <span data-provider-id="novita">Novita</span> | [Catalogue](https://api.novita.ai/v3/openai/models) · [Documentation](https://novita.ai/docs/api-reference/model-apis-llm-list-models) | Some collected models | All collected models | All collected models | Not published in this connector | Some collected models | No billing API |
@@ -214,6 +242,12 @@ Quotations are the providers' words. Caveats record published limits, including 
 > “Sail is the most cost-efficient API for the best open-source models.” — [Sail Research](https://www.sailresearch.com/), observed 2026-09-08.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://www.sailresearch.com/); checked 2026-09-08.
+
+**Nous Research**
+
+> “Published API rate: $0.072/M” — [Nous Research published pricing claim](https://nousresearch.com/), observed 2026-09-11.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://nousresearch.com/); checked 2026-09-11.
 
 **QwenCloud**
 
@@ -517,9 +551,9 @@ That is not hypothetical. Between two captures the document grew about 10% and S
 
 The fixture used in tests is byte-identical to the live document and is marked `-text` in `.gitattributes`, because `core.autocrlf` will otherwise rewrite its line endings on checkout and change the hash — which looks precisely like an upstream price change and is not one.
 
-## 1.0.0 skips 0.9.0
+## Gaps in the version numbers
 
-**There is no 0.9.0 on npm and there never was.** The previously published release is **0.8.0**, so 1.0.0 is the next version you can install and the breaking changes below are the 0.8.0 → 1.0.0 jump. 0.9.0 was built and verified in the repository but never published; if you track version numbers, you have not missed a release. See [the 1.0.0 release notes](docs/release-1.0.0.md).
+**There is no 0.9.0 on npm and there never was.** It was built and verified in the repository and never published, so the 0.8.0 → 1.0.0 jump is not a release you missed; the breaking changes in that jump are in [the 1.0.0 release notes](docs/release-1.0.0.md). **There is no 1.1.1 either.** If you track version numbers, these gaps are bookkeeping, not releases that came and went.
 
 OpenRouter ships its own MCP server. It is single-vendor by construction, which makes it unable to answer the question this one exists for: *of the providers I actually hold keys with, which is the cheapest capable option right now.*
 
@@ -563,6 +597,8 @@ A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. A
 **The refusal rule.** A comparison returns every compatible pair or it refuses. Two points compare only under the same unit AND the same condition; mismatched units, mismatched conditions, or a zero baseline refuse, always with a reason. The refusal surfaces under two names, one per layer: the price-set primitive returns `status: "refused"`, and a tool response carries that through as a comparison leg with `status: "not_comparable"` and the same reason. Nothing is coerced to make a comparison possible, because a comparison across conditions is not a weaker answer, it is a wrong one.
 
 **Speed carries its own conditions.** `dashboard_speed` observations are `measured`, `published`, `unknown`. A rate names `token_basis` (`visible_output`, `billed_total`, `unknown`) because a reasoning model emits tokens that never reach content, so a visible-output rate and a billed rate differ by multiples. Every observation carries a `vantagePoint`: latency is a property of a provider *and* where it was measured from, so a figure without one flatters whoever is nearest the benchmark host. A claim this package cannot source is published as `unknown`, not as a number.
+
+**Measured generation cost is a separate evidence stream.** A provider-reported `costUsd` carries `MEASURED` provenance, its own `observedAt`, `checkedAt`, and `expiresAt`; `UNKNOWN`, `LAG`, and `EXPIRED` remain explicit states. Every real call may append a newer observation, while catalogue prices remain a different field and never backfill measured cost. A provider-reported zero is valid for a local zero-cost model; a zero balance delta is billing lag.
 
 **Deprecations.** `dashboard_contract` returns `schema_version`, the installed `package_version`, and every field or tool announced for removal. A notice names `replaced_by`, or gives a plain `reason` when the capability is gone with no replacement. From 1.0.0 onward a removal is announced before the release that performs it; the 1.0.0 notices are retrospective because no earlier published release carried this mechanism.
 

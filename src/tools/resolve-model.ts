@@ -314,6 +314,10 @@ function divideDecimalByTwo(value: string): string {
 }
 
 function knownPriceSum(model: LiveModel): string | null {
+  if (
+    model.isFree === null &&
+    model.missingFields.includes("native_output_pricing")
+  ) return null;
   const prompt = model.pricePoints.find((point) => point.unit === "token_in" && point.condition === null)?.amount ?? null;
   const completion = model.pricePoints.find((point) => point.unit === "token_out" && point.condition === null)?.amount ?? null;
   if (prompt === null || completion === null) return null;

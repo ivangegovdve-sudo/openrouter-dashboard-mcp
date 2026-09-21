@@ -24,12 +24,25 @@ import { registerCatalogue } from "./tools/catalogue.js";
 import { registerPriceComparison } from "./tools/price-comparison.js";
 import { registerContract } from "./tools/contract.js";
 import { registerSpeed } from "./tools/speed.js";
+import { registerGenerationCosts } from "./tools/generation-costs.js";
+import {
+  registerCapabilityState,
+  type FunctionalityLedgerEntry,
+  type ModelCapabilityLedgerEntry,
+  type ModelLineageLedgerEntry,
+} from "./tools/capability-state.js";
 
 export type CreateServerOptions = DashboardClientOptions & {
   /** Install-time allowlist. Omitted means the complete built-in tool set. */
   selectedTools?: string[];
   /** Install-time provider allowlist used by provider-bearing tools. */
   selectedProviders?: string[];
+  /** Optional dated per-slug functionality ledger supplied by the collector. */
+  functionalityLedger?: FunctionalityLedgerEntry[];
+  /** Optional dated per-slug model-family/base-weight lineage ledger. */
+  modelLineageLedger?: ModelLineageLedgerEntry[];
+  /** Optional dated per-slug tool/input-modality capability ledger. */
+  modelCapabilityLedger?: ModelCapabilityLedgerEntry[];
 };
 
 function csv(value: string | undefined): string[] | undefined {
@@ -66,5 +79,13 @@ export function createServer(
   if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   if (enabled("dashboard_contract")) registerContract(server);
   if (enabled("dashboard_speed")) registerSpeed(server);
+  if (enabled("dashboard_generation_costs")) registerGenerationCosts(server, { client });
+  if (enabled("dashboard_capability_state")) registerCapabilityState(server, {
+    client,
+    ...(selectedProviders ? { allowedProviders: selectedProviders } : {}),
+    ...(options.functionalityLedger ? { functionalityLedger: options.functionalityLedger } : {}),
+    ...(options.modelLineageLedger ? { modelLineageLedger: options.modelLineageLedger } : {}),
+    ...(options.modelCapabilityLedger ? { modelCapabilityLedger: options.modelCapabilityLedger } : {}),
+  });
   return server;
 }
