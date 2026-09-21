@@ -61,6 +61,7 @@ function measured(id: string, costUsd: string, extra: Record<string, unknown> = 
     costUsd,
     costState: "MEASURED",
     provenance: "MEASURED",
+    measurementOrigin: "live_provider",
     httpStatus: null,
     errorBucket: null,
     balanceDeltaUsd: null,
@@ -281,6 +282,24 @@ test("public council is literally cheapest paid and does not add a reachability 
   assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
 
+test("unknown measurement origin stays visible and blocks a council decision", () => {
+  const unknownOrigin = measured(liveModelFixture.id, "0.02", { measurementOrigin: "unknown" });
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [unknownOrigin] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementOrigin, "unknown");
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
+  assert.ok(parsed.queries.public_council.elimination_breakdown.counts.generation_cost_origin_unknown);
+  assert.ok(parsed.queries.public_council.missing_fields.includes("generation_cost.measurement_origin"));
+});
+
 test("measured cost has its own shorter freshness window", () => {
   const state = buildCapabilityState({
     rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],
@@ -441,6 +460,7 @@ test("the registered state falls back to the privacy-safe published measured-cos
           observedAt: checkedAt,
           method: "provider settled usage breakdown",
           provenance: "MEASURED",
+          measurementOrigin: "live_provider",
           freshnessTtlSeconds: 86_400,
           expiresAt: "2026-09-21T09:00:00.000Z",
           sourceUrl: "https://api.sailresearch.com/v2/usage/breakdown",
@@ -460,6 +480,7 @@ test("the registered state falls back to the privacy-safe published measured-cos
   if (parsed.status !== "ok") return;
   assert.deepEqual(parsed.source_endpoints, [liveModelsEndpoint, "/api/public/v2/measured-costs"]);
   assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.costUsd, "0.00000357");
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementOrigin, "live_provider");
   assert.equal(parsed.rows[0]!.routed_provider.value, "sail");
   assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.tokenCounts.total, "0");
   assert.match(parsed.rows[0]!.generation_cost.value?.[0]?.note ?? "", /withholds token counts/);

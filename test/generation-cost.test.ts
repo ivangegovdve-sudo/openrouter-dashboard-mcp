@@ -41,7 +41,9 @@ const base = {
 };
 
 test("accepts a measured authoritative per-generation cost", () => {
-  assert.equal(generationCostObservationSchema.parse(base).costState, "MEASURED");
+  const parsed = generationCostObservationSchema.parse(base);
+  assert.equal(parsed.costState, "MEASURED");
+  assert.equal(parsed.measurementOrigin, "unknown");
 });
 
 test("rejects a zero balance delta as a zero measured cost", () => {
@@ -93,6 +95,7 @@ test("a real provider result appends a measured observation and refreshes its ti
   const ledger = appendGenerationCostObservation([], observation);
   assert.equal(ledger.length, 1);
   assert.equal(ledger[0]?.costState, "MEASURED");
+  assert.equal(ledger[0]?.measurementOrigin, "live_provider");
   assert.equal(latestMeasuredGenerationCost(ledger, {
     now: "2026-09-11T10:00:01.000Z",
     freshnessTtlSeconds: 86_400,
@@ -147,6 +150,7 @@ test("the public measured-cost contract omits private usage fields", () => {
       observedAt: base.observedAt,
       method: "local process accounting",
       provenance: "MEASURED",
+      measurementOrigin: "live_provider",
       freshnessTtlSeconds: 86_400,
       expiresAt: "2026-09-12T10:00:00.000Z",
       sourceUrl: "https://example.test/measurement",
@@ -159,6 +163,7 @@ test("the public measured-cost contract omits private usage fields", () => {
     provenance: [],
   });
   assert.equal(response.data[0]?.measuredCostUsd, "0");
+  assert.equal(response.data[0]?.measurementOrigin, "live_provider");
   assert.equal("balance" in response.data[0]!, false);
   assert.equal("tokenCounts" in response.data[0]!, false);
 });
