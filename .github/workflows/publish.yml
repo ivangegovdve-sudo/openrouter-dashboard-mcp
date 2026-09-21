@@ -1,0 +1,326 @@
+# Publishes to npm using TRUSTED PUBLISHING (OIDC) rather than a long-lived token.
+#
+# WHY THIS EXISTS, AND THE DEADLINE:
+# Every release so far has been published from a laptop using a granular access token
+# with the 2FA-bypass flag. npm is closing that path in JANUARY, so the next release
+# after that date fails with E403 and no amount of retrying fixes it. This workflow is
+# the replacement, and it is better than the thing it replaces on three counts:
+#
+#   - no long-lived credential exists anywhere. OIDC mints a short-lived token per run,
+#     scoped to this repository and this workflow. There is nothing to leak, rotate or
+#     find in a handoff note.
+#   - it satisfies 2FA-enforced publishing by design, which is the rule that closes the
+#     current path.
+#   - it produces a provenance attestation. For a package whose whole pitch is that its
+#     numbers can be trusted, a cryptographic link from tarball to the commit and
+#     workflow that built it is not decoration.
+#
+# WHY TWO JOBS. `id-token: write` is the right to mint the trusted-publisher identity.
+# Granting it to a job that also runs `npm ci`, the build, the test suite and npm's own
+# install scripts means ALL of that code -- ours and every dependency's -- can call the
+# OIDC endpoint and publish, before any of the release guards below have run. The guards
+# would still execute; they would simply be too late to matter.
+#
+# So verification happens in a job with NO token rights, which hands over a built tarball
+# as an artifact. The publish job has the token rights and runs no repository code: it
+# downloads that tarball, checks the release identity, and publishes the bytes it was
+# given. Reviewer-caught, and correctly.
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run every step but stop before publishing"
+        type: boolean
+        default: true
+
+# Nothing at the top level. Each job takes only what it needs.
+permissions: {}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # UNPRIVILEGED. Runs all repository and dependency code. Cannot mint a token.
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
+    steps:
+      # Pinned to reviewed commit SHAs. A mutable major-version ref in a release pipeline
+      # is a supply-chain hole with a release on the end of it.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci --ignore-scripts
+
+      # Same order and the same reasons as verify.yml: docs:check must precede build,
+      # because once build runs it would compare the README against a copy build just
+      # rewrote; build must precede test, because some tests read what the tarball ships.
+      - run: npm run docs:check
+      - run: npm run build
+      - run: npm test
+
+      - name: Pack the exact artifact that will be published
+        id: pack
+        run: |
+          npm pack
+          version="$(node -p "require('./package.json').version")"
+          # VALIDATED BEFORE IT LEAVES THIS JOB. This value comes from package.json, flows
+          # into the privileged job, and previously reached `run:` through workflow-expression
+          # interpolation -- which splices it into shell SOURCE, so a crafted version string
+          # could inject commands into the one job holding id-token: write. It is pinned to
+          # a strict semver shape here, and passed through env rather than interpolated
+          # there. Both halves matter: validation alone still interpolates.
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::package.json version '$version' is not a plain semver string; refusing to pass it to the publish job"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          ls -l "open-dashboard-mcp-$version.tgz"
+
+      # The publish job republishes THESE BYTES. Nothing is rebuilt on the privileged
+      # side, so nothing there can substitute a different artifact.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tarball
+          path: open-dashboard-mcp-*.tgz
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # PRIVILEGED. Holds id-token: write. Runs NO repository or dependency code:
+  # no npm ci, no build, no tests, no install scripts.
+  # ---------------------------------------------------------------------------
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Checked out only for the tag checks below. fetch-depth 0 because a shallow clone
+      # has neither the tags nor the history they read.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # NODE 24, SOLELY TO AVOID DOWNLOADING NPM HERE. Trusted publishing needs npm
+      # 11.5.1+, Node 22 bundles npm 10.x, and the previous version of this job ran
+      # `npm install -g npm@11.5.1` -- downloading and executing external code in the one
+      # job that can publish, which is exactly the isolation this split exists to create.
+      # Node 24 ships npm 11.x in the runner image, so the requirement is met by the
+      # toolchain instead of by a network fetch.
+      #
+      # The tarball was built by the verify job on Node 22; this job only uploads bytes,
+      # so the Node version here does not affect what ships.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Asserted, not installed. If a future runner image regresses below 11.5.1 this
+      # fails loudly rather than silently falling back to a token that no longer exists.
+      - name: The bundled npm must support trusted publishing
+        run: |
+          version="$(npm --version)"
+          echo "npm $version"
+          node -e '
+            const [maj, min, patch] = process.argv[1].split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && patch >= 1)));
+            if (!ok) {
+              console.error("The runner bundles npm " + process.argv[1] + ", which cannot do trusted publishing (need >= 11.5.1). Raise node-version rather than installing npm in this job.");
+              process.exit(1);
+            }
+          ' "$version"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: tarball
+
+      - name: Identify the artifact
+        id: artifact
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # Re-validated on arrival: the producing job is trusted to have checked, but this
+          # job is the one that can publish, so it does not take that on faith.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Refusing a version string that is not plain semver"
+            exit 1
+          fi
+          version="$VERSION"
+          file="open-dashboard-mcp-$version.tgz"
+          if [ ! -f "$file" ]; then
+            echo "::error::The verified artifact $file was not produced"
+            exit 1
+          fi
+          if [ "$version" != "$(node -p "require('./package.json').version")" ]; then
+            echo "::error::The artifact version does not match package.json on this ref"
+            exit 1
+          fi
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # The tag being released must name what is about to be published.
+      - name: The package version must match the release tag
+        if: github.event_name == 'release'
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          echo "package=$VERSION  tag=$tagged"
+          if [ "$VERSION" != "$tagged" ]; then
+            echo "::error::package.json is $VERSION but the release tag is $tagged"
+            exit 1
+          fi
+
+      # A manual dispatch must not be able to publish an arbitrary branch. Without this,
+      # anyone able to run a workflow could publish whatever package.json sits on their
+      # branch -- a publish as a side effect of pressing a button.
+      - name: A manual publish must come from main and match an existing tag
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == false
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::A manual publish is only allowed from main; this ref is $GITHUB_REF"
+            exit 1
+          fi
+          version="$VERSION"
+          # BOTH TAG CONVENTIONS, because the release path above accepts both. It strips a
+          # leading "v" only when present, so a release tagged 1.0.0 passes there -- while
+          # this path hardcoded refs/tags/v$version and would then fail for the same
+          # release. A dry run that passes followed by a real dispatch that cannot succeed
+          # is worse than either outcome alone.
+          tag=""
+          for candidate in "v$version" "$version"; do
+            if git rev-parse -q --verify "refs/tags/$candidate" >/dev/null; then tag="$candidate"; break; fi
+          done
+          if [ -z "$tag" ]; then
+            echo "::error::Neither tag v$version nor $version exists. Tag the release first so the artifact is one a release names."
+            exit 1
+          fi
+          # The tag must point at what was BUILT, not merely exist: main can advance past a
+          # tag, and then this would publish a different tree under a tagged version.
+          if [ "$(git rev-parse "refs/tags/$tag^{commit}")" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::Tag $tag does not point at HEAD. Publish from the tagged commit, or move the tag."
+            exit 1
+          fi
+          echo "main, tag $tag exists, and it points at HEAD."
+
+      # A PRERELEASE MUST NOT BECOME `latest`, AND THE VERSION DECIDES THAT -- not the
+      # release checkbox. Reading GitHub's `prerelease` flag was wrong twice: a manual
+      # dispatch has no release metadata at all and so always chose latest, and a release
+      # of 1.2.0-beta.1 that nobody ticked as prerelease would also have chosen latest,
+      # handing every ordinary consumer a beta. Semver already encodes this in the version
+      # string, which is the same string being published.
+      - name: Choose the dist-tag from the version being published
+        id: disttag
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
+        run: |
+          version="$VERSION"
+          if node -e 'process.exit(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(process.argv[1]) ? 0 : 1)' "$version"; then
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "$version is a release version: dist-tag latest."
+          else
+            echo "tag=next" >> "$GITHUB_OUTPUT"
+            echo "$version carries a prerelease or build component: dist-tag next, not latest."
+          fi
+
+      # PROVENANCE REQUIRES A PUBLIC REPOSITORY. npm does not generate attestations from a
+      # private repo even for a public package, so passing --provenance unconditionally
+      # would fail here today: this repository is private, and cleared to go public but not
+      # yet flipped. The flag is therefore chosen from the repository's actual visibility
+      # rather than asserted, and the job SAYS which it did -- a release that quietly
+      # published without the attestation it advertises would be its own small dishonesty.
+      - name: Publish the verified tarball
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        env:
+          TARBALL: ${{ steps.artifact.outputs.file }}
+          DIST_TAG: ${{ steps.disttag.outputs.tag }}
+          IS_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          # ALREADY PUBLISHED IS NOT A FAILURE. The two supported paths overlap: a manual
+          # publish followed by publishing the corresponding GitHub release runs this job
+          # twice for the same version, and npm permanently refuses a republish. Treating
+          # that as an error would turn a correct, already-completed release into a red
+          # pipeline and invite someone to "fix" it.
+          version="$(node -p "require('./package.json').version")"
+          published="$(curl -s --connect-timeout 5 --max-time 10 "https://registry.npmjs.org/open-dashboard-mcp/$version" || true)"
+          if printf '%s' "$published" | grep -q '"shasum"'; then
+            # THE VERSION EXISTING IS NOT ENOUGH. Skipping on a version match alone would
+            # report success when the registry holds a DIFFERENT artifact under the same
+            # number -- a silent success in the one place that must not have one. The
+            # shasum of what is already published has to equal the shasum of the tarball
+            # this run verified, or the run fails and a human looks at why.
+            remote="$(printf '%s' "$published" | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).dist.shasum')"
+            local_sum="$(sha1sum "$TARBALL" | cut -d" " -f1)"
+            if [ "$remote" = "$local_sum" ]; then
+              echo "::notice::$version is already on the registry and is byte-identical to this run's artifact; nothing to publish."
+              exit 0
+            fi
+            echo "::error::$version is already published but its shasum ($remote) does not match this run's tarball ($local_sum). Refusing to report success for an artifact this run did not publish."
+            exit 1
+          fi
+          if [ "$IS_PRIVATE" = "false" ]; then
+            echo "Public repository: publishing with a provenance attestation."
+            npm publish "$TARBALL" --provenance --access public --tag "$DIST_TAG"
+          else
+            echo "::warning::This repository is private, so npm cannot generate a provenance attestation. Publishing without one. Make the repository public to get provenance."
+            npm publish "$TARBALL" --access public --tag "$DIST_TAG"
+          fi
+
+      - name: Dry run only, nothing published
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        run: echo "Verification passed and the tarball was built. Nothing was published. To publish, start a NEW dispatch with dry_run unchecked, or publish a GitHub release. Re-running this run would reuse dry_run=true."
+
+      # THE CLI'S OUTPUT IS THE WRONG LAYER. npm printed its success line ~40s before the
+      # registry resolved 1.0.0 and ~2min before 1.0.1, measured on this package.
+      #
+      # It asks for the EXACT VERSION, not /latest: a prerelease is deliberately not latest,
+      # and if a newer version were already latest this would wait five minutes and then
+      # call a successful publish a failure.
+      - name: Confirm the registry actually resolves the published version
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        env:
+          VERSION: ${{ steps.artifact.outputs.version }}
+        run: |
+          expected="$VERSION"
+          # A DEADLINE, NOT AN ATTEMPT COUNT. Thirty attempts of up to 10s each plus a 10s
+          # sleep is up to ten minutes, so the previous loop advertised a five-minute bound
+          # it could not keep -- the same defect as a comment describing behaviour the code
+          # does not have, which is what this whole release is about. The clock now decides.
+          # TEN MINUTES, FROM MEASUREMENT RATHER THAN A ROUND NUMBER. Three publishes of
+          # this package took roughly 40s, 2min and 4.5min for the registry to resolve --
+          # the lag is growing, and a five-minute budget was already within striking
+          # distance of the last one. A gate that fails on a slow-but-successful publish
+          # teaches people to ignore it. The request budget is reserved so the final
+          # attempt still finishes inside the window.
+          deadline=$(( SECONDS + 600 - 10 ))
+          attempt=0
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            attempt=$(( attempt + 1 ))
+            # --connect-timeout/--max-time make the five-minute bound REAL. Without them a
+            # stalled TCP or TLS handshake blocks forever and the job hangs after npm may
+            # already have published -- a loop that claims a timeout it does not enforce.
+            code="$(curl -s -o /dev/null --connect-timeout 5 --max-time 10 -w '%{http_code}' "https://registry.npmjs.org/open-dashboard-mcp/$expected" || echo 000)"
+            echo "attempt $attempt: registry returned $code for $expected"
+            if [ "$code" = "200" ]; then
+              echo "The registry resolves $expected."
+              exit 0
+            fi
+            [ "$SECONDS" -lt "$deadline" ] && sleep 5
+          done
+          echo "::error::The registry did not resolve $expected within ten minutes. The publish may have failed even though the CLI reported success."
+          exit 1
