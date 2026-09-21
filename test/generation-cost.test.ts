@@ -23,6 +23,7 @@ const base = {
   costUsd: "0.00000123",
   costState: "MEASURED" as const,
   provenance: "MEASURED" as const,
+  measurementSource: "live_provider_read" as const,
   balanceDeltaUsd: null,
   authoritativeField: "usage.cost",
   sourceUrl: "https://openrouter.ai/api/v1/chat/completions",
@@ -43,7 +44,20 @@ const base = {
 test("accepts a measured authoritative per-generation cost", () => {
   const parsed = generationCostObservationSchema.parse(base);
   assert.equal(parsed.costState, "MEASURED");
-  assert.equal(parsed.measurementOrigin, "unknown");
+  assert.equal(parsed.measurementSource, "live_provider_read");
+});
+
+test("a missing measurement source remains explicitly unknown", () => {
+  const { measurementSource: _measurementSource, ...legacy } = base;
+  assert.equal(generationCostObservationSchema.parse(legacy).measurementSource, "unknown");
+});
+
+test("a measured cost records whether it came from a fixture or a live provider read", () => {
+  const fixture = generationCostObservationSchema.parse({
+    ...base,
+    measurementSource: "fixture",
+  });
+  assert.equal(fixture.measurementSource, "fixture");
 });
 
 test("rejects a zero balance delta as a zero measured cost", () => {
@@ -95,7 +109,7 @@ test("a real provider result appends a measured observation and refreshes its ti
   const ledger = appendGenerationCostObservation([], observation);
   assert.equal(ledger.length, 1);
   assert.equal(ledger[0]?.costState, "MEASURED");
-  assert.equal(ledger[0]?.measurementOrigin, "live_provider");
+  assert.equal(ledger[0]?.measurementSource, "live_provider_read");
   assert.equal(latestMeasuredGenerationCost(ledger, {
     now: "2026-09-11T10:00:01.000Z",
     freshnessTtlSeconds: 86_400,
@@ -105,6 +119,7 @@ test("a real provider result appends a measured observation and refreshes its ti
     freshnessTtlSeconds: 86_400,
   });
   assert.equal(envelope.freshnessTtlSeconds, 86_400);
+  assert.equal(envelope.observations[0]?.measurementSource, "live_provider_read");
 });
 
 test("a provider-reported zero charge is measurable, including local zero-cost models", () => {
@@ -150,7 +165,7 @@ test("the public measured-cost contract omits private usage fields", () => {
       observedAt: base.observedAt,
       method: "local process accounting",
       provenance: "MEASURED",
-      measurementOrigin: "live_provider",
+      measurementSource: "live_provider_read",
       freshnessTtlSeconds: 86_400,
       expiresAt: "2026-09-12T10:00:00.000Z",
       sourceUrl: "https://example.test/measurement",
@@ -163,7 +178,7 @@ test("the public measured-cost contract omits private usage fields", () => {
     provenance: [],
   });
   assert.equal(response.data[0]?.measuredCostUsd, "0");
-  assert.equal(response.data[0]?.measurementOrigin, "live_provider");
+  assert.equal(response.data[0]?.measurementSource, "live_provider_read");
   assert.equal("balance" in response.data[0]!, false);
   assert.equal("tokenCounts" in response.data[0]!, false);
 });

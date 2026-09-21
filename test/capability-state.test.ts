@@ -61,7 +61,7 @@ function measured(id: string, costUsd: string, extra: Record<string, unknown> = 
     costUsd,
     costState: "MEASURED",
     provenance: "MEASURED",
-    measurementOrigin: "live_provider",
+    measurementSource: "fixture",
     httpStatus: null,
     errorBucket: null,
     balanceDeltaUsd: null,
@@ -229,6 +229,7 @@ test("does not call catalogue prices real generation cost", () => {
     costUsd: "0.02",
     costState: "PUBLISHED_ESTIMATE",
     provenance: "PUBLISHED",
+    measurementSource: "unknown",
     balanceDeltaUsd: null,
     authoritativeField: null,
     sourceUrl: "https://provider.test/pricing",
@@ -279,13 +280,15 @@ test("public council is literally cheapest paid and does not add a reachability 
   assert.equal(parsed.rows.find((item) => item.slug === "cheap")!.reachability.state, "unknown");
   assert.equal(parsed.queries.public_council.decision_state, "decidable");
   assert.equal(parsed.queries.public_council.selected?.slug, "cheap");
+  assert.equal(parsed.queries.public_council.selected?.measured_cost_usd, "0.02");
+  assert.equal(parsed.queries.public_council.selected?.measured_cost_source, "fixture");
   assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
 
-test("unknown measurement origin stays visible and blocks a council decision", () => {
-  const unknownOrigin = measured(liveModelFixture.id, "0.02", { measurementOrigin: "unknown" });
+test("unknown measurement source stays visible and blocks a council decision", () => {
+  const unknownSource = measured(liveModelFixture.id, "0.02", { measurementSource: "unknown" });
   const state = buildCapabilityState({
-    rows: [row({ generationCosts: [unknownOrigin] })],
+    rows: [row({ generationCosts: [unknownSource] })],
     sourceStale: false,
     observedAt,
     now: checkedAt,
@@ -294,10 +297,10 @@ test("unknown measurement origin stays visible and blocks a council decision", (
   const parsed = capabilityStateOutputSchema.parse(state);
   assert.equal(parsed.status, "ok");
   if (parsed.status !== "ok") return;
-  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementOrigin, "unknown");
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementSource, "unknown");
   assert.equal(parsed.queries.public_council.decision_state, "blocked");
-  assert.ok(parsed.queries.public_council.elimination_breakdown.counts.generation_cost_origin_unknown);
-  assert.ok(parsed.queries.public_council.missing_fields.includes("generation_cost.measurement_origin"));
+  assert.ok(parsed.queries.public_council.elimination_breakdown.counts.generation_cost_source_unknown);
+  assert.ok(parsed.queries.public_council.missing_fields.includes("generation_cost_source"));
 });
 
 test("measured cost has its own shorter freshness window", () => {
@@ -315,6 +318,25 @@ test("measured cost has its own shorter freshness window", () => {
   assert.equal(parsed.rows[0]!.generation_cost.state, "expired");
   assert.equal(parsed.rows[0]!.generation_cost.value, null);
   assert.equal(parsed.queries.public_council.decision_state, "blocked");
+});
+
+test("a numeric cost with unknown source cannot make the council decidable", () => {
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { measurementSource: "unknown" })] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
+  assert.equal(parsed.queries.public_council.selected, null);
+  assert.equal(
+    parsed.queries.public_council.elimination_breakdown.counts.generation_cost_source_unknown,
+    1,
+  );
 });
 
 test("private council requires the full functionality and lineage/capability ledgers", () => {
@@ -460,7 +482,7 @@ test("the registered state falls back to the privacy-safe published measured-cos
           observedAt: checkedAt,
           method: "provider settled usage breakdown",
           provenance: "MEASURED",
-          measurementOrigin: "live_provider",
+          measurementSource: "fixture",
           freshnessTtlSeconds: 86_400,
           expiresAt: "2026-09-21T09:00:00.000Z",
           sourceUrl: "https://api.sailresearch.com/v2/usage/breakdown",
@@ -480,7 +502,8 @@ test("the registered state falls back to the privacy-safe published measured-cos
   if (parsed.status !== "ok") return;
   assert.deepEqual(parsed.source_endpoints, [liveModelsEndpoint, "/api/public/v2/measured-costs"]);
   assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.costUsd, "0.00000357");
-  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementOrigin, "live_provider");
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.measurementSource, "fixture");
+  assert.equal(parsed.queries.public_council.selected?.measured_cost_source, "fixture");
   assert.equal(parsed.rows[0]!.routed_provider.value, "sail");
   assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.tokenCounts.total, "0");
   assert.match(parsed.rows[0]!.generation_cost.value?.[0]?.note ?? "", /withholds token counts/);

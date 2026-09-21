@@ -6,7 +6,7 @@ import {
 } from "./dashboard/schemas/common.js";
 import {
   generationCostObservationSchema,
-  measurementOriginSchema,
+  measurementSourceSchema,
   type GenerationCostObservation,
   type Workload,
 } from "./generation-cost.js";
@@ -42,7 +42,7 @@ export const publicMeasuredCostEntrySchema = z
     observedAt: z.string().datetime({ offset: true }),
     method: z.string().min(1),
     provenance: z.literal("MEASURED"),
-    measurementOrigin: measurementOriginSchema.default("unknown"),
+    measurementSource: measurementSourceSchema.default("unknown"),
     freshnessTtlSeconds: z.number().int().positive(),
     expiresAt: z.string().datetime({ offset: true }),
     sourceUrl: z.string().url(),
@@ -77,8 +77,6 @@ export type GenerationCostOutcome = {
   errorBucket?: GenerationCostObservation["errorBucket"];
   latency: GenerationCostObservation["latency"];
   note: string;
-  /** Real provider outcomes default to live_provider; synthetic callers must opt into fixture. */
-  measurementOrigin?: GenerationCostObservation["measurementOrigin"];
 };
 
 function outcomeToObservation(input: GenerationCostOutcome): GenerationCostObservation {
@@ -100,7 +98,7 @@ function outcomeToObservation(input: GenerationCostOutcome): GenerationCostObser
     costUsd: measured ? input.costUsd : null,
     costState,
     provenance,
-    measurementOrigin: input.measurementOrigin ?? "live_provider",
+    measurementSource: "live_provider_read",
     httpStatus: input.httpStatus ?? null,
     errorBucket: input.errorBucket ?? null,
     balanceDeltaUsd,
