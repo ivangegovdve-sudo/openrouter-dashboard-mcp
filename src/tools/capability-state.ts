@@ -9,6 +9,10 @@ import {
   generationCostCollectionSchema,
   generationCostObservationSchema,
 } from "../generation-cost.js";
+import {
+  publicMeasuredCostsResponseSchema,
+  type PublicMeasuredCostEntry,
+} from "../measured-cost-ledger.js";
 import { measurementManifestSchema, WEEKLY_MEASUREMENT_MANIFEST } from "../measurement-manifest.js";
 import { PROVIDER_IDS } from "../providers/registry.js";
 import {
@@ -23,6 +27,7 @@ import {
 const MANIFEST_ENDPOINT = "/api/public/v2/manifest";
 const LIVE_MODELS_ENDPOINT = "/api/public/v2/live-models";
 const GENERATION_COSTS_ENDPOINT = "/api/public/v2/generation-costs";
+export const MEASURED_COSTS_ENDPOINT = "/api/public/v2/measured-costs";
 export const FUNCTIONALITY_LEDGER_ENDPOINT = "/api/public/v2/functionality-ledger";
 export const MODEL_LINEAGE_ENDPOINT = "/api/public/v2/model-lineage";
 export const MODEL_CAPABILITY_ENDPOINT = "/api/public/v2/model-capabilities";
@@ -32,6 +37,8 @@ export const CAPABILITY_STATE_PAGE_SIZE = 500;
 // A page limit would turn a first-page sample into a catalogue-wide claim.
 export const CAPABILITY_STATE_PAGE_LIMIT: number | null = null;
 export const CAPABILITY_STATE_DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60;
+/** Measured charges drift faster than catalogue/functionality evidence. */
+export const GENERATION_COST_DEFAULT_TTL_SECONDS = 24 * 60 * 60;
 export const CAPABILITY_STATE_MAX_ROWS = 2_000;
 export const FUNCTIONALITY_LATENCY_BOUND_MS = "60000";
 
@@ -407,6 +414,7 @@ export const capabilityStateInputSchema = z
     // read and is reported as capped so it cannot masquerade as the catalogue.
     max_rows: z.number().int().min(1).max(CAPABILITY_STATE_MAX_ROWS).optional(),
     freshness_ttl_seconds: z.number().int().positive().max(31_536_000).default(CAPABILITY_STATE_DEFAULT_TTL_SECONDS),
+    generation_cost_ttl_seconds: z.number().int().positive().max(31_536_000).default(GENERATION_COST_DEFAULT_TTL_SECONDS),
   })
   .strict();
 
@@ -579,6 +587,49 @@ function measuredCosts(values: GenerationCostObservation[]): GenerationCostObser
   return values.filter((value) =>
     value.costState === "MEASURED" && value.costUsd !== null,
   );
+}
+
+function publicMeasuredCostObservation(
+  entry: PublicMeasuredCostEntry,
+  catalogueProvider: string,
+): GenerationCostObservation {
+  const withheldWorkload = {
+    name: "published measured-cost workload; token detail withheld",
+    inputTokens: null,
+    outputTokens: null,
+    maxOutputTokens: null,
+  } as const;
+  return generationCostObservationSchema.parse({
+    id: `public:${entry.routedProvider}:${entry.slug}:${entry.observedAt}`,
+    provider: catalogueProvider,
+    upstreamProvider: entry.routedProvider,
+    model: entry.slug,
+    observedAt: entry.observedAt,
+    provenanceDate: entry.observedAt,
+    workload: withheldWorkload,
+    vantagePoint: "published ledger; vantage point withheld",
+    tokenCounts: { input: "0", output: "0", total: "0" },
+    costUsd: entry.measuredCostUsd,
+    costState: "MEASURED",
+    provenance: "MEASURED",
+    httpStatus: null,
+    errorBucket: null,
+    balanceDeltaUsd: null,
+    authoritativeField: "public.measuredCostUsd",
+    sourceUrl: entry.sourceUrl,
+    latency: {
+      ttftMs: null,
+      roundTripMs: null,
+      sustainedThroughputTps: null,
+      workload: withheldWorkload,
+      vantagePoint: "published ledger; vantage point withheld",
+      tokenBudget: { inputTokens: null, outputTokens: null },
+      n: "0",
+      percentileMethod: "unknown",
+      observedAt: entry.observedAt,
+    },
+    note: `${entry.method}. The public publication intentionally withholds token counts, volumes, balances, request identifiers, and vantage-point details.`,
+  });
 }
 
 function costOptions(
@@ -992,9 +1043,12 @@ export type CapabilityStateBuildInput = {
   rows: LiveModel[];
   sourceStale: boolean;
   costSourceStale?: boolean;
+  /** Endpoint that supplied the measured cost rows; defaults to the legacy full ledger. */
+  generationCostSourceEndpoint?: string;
   observedAt: string;
   now: string;
   freshnessTtlSeconds: number;
+  generationCostTtlSeconds?: number;
   providers?: string[];
   costObservations?: GenerationCostObservation[];
   functionalityLedger?: FunctionalityLedgerEntry[];
@@ -1009,6 +1063,7 @@ export type CapabilityStateBuildInput = {
 };
 
 export function buildCapabilityState(input: CapabilityStateBuildInput): CapabilityStateOutput {
+  const generationCostTtlSeconds = input.generationCostTtlSeconds ?? GENERATION_COST_DEFAULT_TTL_SECONDS;
   const allowed = input.providers === undefined ? null : new Set(input.providers);
   const liveRows = input.rows
     .filter((row) => row.availability === "available")
@@ -1063,9 +1118,9 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
           "The catalogue did not publish a complete price for this row.",
           catalogueOptions,
         ),
-      generation_cost: generationCostFact(costRows, input.now, input.freshnessTtlSeconds, costSourceStale),
-      routed_provider: routedProviderFact(costRows, input.now, input.freshnessTtlSeconds, costSourceStale),
-      reachability: reachabilityFrom(costRows, functionality, input.now, input.freshnessTtlSeconds, costSourceStale),
+      generation_cost: generationCostFact(costRows, input.now, generationCostTtlSeconds, costSourceStale),
+      routed_provider: routedProviderFact(costRows, input.now, generationCostTtlSeconds, costSourceStale),
+      reachability: reachabilityFrom(costRows, functionality, input.now, generationCostTtlSeconds, costSourceStale),
       functionality: functionalityFor(functionality, {
         ...catalogueOptions,
         source: FUNCTIONALITY_LEDGER_ENDPOINT,
@@ -1109,7 +1164,7 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
     source_endpoint: LIVE_MODELS_ENDPOINT,
     source_endpoints: unique([
       LIVE_MODELS_ENDPOINT,
-      ...(input.costObservations === undefined ? [] : [GENERATION_COSTS_ENDPOINT]),
+      ...(input.costObservations === undefined ? [] : [input.generationCostSourceEndpoint ?? GENERATION_COSTS_ENDPOINT]),
       ...(input.functionalityLedger === undefined ? [] : [FUNCTIONALITY_LEDGER_ENDPOINT]),
       ...(input.modelLineageLedger === undefined ? [] : [MODEL_LINEAGE_ENDPOINT]),
       ...(input.modelCapabilityLedger === undefined ? [] : [MODEL_CAPABILITY_ENDPOINT]),
@@ -1287,6 +1342,7 @@ export async function runCapabilityState(
     const warnings: string[] = [];
     let costObservations: GenerationCostObservation[] | undefined;
     let costSourceStale = false;
+    let generationCostSourceEndpoint: string | undefined;
     const evidence = [manifestEvidence, ...scan.evidence];
     if (manifest.routes.includes(GENERATION_COSTS_ENDPOINT)) {
       try {
@@ -1297,13 +1353,37 @@ export async function runCapabilityState(
         );
         costObservations = costs.data;
         costSourceStale = costs.stale;
+        generationCostSourceEndpoint = GENERATION_COSTS_ENDPOINT;
         evidence.push(sourceEvidence(GENERATION_COSTS_ENDPOINT, costs));
       } catch (error) {
         const safe = safeDashboardError(error);
         warnings.push("Generation-cost evidence is unavailable; generation_cost, routed_provider, and reachability remain UNKNOWN: " + safe.message);
       }
+    } else if (manifest.routes.includes(MEASURED_COSTS_ENDPOINT)) {
+      try {
+        const published = await dependencies.client.get(
+          MEASURED_COSTS_ENDPOINT,
+          new URLSearchParams(),
+          publicMeasuredCostsResponseSchema,
+        );
+        // The public publication deliberately contains no catalogue-provider
+        // field. Join each published slug to the scanned row, then retain the
+        // routed provider as the observation's upstream provider. A slug with
+        // no live row remains absent rather than becoming a phantom candidate.
+        costObservations = published.data.flatMap((entry) =>
+          scan.rows
+            .filter((row) => row.id === entry.slug)
+            .map((row) => publicMeasuredCostObservation(entry, row.provider)),
+        );
+        costSourceStale = published.stale;
+        generationCostSourceEndpoint = MEASURED_COSTS_ENDPOINT;
+        evidence.push(sourceEvidence(MEASURED_COSTS_ENDPOINT, published));
+      } catch (error) {
+        const safe = safeDashboardError(error);
+        warnings.push("The public measured-cost ledger is unavailable; generation_cost, routed_provider, and reachability remain UNKNOWN: " + safe.message);
+      }
     } else {
-      warnings.push("The manifest does not publish " + GENERATION_COSTS_ENDPOINT + "; generation_cost, routed_provider, and reachability remain UNKNOWN.");
+      warnings.push("The manifest does not publish " + GENERATION_COSTS_ENDPOINT + " or " + MEASURED_COSTS_ENDPOINT + "; generation_cost, routed_provider, and reachability remain UNKNOWN.");
     }
 
     let functionalityLedger = dependencies.functionalityLedger;
@@ -1370,9 +1450,11 @@ export async function runCapabilityState(
       rows: scan.rows,
       sourceStale: scan.stale,
       costSourceStale,
+      generationCostSourceEndpoint,
       observedAt: now,
       now,
       freshnessTtlSeconds: input.freshness_ttl_seconds,
+      generationCostTtlSeconds: input.generation_cost_ttl_seconds,
       ...(allowed ? { providers: allowed } : {}),
       ...(costObservations === undefined ? {} : { costObservations }),
       ...(functionalityLedger === undefined ? {} : { functionalityLedger }),

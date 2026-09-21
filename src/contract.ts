@@ -154,6 +154,22 @@ export type {
   GenerationCostCollection,
   GenerationCostObservation,
 } from "./generation-cost.js";
+export {
+  appendGenerationCostObservation,
+  buildMeasuredCostLedger,
+  DEFAULT_MEASURED_COST_TTL_SECONDS,
+  latestMeasuredGenerationCost,
+  measuredCostLedgerSchema,
+  publicMeasuredCostEntrySchema,
+  publicMeasuredCostsResponseSchema,
+  recordGenerationCostOutcome,
+} from "./measured-cost-ledger.js";
+export type {
+  GenerationCostOutcome,
+  MeasuredCostLedger,
+  MeasuredCostState,
+  PublicMeasuredCostEntry,
+} from "./measured-cost-ledger.js";
 
 const DEPRECATIONS: DeprecationNotice[] = [
   { field: "catalogueModel.pricing", removed_in: "1.0.0", replaced_by: "pricePoints", reason: null, since: "2026-09-08", state: "published" },

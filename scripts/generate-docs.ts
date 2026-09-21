@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { PROVIDER_IDS, PROVIDER_REGISTRY, providerDescriptorSchema } from "../src/providers/registry.js";
 import { priceConditionSchema, priceUnitSchema, pricePointSchema } from "../src/contract.js";
+import { generationCostObservationSchema } from "../src/generation-cost.js";
 import { speedObservationSchema } from "../src/speed.js";
 import { createServer } from "../src/server.js";
 
@@ -51,6 +52,7 @@ export function contractVocabulary() {
     .map(option => option.shape.kind.value);
   const point = pricePointSchema as unknown as { shape: Record<string, { options?: readonly string[] }> };
   const speed = speedObservationSchema as unknown as { shape: Record<string, { options?: readonly string[] }> };
+  const generationCost = generationCostObservationSchema as unknown as { shape: Record<string, unknown> };
   return {
     priceUnits: [...(priceUnitSchema.options as readonly string[])],
     conditionKinds: kinds,
@@ -63,6 +65,7 @@ export function contractVocabulary() {
     speedFields: Object.keys(speed.shape),
     contractFields: ["schema_version", "package_version", "deprecations", "field", "removed_in", "replaced_by", "reason", "since", "state"],
     normalizedFigureFields: ["value", "unit", "assumption", "derived_from"],
+    measuredCostFields: Object.keys(generationCost.shape),
     environmentVariables: ["OPEN_DASHBOARD_TOOLS", "OPEN_DASHBOARD_PROVIDERS", "OPEN_DASHBOARD_KEY_SOURCES", "DASHBOARD_BASE_URL"],
   };
 }
@@ -118,6 +121,8 @@ function contractBlock(): string {
     `**The refusal rule.** A comparison returns every compatible pair or it refuses. Two points compare only under the same unit AND the same condition; mismatched units, mismatched conditions, or a zero baseline refuse, always with a reason. The refusal surfaces under two names, one per layer: the price-set primitive returns \`status: \"refused\"\`, and a tool response carries that through as a comparison leg with \`status: \"not_comparable\"\` and the same reason. Nothing is coerced to make a comparison possible, because a comparison across conditions is not a weaker answer, it is a wrong one.`,
     ``,
     `**Speed carries its own conditions.** \`dashboard_speed\` observations are ${speedStates}. A rate names \`token_basis\` (${tokenBasis}) because a reasoning model emits tokens that never reach content, so a visible-output rate and a billed rate differ by multiples. Every observation carries a \`vantagePoint\`: latency is a property of a provider *and* where it was measured from, so a figure without one flatters whoever is nearest the benchmark host. A claim this package cannot source is published as \`unknown\`, not as a number.`,
+    ``,
+    `**Measured generation cost is a separate evidence stream.** A provider-reported \`costUsd\` carries \`MEASURED\` provenance, its own \`observedAt\`, \`checkedAt\`, and \`expiresAt\`; \`UNKNOWN\`, \`LAG\`, and \`EXPIRED\` remain explicit states. Every real call may append a newer observation, while catalogue prices remain a different field and never backfill measured cost. A provider-reported zero is valid for a local zero-cost model; a zero balance delta is billing lag.`,
     ``,
     `**Deprecations.** \`dashboard_contract\` returns \`schema_version\`, the installed \`package_version\`, and every field or tool announced for removal. A notice names \`replaced_by\`, or gives a plain \`reason\` when the capability is gone with no replacement. From 1.0.0 onward a removal is announced before the release that performs it; the 1.0.0 notices are retrospective because no earlier published release carried this mechanism.`,
   ].join(String.fromCharCode(10));

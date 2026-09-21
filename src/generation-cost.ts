@@ -33,6 +33,7 @@ export const workloadSchema = z
     maxOutputTokens: exactIntegerStringSchema.nullable(),
   })
   .strict();
+export type Workload = z.infer<typeof workloadSchema>;
 
 const tokenCountsSchema = z
   .object({

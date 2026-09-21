@@ -598,6 +598,8 @@ A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. A
 
 **Speed carries its own conditions.** `dashboard_speed` observations are `measured`, `published`, `unknown`. A rate names `token_basis` (`visible_output`, `billed_total`, `unknown`) because a reasoning model emits tokens that never reach content, so a visible-output rate and a billed rate differ by multiples. Every observation carries a `vantagePoint`: latency is a property of a provider *and* where it was measured from, so a figure without one flatters whoever is nearest the benchmark host. A claim this package cannot source is published as `unknown`, not as a number.
 
+**Measured generation cost is a separate evidence stream.** A provider-reported `costUsd` carries `MEASURED` provenance, its own `observedAt`, `checkedAt`, and `expiresAt`; `UNKNOWN`, `LAG`, and `EXPIRED` remain explicit states. Every real call may append a newer observation, while catalogue prices remain a different field and never backfill measured cost. A provider-reported zero is valid for a local zero-cost model; a zero balance delta is billing lag.
+
 **Deprecations.** `dashboard_contract` returns `schema_version`, the installed `package_version`, and every field or tool announced for removal. A notice names `replaced_by`, or gives a plain `reason` when the capability is gone with no replacement. From 1.0.0 onward a removal is announced before the release that performs it; the 1.0.0 notices are retrospective because no earlier published release carried this mechanism.
 
 <!-- contract:end -->
