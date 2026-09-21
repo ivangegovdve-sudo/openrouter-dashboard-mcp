@@ -281,6 +281,23 @@ test("public council is literally cheapest paid and does not add a reachability 
   assert.equal(parsed.queries.private_council.decision_state, "blocked");
 });
 
+test("measured cost has its own shorter freshness window", () => {
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],
+    sourceStale: false,
+    observedAt,
+    now: "2026-09-20T10:00:00.000Z",
+    freshnessTtlSeconds: 7 * 24 * 60 * 60,
+    generationCostTtlSeconds: 3_600,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.generation_cost.state, "expired");
+  assert.equal(parsed.rows[0]!.generation_cost.value, null);
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
+});
+
 test("private council requires the full functionality and lineage/capability ledgers", () => {
   const state = buildCapabilityState({
     rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],
@@ -402,6 +419,50 @@ test("the registered state reads a generation-cost source when the manifest adve
   assert.deepEqual(parsed.source_endpoints, [liveModelsEndpoint, "/api/public/v2/generation-costs"]);
   assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.costUsd, "0.02");
   assert.equal(parsed.rows[0]!.routed_provider.value, "routed-provider");
+});
+
+test("the registered state falls back to the privacy-safe published measured-cost ledger", async () => {
+  const client = {
+    async get(path: string, _query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
+      if (path === "/api/public/v2/manifest") {
+        return schema.parse({
+          ...manifestFixture,
+          routes: [...manifestFixture.routes, "/api/public/v2/measured-costs"],
+        });
+      }
+      if (path === liveModelsEndpoint) return schema.parse(collection([row()]));
+      assert.equal(path, "/api/public/v2/measured-costs");
+      return schema.parse({
+        schemaVersion: "2.0",
+        data: [{
+          slug: liveModelFixture.id,
+          routedProvider: "sail",
+          measuredCostUsd: "0.00000357",
+          observedAt: checkedAt,
+          method: "provider settled usage breakdown",
+          provenance: "MEASURED",
+          freshnessTtlSeconds: 86_400,
+          expiresAt: "2026-09-21T09:00:00.000Z",
+          sourceUrl: "https://api.sailresearch.com/v2/usage/breakdown",
+        }],
+        cursor: null,
+        window: { start: "2026-09-20", end: "2026-09-20", timezone: "UTC", inclusive: true, basis: "observed" },
+        completeness: { acquisitionComplete: true, populationCompleteness: "requested_slice", missingFields: [] },
+        stale: false,
+        rank: null,
+        provenance: [],
+      });
+    },
+  } as never;
+  const result = await runCapabilityState({}, { client, now: () => new Date("2026-09-20T09:00:00.000Z") });
+  const parsed = capabilityStateOutputSchema.parse(result);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.deepEqual(parsed.source_endpoints, [liveModelsEndpoint, "/api/public/v2/measured-costs"]);
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.costUsd, "0.00000357");
+  assert.equal(parsed.rows[0]!.routed_provider.value, "sail");
+  assert.equal(parsed.rows[0]!.generation_cost.value?.[0]?.tokenCounts.total, "0");
+  assert.match(parsed.rows[0]!.generation_cost.value?.[0]?.note ?? "", /withholds token counts/);
 });
 
 test("the registered state scans live rows and carries source evidence", async () => {

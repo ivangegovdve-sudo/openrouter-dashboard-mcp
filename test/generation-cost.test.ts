@@ -2,6 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { generationCostCellSummarySchema, generationCostObservationSchema } from "../src/generation-cost.js";
+import {
+  appendGenerationCostObservation,
+  buildMeasuredCostLedger,
+  latestMeasuredGenerationCost,
+  publicMeasuredCostsResponseSchema,
+  recordGenerationCostOutcome,
+} from "../src/measured-cost-ledger.js";
 
 const base = {
   id: "generation-1",
@@ -78,4 +85,80 @@ test("a cell needs three observations before it can expose a measured range", ()
     rangeUsd: { min: "0.00000100", max: "0.00000400" },
     note: "Measured range across routed upstream providers; no single cost is representative.",
   }).measurementState, "MEASURED_RANGE");
+});
+
+test("a real provider result appends a measured observation and refreshes its timestamp", () => {
+  const { costState: _costState, provenance: _provenance, ...outcome } = base;
+  const observation = recordGenerationCostOutcome(outcome);
+  const ledger = appendGenerationCostObservation([], observation);
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0]?.costState, "MEASURED");
+  assert.equal(latestMeasuredGenerationCost(ledger, {
+    now: "2026-09-11T10:00:01.000Z",
+    freshnessTtlSeconds: 86_400,
+  }).value, "0.00000123");
+  const envelope = buildMeasuredCostLedger(ledger, {
+    now: "2026-09-11T10:00:01.000Z",
+    freshnessTtlSeconds: 86_400,
+  });
+  assert.equal(envelope.freshnessTtlSeconds, 86_400);
+});
+
+test("a provider-reported zero charge is measurable, including local zero-cost models", () => {
+  const { costState: _costState, provenance: _provenance, ...outcome } = base;
+  const observation = recordGenerationCostOutcome({ ...outcome, id: "zero-cost", costUsd: "0" });
+  assert.equal(observation.costState, "MEASURED");
+  assert.equal(observation.costUsd, "0");
+});
+
+test("a zero balance delta remains LAG and cannot become a free generation", () => {
+  const { costState: _costState, provenance: _provenance, ...outcome } = base;
+  const observation = recordGenerationCostOutcome({
+    ...outcome,
+    id: "lagging",
+    costUsd: null,
+    balanceDeltaUsd: "0",
+    authoritativeField: null,
+  });
+  assert.equal(observation.costState, "LAG");
+  assert.equal(observation.costUsd, null);
+  assert.equal(latestMeasuredGenerationCost([observation], {
+    now: "2026-09-11T10:00:01.000Z",
+    freshnessTtlSeconds: 86_400,
+  }).state, "unknown");
+});
+
+test("measured cost expires explicitly instead of being reused", () => {
+  const { costState: _costState, provenance: _provenance, ...outcome } = base;
+  const observation = recordGenerationCostOutcome(outcome);
+  assert.equal(latestMeasuredGenerationCost([observation], {
+    now: "2026-09-12T10:00:01.000Z",
+    freshnessTtlSeconds: 86_400,
+  }).state, "expired");
+});
+
+test("the public measured-cost contract omits private usage fields", () => {
+  const response = publicMeasuredCostsResponseSchema.parse({
+    schemaVersion: "2.0",
+    data: [{
+      slug: "local/example",
+      routedProvider: "local",
+      measuredCostUsd: "0",
+      observedAt: base.observedAt,
+      method: "local process accounting",
+      provenance: "MEASURED",
+      freshnessTtlSeconds: 86_400,
+      expiresAt: "2026-09-12T10:00:00.000Z",
+      sourceUrl: "https://example.test/measurement",
+    }],
+    cursor: null,
+    window: { start: "2026-09-11", end: "2026-09-11", timezone: "UTC", inclusive: true, basis: "observed" },
+    completeness: { acquisitionComplete: true, populationCompleteness: "requested_slice", missingFields: [] },
+    stale: false,
+    rank: null,
+    provenance: [],
+  });
+  assert.equal(response.data[0]?.measuredCostUsd, "0");
+  assert.equal("balance" in response.data[0]!, false);
+  assert.equal("tokenCounts" in response.data[0]!, false);
 });
