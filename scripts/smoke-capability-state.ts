@@ -4,20 +4,26 @@ import { startFixtureDashboard } from "./fixture-dashboard.js";
 import { createServer } from "../src/server.js";
 import { capabilityStateOutputSchema } from "../src/tools/capability-state.js";
 
-function maxRowsFromArgs(): number {
-  const value = process.argv[2] ?? "1";
+type SmokeScenario = "blocked" | "measured";
+
+function inputFromArgs(): { scenario: SmokeScenario; maxRows: number; freshnessTtlSeconds?: number; generationCostTtlSeconds?: number } {
+  const first = process.argv[2] ?? "1";
+  const scenario: SmokeScenario = first === "measured" ? "measured" : "blocked";
+  const value = scenario === "measured" ? (process.argv[3] ?? "6") : first;
   if (!/^\d+$/.test(value)) {
-    throw new Error("Usage: npm run smoke:capability-state -- [max_rows]");
+    throw new Error("Usage: npm run smoke:capability-state -- [max_rows] | measured [max_rows]");
   }
   const maxRows = Number(value);
   if (!Number.isSafeInteger(maxRows) || maxRows < 1) {
     throw new Error("max_rows must be a positive safe integer");
   }
-  return maxRows;
+  return scenario === "measured"
+    ? { scenario, maxRows, freshnessTtlSeconds: 31_536_000, generationCostTtlSeconds: 31_536_000 }
+    : { scenario, maxRows };
 }
 
 async function main(): Promise<void> {
-  const maxRows = maxRowsFromArgs();
+  const input = inputFromArgs();
   const fixture = await startFixtureDashboard({ mode: "fixture" });
   const server = createServer({ baseUrl: fixture.baseUrl, cache: false });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -28,15 +34,22 @@ async function main(): Promise<void> {
   try {
     const result = await client.callTool({
       name: "dashboard_capability_state",
-      arguments: { max_rows: maxRows },
+      arguments: {
+        max_rows: input.maxRows,
+        ...(input.freshnessTtlSeconds === undefined ? {} : { freshness_ttl_seconds: input.freshnessTtlSeconds }),
+        ...(input.generationCostTtlSeconds === undefined ? {} : { generation_cost_ttl_seconds: input.generationCostTtlSeconds }),
+      },
     });
     const state = capabilityStateOutputSchema.parse(result.structuredContent);
     if (state.status !== "ok") {
-      process.stdout.write(JSON.stringify({ input: { max_rows: maxRows }, state }, null, 2) + "\n");
+      process.stdout.write(JSON.stringify({ input, state }, null, 2) + "\n");
       return;
     }
+    if (input.scenario === "measured" && (state.queries.public_council.decision_state !== "decidable" || state.queries.public_council.selected === null)) {
+      throw new Error("measured smoke scenario did not produce a public council selection");
+    }
     process.stdout.write(JSON.stringify({
-      input: { max_rows: maxRows },
+      input,
       mcp_tool: "dashboard_capability_state",
       status: state.status,
       source_endpoints: state.source_endpoints,
@@ -46,6 +59,11 @@ async function main(): Promise<void> {
         considered_rows: state.queries.public_council.considered_rows,
         candidate_rows: state.queries.public_council.candidate_rows,
         elimination_counts: state.queries.public_council.elimination_breakdown.counts,
+        selected: state.queries.public_council.selected === null ? null : {
+          slug: state.queries.public_council.selected.slug,
+          routed_provider: state.queries.public_council.selected.routed_provider,
+          measured_cost_usd: state.rows.find((row) => row.slug === state.queries.public_council.selected?.slug)?.generation_cost.value?.[0]?.costUsd ?? null,
+        },
       },
       first_row: state.rows[0] === undefined ? null : {
         slug: state.rows[0].slug,

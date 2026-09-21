@@ -320,7 +320,7 @@ function generationCostsResponse() {
         id: "fixture-generation-1",
         provider: "openrouter",
         upstreamProvider: "Azure",
-        model: "openai/gpt-4o-mini",
+        model: discountedLiveModel.id,
         observedAt,
         provenanceDate: observedAt,
         workload,
