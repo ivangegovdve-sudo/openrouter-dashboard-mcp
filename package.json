@@ -1,6 +1,6 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter. Refuses to quote Sail prices; catalogue arithmetic is not generation cost. GitHub trending.",
   "keywords": [
     "mcp",
@@ -27,7 +27,8 @@
   "files": [
     "build",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/jev-routing-example.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run typecheck:harness && npm run docs:generate",

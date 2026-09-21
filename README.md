@@ -125,7 +125,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.4** registers **13 providers** and exposes seventeen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.5** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -156,11 +156,12 @@ anything anywhere.
 
 <!-- tools:begin generated-do-not-edit -->
 
-**17 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**18 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
 | `dashboard_benchmarks` | Dashboard benchmark observations |
+| `dashboard_capability_state` | Capability state for deterministic model selection |
 | `dashboard_catalogue` | Provider model catalogue and comparable media prices |
 | `dashboard_contract` | MCP schema and deprecation contract |
 | `dashboard_free_models` | Dashboard usable free models |
@@ -182,13 +183,21 @@ anything anywhere.
 
 Every tool is read-only, non-destructive, and open-world. Results preserve exact integer/decimal strings, provenance, stale markers, caps, and explicit unavailable/partial states. A tool-level upstream failure is returned as structured data and does not terminate the MCP connection.
 
+### Deterministic capability state
+
+`dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live model slug, provider coverage, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functional model. Every decision field has its own `checked_at`, `observed_at`, `expires_at`, and `age_seconds`; expired values are cleared and labelled `expired`, never reused as current values. The row carries `billing_class`, `context_window`, `catalogue_price`, measured `generation_cost` (including input/output token counts), `routed_provider`, three-state `reachability`, input/output modalities, `supports_tool_calling`, explicit `model_family` and `base_weights_lineage`, and the cached functionality ledger (`resolves`, `structured_output_ok`, `p50_latency`, `p95_latency`, `last_functionally_tested`, plus the external semantic-quality hook). Unknown is a value, not an omission.
+
+The two policies are deliberately different: `queries.public_council` is eligible on current paid classification plus authoritative per-generation cost only, while `queries.private_council` additionally requires live reachability, tool-calling support, the re-testable mechanical functionality gates, the 60-second p95 bound, and a separate semantic judgment. Catalogue price is never substituted for generation cost. Vendor identity is never used as model-family or base-weight lineage. By default the live-model cursor is exhausted; `max_rows` is an explicit degraded read, and `pagination.capped`, `scope.completeness`, `considered_rows`, `candidate_rows`, and `elimination_breakdown` expose the denominator and every measured gate. Family collision is explicitly reported as not evaluated until the caller supplies the already-seated council roster. See [`docs/jev-routing-example.json`](docs/jev-routing-example.json) for a full-scan Jev projection: with the currently deployed source it deterministically returns `block` after the complete live set is considered because `/api/public/v2/generation-costs` and the three dated ledgers are not published, so `billing_class`, `generation_cost`, and the private-only fields remain explicit UNKNOWN.
+
+The response also carries the locked `basket-v1` weekly measurement manifest. It names the eight model/provider rows, the exact workload, three vantage points, the published-price lower-bound cost estimate, and the signed-result snapshot fields. The current plan uses `n=8`: p50 and `max of 8` are publishable, while p95 is explicitly withheld until a larger sample exists. No Vercel job is allowed to claim a Bulgarian, European KVM, or US Oracle vantage point, and no missing snapshot is silently pooled.
+
 `/api/public/v2/live-models` — the cross-provider catalogue — is deployed and serving as of 2026-08-27. If the dashboard stops publishing it, model resolution, exact model status, and usable-free-model queries return an explicit capability decline pointing at `dashboard_source_health` instead of fabricating catalogue data.
 
 ## Providers
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.4**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.5**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
