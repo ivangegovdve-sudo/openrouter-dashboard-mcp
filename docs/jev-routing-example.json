@@ -1,0 +1,107 @@
+{
+  "judgment": {
+    "kind": "Choice",
+    "choices": ["select_model", "block"],
+    "question": "For the PUBLIC council, choose literally the cheapest paid model."
+  },
+  "state": {
+    "schema_version": "1.1",
+    "generated_at": "2026-09-21T05:21:49.483Z",
+    "source_endpoint": "https://openrouter-github-dashboard.vercel.app/api/public/v2/live-models",
+    "source_endpoints": [
+      "/api/public/v2/live-models"
+    ],
+    "source_stale": false,
+    "scope": {
+      "definition": "one row per available live model slug",
+      "completeness": "full",
+      "missing_fields": [
+        "billing_class",
+        "generation_cost",
+        "supports_tool_calling",
+        "reachability",
+        "functionality.resolves",
+        "functionality.structured_output_ok",
+        "functionality.p50_latency",
+        "functionality.p95_latency",
+        "functionality.last_functionally_tested",
+        "functionality.semantic_quality"
+      ]
+    },
+    "pagination": {
+      "page_size": 500,
+      "page_limit": null,
+      "pages_scanned": 3,
+      "rows_scanned": 1323,
+      "live_rows_returned": 1150,
+      "capped": false,
+      "next_cursor": null
+    },
+    "queries": {
+      "public_council": {
+        "rule": "literal_cheapest_paid",
+        "decision_state": "blocked",
+        "selected": null,
+        "missing_fields": ["billing_class", "generation_cost"],
+        "considered_rows": 1150,
+        "candidate_rows": 0,
+        "elimination_breakdown": {
+          "counts": {
+            "billing_class_unknown_or_expired": 265,
+            "generation_cost_unknown_or_expired": 1150,
+            "billing_class=free": 22
+          },
+          "not_evaluated": ["family_collision"],
+          "note": "Counts are per-row gate observations and are not mutually exclusive. family_collision requires the already-seated council roster and is evaluated by the caller, not by this single-seat query."
+        },
+        "basis": "The literal cheapest paid model requires a current paid classification and an authoritative per-generation charge."
+      },
+      "private_council": {
+        "rule": "cheapest_functional",
+        "decision_state": "blocked",
+        "selected": null,
+        "missing_fields": [
+          "billing_class",
+          "generation_cost",
+          "supports_tool_calling",
+          "reachability",
+          "functionality.resolves",
+          "functionality.structured_output_ok",
+          "functionality.p50_latency",
+          "functionality.p95_latency",
+          "functionality.last_functionally_tested",
+          "functionality.semantic_quality"
+        ],
+        "considered_rows": 1150,
+        "candidate_rows": 0,
+        "elimination_breakdown": {
+          "counts": {
+            "billing_class_unknown_or_expired": 265,
+            "generation_cost_unknown_or_expired": 1150,
+            "supports_tool_calling_unknown_or_expired": 1150,
+            "reachability_unknown_or_expired": 1150,
+            "functionality.resolves_untested_or_expired": 1150,
+            "functionality.structured_output_ok_untested_or_expired": 1150,
+            "functionality_untested_or_expired": 1150,
+            "functionality.semantic_quality_untested_or_expired": 1150
+          },
+          "not_evaluated": ["family_collision"],
+          "note": "Counts are per-row gate observations and are not mutually exclusive. family_collision requires the already-seated council roster and is evaluated by the caller, not by this single-seat query."
+        },
+        "basis": "The cheapest functional model requires all mechanical gates, a current live probe, an actual tool-calling capability, and a separate semantic judgment."
+      }
+    },
+    "ledger_state": {
+      "functionality": "unavailable",
+      "lineage": "unavailable",
+      "capability": "unavailable"
+    },
+    "warnings": [
+      "The manifest does not publish /api/public/v2/generation-costs; generation_cost, routed_provider, and reachability remain UNKNOWN.",
+      "The manifest does not publish /api/public/v2/functionality-ledger; mechanical functionality remains UNKNOWN.",
+      "The manifest does not publish /api/public/v2/model-lineage; model_family and base_weights_lineage remain UNKNOWN.",
+      "The manifest does not publish /api/public/v2/model-capabilities; supports_tool_calling and input_modalities remain UNKNOWN."
+    ]
+  },
+  "projection_note": "This is the exact compact Jev decision projection for the full scan above. The raw openDashboard response also carries all 1,150 per-slug rows with the same explicit UNKNOWN fields; this example does not replace that rowset with a first-page sample. Both policies correctly refuse to choose because the complete live set has no published paid-cost or functionality-ledger evidence."
+}

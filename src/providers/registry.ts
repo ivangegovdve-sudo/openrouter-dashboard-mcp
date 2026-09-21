@@ -246,7 +246,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "Nous Research is registered as a named provider, but its published rate is not verifiable here: 15 checked paths across three hosts returned 404 and no balance, credits, usage, or per-generation cost endpoint was found. Generation cost is BLOCKED, not zero.",
+      "Nous Research's public /v1/models catalogue is readable and carries provider-published token rates, but no authenticated balance, usage, or per-generation charge is established here. The Hermes API server key is a separate credential from a Nous Portal key, so inference and generation cost remain BLOCKED, not zero.",
   },
   qwencloud: {
     id: "qwencloud",
