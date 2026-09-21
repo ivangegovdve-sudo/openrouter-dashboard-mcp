@@ -48,6 +48,45 @@ export const providerEvidenceShape = {
   pitchResearch: providerResearchSchema,
 };
 
+const decimalStringSchema = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d+)?$/, "Use an exact nonnegative decimal");
+const httpsUrlSchema = z.url().refine((url) => url.startsWith("https://"), "Evidence requires HTTPS");
+
+/** A source the package actually checked, distinct from a connector endpoint. */
+export const catalogueSourceSchema = z.object({
+  kind: z.enum(["api", "pricing_page", "pinned_document"]),
+  url: httpsUrlSchema,
+  observedAt: observedDateSchema,
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+}).strict();
+
+/** Native per-model evidence that a generated catalogue page may quote. */
+export const catalogueModelEvidenceSchema = z.discriminatedUnion("status", [
+  z.object({
+    modelId: z.string().min(1),
+    status: z.literal("priced"),
+    precision: z.literal("approximate"),
+    promptUsdPerMillion: decimalStringSchema,
+    completionUsdPerMillion: decimalStringSchema,
+    sourceUrl: httpsUrlSchema,
+    observedAt: observedDateSchema,
+    reason: z.null(),
+  }).strict(),
+  z.object({
+    modelId: z.string().min(1),
+    status: z.literal("not_published"),
+    promptUsdPerMillion: z.null(),
+    completionUsdPerMillion: z.null(),
+    sourceUrl: httpsUrlSchema,
+    observedAt: observedDateSchema,
+    reason: z.string().min(1),
+  }).strict(),
+]);
+
+export const catalogueEvidenceSchema = z.object({
+  sources: z.array(catalogueSourceSchema).min(1),
+  models: z.array(catalogueModelEvidenceSchema).optional(),
+}).strict();
+
 export const providerEvidenceSchema = z.object(providerEvidenceShape).strict().superRefine((value, ctx) => {
   for (const [fact, research] of [["pitch", "pitchResearch"], ["caveats", "caveatResearch"]] as const) {
     if ((value[fact] !== undefined) !== (value[research].status === "published")) {
