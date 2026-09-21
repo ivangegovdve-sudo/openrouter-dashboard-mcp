@@ -8,6 +8,7 @@ import { pricePointSchema } from "../contract.js";
 import {
   generationCostCollectionSchema,
   generationCostObservationSchema,
+  measurementOriginSchema,
 } from "../generation-cost.js";
 import {
   publicMeasuredCostsResponseSchema,
@@ -231,6 +232,8 @@ const selectedModelSchema = z
     slug: z.string().min(1),
     catalogue_provider: z.string().min(1),
     routed_provider: z.string().nullable(),
+    measured_cost_usd: decimalStringSchema,
+    measurement_origin: measurementOriginSchema,
   })
   .strict();
 
@@ -612,6 +615,7 @@ function publicMeasuredCostObservation(
     costUsd: entry.measuredCostUsd,
     costState: "MEASURED",
     provenance: "MEASURED",
+    measurementOrigin: entry.measurementOrigin,
     httpStatus: null,
     errorBucket: null,
     balanceDeltaUsd: null,
@@ -847,13 +851,13 @@ function compareDecimal(left: string, right: string): number {
   return leftPadded === rightPadded ? 0 : leftPadded < rightPadded ? -1 : 1;
 }
 
-function latestMeasuredCost(row: z.infer<typeof capabilityRowSchema>): string | null {
+function latestMeasuredObservation(row: z.infer<typeof capabilityRowSchema>): GenerationCostObservation | null {
   const values = row.generation_cost.value;
   if (row.generation_cost.state !== "known" || values === null) return null;
   const matchingRoute = row.routed_provider.value === null
     ? values
     : values.filter((value) => value.upstreamProvider === row.routed_provider.value);
-  return latestByObservedAt(matchingRoute.length > 0 ? matchingRoute : values)?.costUsd ?? null;
+  return latestByObservedAt(matchingRoute.length > 0 ? matchingRoute : values) ?? null;
 }
 
 function selectionFor(
@@ -872,9 +876,13 @@ function selectionFor(
     missing.push("billing_class");
     failedGates.push("billing_class_unknown_or_expired");
   }
-  if (row.generation_cost.state !== "known" || latestMeasuredCost(row) === null) {
+  const latestCost = latestMeasuredObservation(row);
+  if (row.generation_cost.state !== "known" || latestCost === null) {
     missing.push("generation_cost");
     failedGates.push("generation_cost_unknown_or_expired");
+  } else if (latestCost.measurementOrigin === "unknown") {
+    missing.push("generation_cost.measurement_origin");
+    failedGates.push("generation_cost_origin_unknown");
   }
 
   if (kind === "private") {
@@ -951,8 +959,8 @@ function selectionFor(
   return {
     state: "eligible" as const,
     reason: kind === "public"
-      ? "Current paid classification and authoritative per-generation cost are present."
-      : "Current cost, live reachability, tool support, mechanical functionality, latency bound, and external semantic judgment are present.",
+      ? "Current paid classification and authoritative per-generation cost with known measurement origin are present."
+      : "Current cost with known measurement origin, live reachability, tool support, mechanical functionality, latency bound, and external semantic judgment are present.",
     missing_fields: [],
     failed_gates: [],
   };
@@ -988,10 +996,14 @@ function queryFor(
   if (candidates.length > 0) {
     const selected = [...candidates].sort((left, right) =>
       compareDecimal(
-        latestMeasuredCost(left) ?? "999999999999",
-        latestMeasuredCost(right) ?? "999999999999",
+        latestMeasuredObservation(left)?.costUsd ?? "999999999999",
+        latestMeasuredObservation(right)?.costUsd ?? "999999999999",
       ) || left.key.localeCompare(right.key),
     )[0]!;
+    const selectedCost = latestMeasuredObservation(selected);
+    if (selectedCost === null || selectedCost.costUsd === null) {
+      throw new Error("an eligible capability row must carry a measured cost");
+    }
     return {
       rule,
       decision_state: "decidable" as const,
@@ -1000,20 +1012,23 @@ function queryFor(
         slug: selected.slug,
         catalogue_provider: selected.catalogue_provider,
         routed_provider: selected.routed_provider.value,
+        measured_cost_usd: selectedCost.costUsd,
+        measurement_origin: selectedCost.measurementOrigin,
       },
       missing_fields: [],
       considered_rows: rows.length,
       candidate_rows: candidates.length,
       elimination_breakdown: breakdown,
       basis: kind === "public"
-        ? "Authoritative measured generation cost, ascending; paid is the only eligibility policy and catalogue price is never substituted."
-        : "Authoritative measured generation cost among rows that pass lineage diversity, every mechanical functionality gate, and the external semantic-quality hook.",
+        ? "Authoritative measured generation cost with a known measurement origin, ascending; paid is the only eligibility policy and catalogue price is never substituted."
+        : "Authoritative measured generation cost with a known measurement origin among rows that pass lineage diversity, every mechanical functionality gate, and the external semantic-quality hook.",
     };
   }
   const required = kind === "public"
-    ? ["billing_class", "generation_cost"]
+    ? ["billing_class", "generation_cost", "generation_cost.measurement_origin"]
     : [
       "generation_cost",
+      "generation_cost.measurement_origin",
       "supports_tool_calling",
       "reachability",
       "model_family",

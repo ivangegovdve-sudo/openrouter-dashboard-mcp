@@ -25,6 +25,15 @@ export const costProvenanceSchema = z.enum([
 ]);
 export type CostProvenance = z.infer<typeof costProvenanceSchema>;
 
+/** Where the numeric charge was observed. A measured value without this
+ * discriminator cannot be distinguished from a loopback fixture downstream. */
+export const measurementOriginSchema = z.enum([
+  "fixture",
+  "live_provider",
+  "unknown",
+]);
+export type MeasurementOrigin = z.infer<typeof measurementOriginSchema>;
+
 export const workloadSchema = z
   .object({
     name: z.string().min(1),
@@ -77,6 +86,7 @@ export const generationCostObservationSchema = z
     costUsd: exactDecimalStringSchema.nullable(),
     costState: costStateSchema,
     provenance: costProvenanceSchema,
+    measurementOrigin: measurementOriginSchema.default("unknown"),
     /** HTTP result captured by the probe; null preserves older ledger rows that did not retain it. */
     httpStatus: z.number().int().min(100).max(599).nullable().default(null),
     /** Bucketed transport outcome for non-success probes; the raw error is never persisted. */

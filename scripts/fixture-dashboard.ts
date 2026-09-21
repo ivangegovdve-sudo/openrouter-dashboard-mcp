@@ -329,6 +329,7 @@ function generationCostsResponse() {
         costUsd: "0.00000123",
         costState: "MEASURED",
         provenance: "MEASURED",
+        measurementOrigin: "fixture",
         balanceDeltaUsd: null,
         authoritativeField: "usage.cost",
         sourceUrl: "https://catalogue.test/generation-costs",

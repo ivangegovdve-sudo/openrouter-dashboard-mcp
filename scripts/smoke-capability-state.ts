@@ -59,11 +59,7 @@ async function main(): Promise<void> {
         considered_rows: state.queries.public_council.considered_rows,
         candidate_rows: state.queries.public_council.candidate_rows,
         elimination_counts: state.queries.public_council.elimination_breakdown.counts,
-        selected: state.queries.public_council.selected === null ? null : {
-          slug: state.queries.public_council.selected.slug,
-          routed_provider: state.queries.public_council.selected.routed_provider,
-          measured_cost_usd: state.rows.find((row) => row.slug === state.queries.public_council.selected?.slug)?.generation_cost.value?.[0]?.costUsd ?? null,
-        },
+        selected: state.queries.public_council.selected,
       },
       first_row: state.rows[0] === undefined ? null : {
         slug: state.rows[0].slug,
