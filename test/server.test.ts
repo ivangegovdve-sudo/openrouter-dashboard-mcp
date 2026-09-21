@@ -120,6 +120,7 @@ test("serializes the measured generation-cost observation through the registered
     costUsd: "0.00000123",
     costState: "MEASURED",
     provenance: "MEASURED",
+    measurementSource: "fixture",
     balanceDeltaUsd: null,
     authoritativeField: "usage.cost",
     sourceUrl: "https://openrouter.ai/api/v1/chat/completions",

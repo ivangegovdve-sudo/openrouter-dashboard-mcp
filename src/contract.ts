@@ -147,12 +147,14 @@ export {
   costStateSchema,
   generationCostCollectionSchema,
   generationCostObservationSchema,
+  measurementSourceSchema,
 } from "./generation-cost.js";
 export type {
   CostProvenance,
   CostState,
   GenerationCostCollection,
   GenerationCostObservation,
+  MeasurementSource,
 } from "./generation-cost.js";
 export {
   appendGenerationCostObservation,
