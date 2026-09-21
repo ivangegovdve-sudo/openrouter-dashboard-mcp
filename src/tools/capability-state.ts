@@ -28,7 +28,9 @@ export const MODEL_LINEAGE_ENDPOINT = "/api/public/v2/model-lineage";
 export const MODEL_CAPABILITY_ENDPOINT = "/api/public/v2/model-capabilities";
 
 export const CAPABILITY_STATE_PAGE_SIZE = 500;
-export const CAPABILITY_STATE_PAGE_LIMIT = 8;
+// A default state read follows the live-model cursor until it is exhausted.
+// A page limit would turn a first-page sample into a catalogue-wide claim.
+export const CAPABILITY_STATE_PAGE_LIMIT: number | null = null;
 export const CAPABILITY_STATE_DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const CAPABILITY_STATE_MAX_ROWS = 2_000;
 export const FUNCTIONALITY_LATENCY_BOUND_MS = "60000";
@@ -103,6 +105,7 @@ const selectionSchema = z
     state: z.enum(["eligible", "ineligible", "unknown"]),
     reason: z.string(),
     missing_fields: z.array(z.string()),
+    failed_gates: z.array(z.string()),
   })
   .strict();
 
@@ -231,6 +234,14 @@ const queryExampleSchema = z
     selected: selectedModelSchema.nullable(),
     missing_fields: z.array(z.string()),
     considered_rows: z.number().int().nonnegative(),
+    candidate_rows: z.number().int().nonnegative(),
+    elimination_breakdown: z
+      .object({
+        counts: z.record(z.string(), z.number().int().nonnegative()),
+        not_evaluated: z.array(z.string()),
+        note: z.string(),
+      })
+      .strict(),
     basis: z.string(),
   })
   .strict();
@@ -250,7 +261,7 @@ const workloadSchema = z
 const paginationSchema = z
   .object({
     page_size: z.number().int().positive(),
-    page_limit: z.number().int().positive(),
+    page_limit: z.number().int().positive().nullable(),
     pages_scanned: z.number().int().nonnegative(),
     rows_scanned: z.number().int().nonnegative(),
     live_rows_returned: z.number().int().nonnegative(),
@@ -392,7 +403,9 @@ export const capabilityStateOutputSchema = z.discriminatedUnion("status", [
 export const capabilityStateInputSchema = z
   .object({
     providers: z.array(z.string().min(1)).max(50).optional(),
-    max_rows: z.number().int().min(1).max(CAPABILITY_STATE_MAX_ROWS).default(CAPABILITY_STATE_MAX_ROWS),
+    // Omitted means full cursor exhaustion. A bound is an explicit degraded
+    // read and is reported as capped so it cannot masquerade as the catalogue.
+    max_rows: z.number().int().min(1).max(CAPABILITY_STATE_MAX_ROWS).optional(),
     freshness_ttl_seconds: z.number().int().positive().max(31_536_000).default(CAPABILITY_STATE_DEFAULT_TTL_SECONDS),
   })
   .strict();
@@ -798,13 +811,19 @@ function selectionFor(
 ) {
   const missing: string[] = [];
   const ineligible: string[] = [];
+  const failedGates: string[] = [];
   if (row.billing_class.state === "known" && row.billing_class.value === "free") {
-    if (kind === "public") ineligible.push("billing_class=free");
+    if (kind === "public") {
+      ineligible.push("billing_class=free");
+      failedGates.push("billing_class=free");
+    }
   } else if (row.billing_class.state !== "known") {
     missing.push("billing_class");
+    failedGates.push("billing_class_unknown_or_expired");
   }
   if (row.generation_cost.state !== "known" || latestMeasuredCost(row) === null) {
     missing.push("generation_cost");
+    failedGates.push("generation_cost_unknown_or_expired");
   }
 
   if (kind === "private") {
@@ -814,34 +833,52 @@ function selectionFor(
     }
     if (row.supports_tool_calling.state === "known" && row.supports_tool_calling.value === false) {
       ineligible.push("supports_tool_calling=false");
+      failedGates.push("supports_tool_calling=false");
     } else if (row.supports_tool_calling.state !== "known") {
       missing.push("supports_tool_calling");
+      failedGates.push("supports_tool_calling_unknown_or_expired");
     }
     if (row.reachability.state === "rate_limited") {
       ineligible.push("reachability=rate_limited");
+      failedGates.push("reachability=rate_limited");
     } else if (row.reachability.state !== "live") {
       missing.push("reachability");
+      failedGates.push("reachability_unknown_or_expired");
     }
     const mechanical: Array<["resolves" | "structured_output_ok", Observation<boolean>]> = [
       ["resolves", row.functionality.resolves],
       ["structured_output_ok", row.functionality.structured_output_ok],
     ];
     for (const [field, observation] of mechanical) {
-      if (observation.state !== "known") missing.push("functionality." + field);
-      else if (observation.value === false) ineligible.push("functionality." + field + "=false");
+      if (observation.state !== "known") {
+        missing.push("functionality." + field);
+        failedGates.push("functionality." + field + "_untested_or_expired");
+      } else if (observation.value === false) {
+        ineligible.push("functionality." + field + "=false");
+        failedGates.push("functionality." + field + "=false");
+      }
     }
     for (const field of ["p50_latency", "p95_latency", "last_functionally_tested"] as const) {
       const observation = row.functionality[field];
-      if (observation.state !== "known") missing.push("functionality." + field);
+      if (observation.state !== "known") {
+        missing.push("functionality." + field);
+        failedGates.push("functionality_untested_or_expired");
+      }
     }
     const p95 = row.functionality.p95_latency.value;
     const bound = row.functionality.latency_bound_ms.value;
     if (row.functionality.p95_latency.state === "known" && row.functionality.latency_bound_ms.state === "known" && p95 !== null && bound !== null && compareDecimal(p95, bound) > 0) {
       ineligible.push("functionality.p95_latency>" + bound);
+      failedGates.push("functionality.p95_latency_exceeds_bound");
     }
     const semantic = row.functionality.semantic_quality;
-    if (semantic.state !== "known") missing.push("functionality.semantic_quality");
-    else if (semantic.value === "fail") ineligible.push("functionality.semantic_quality=fail");
+    if (semantic.state !== "known") {
+      missing.push("functionality.semantic_quality");
+      failedGates.push("functionality.semantic_quality_untested_or_expired");
+    } else if (semantic.value === "fail") {
+      ineligible.push("functionality.semantic_quality=fail");
+      failedGates.push("functionality.semantic_quality=fail");
+    }
   }
 
   if (ineligible.length > 0) {
@@ -849,6 +886,7 @@ function selectionFor(
       state: "ineligible" as const,
       reason: ineligible.join(", "),
       missing_fields: unique(missing),
+      failed_gates: unique(failedGates),
     };
   }
   if (missing.length > 0) {
@@ -856,6 +894,7 @@ function selectionFor(
       state: "unknown" as const,
       reason: "Required evidence is missing or expired.",
       missing_fields: unique(missing),
+      failed_gates: unique(failedGates),
     };
   }
   return {
@@ -864,6 +903,24 @@ function selectionFor(
       ? "Current paid classification and authoritative per-generation cost are present."
       : "Current cost, live reachability, tool support, mechanical functionality, latency bound, and external semantic judgment are present.",
     missing_fields: [],
+    failed_gates: [],
+  };
+}
+
+function eliminationBreakdown(
+  rows: z.infer<typeof capabilityRowSchema>[],
+  selectionKey: "public_council" | "private_council",
+) {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    for (const gate of row.selection[selectionKey].failed_gates) {
+      counts[gate] = (counts[gate] ?? 0) + 1;
+    }
+  }
+  return {
+    counts,
+    not_evaluated: ["family_collision"],
+    note: "Counts are per-row gate observations and are not mutually exclusive. family_collision requires the already-seated council roster and is evaluated by the caller, not by this single-seat query.",
   };
 }
 
@@ -876,6 +933,7 @@ function queryFor(
     : "cheapest_functional" as const;
   const selectionKey = kind === "public" ? "public_council" : "private_council";
   const candidates = rows.filter((row) => row.selection[selectionKey].state === "eligible");
+  const breakdown = eliminationBreakdown(rows, selectionKey);
   if (candidates.length > 0) {
     const selected = [...candidates].sort((left, right) =>
       compareDecimal(
@@ -893,7 +951,9 @@ function queryFor(
         routed_provider: selected.routed_provider.value,
       },
       missing_fields: [],
-      considered_rows: candidates.length,
+      considered_rows: rows.length,
+      candidate_rows: candidates.length,
+      elimination_breakdown: breakdown,
       basis: kind === "public"
         ? "Authoritative measured generation cost, ascending; paid is the only eligibility policy and catalogue price is never substituted."
         : "Authoritative measured generation cost among rows that pass lineage diversity, every mechanical functionality gate, and the external semantic-quality hook.",
@@ -920,6 +980,8 @@ function queryFor(
     selected: null,
     missing_fields: unique(rows.flatMap((row) => row.selection[selectionKey].missing_fields).concat(required)),
     considered_rows: rows.length,
+    candidate_rows: 0,
+    elimination_breakdown: breakdown,
     basis: kind === "public"
       ? "The literal cheapest paid model requires a current paid classification and an authoritative per-generation charge."
       : "The cheapest functional model requires explicit model-family/base-weight lineage, all mechanical gates, a current live probe, an actual tool-calling capability, and a separate semantic judgment.",
@@ -1125,7 +1187,7 @@ export function buildCapabilityState(input: CapabilityStateBuildInput): Capabili
 
 async function scanLiveModels(
   client: DashboardClient,
-  maxRows: number,
+  maxRows: number | null,
   allowedProviders?: string[],
 ): Promise<{
   rows: LiveModel[];
@@ -1143,7 +1205,11 @@ async function scanLiveModels(
   let rowsScanned = 0;
   let stale = false;
   let capped = false;
-  while (pagesScanned < CAPABILITY_STATE_PAGE_LIMIT && rows.length < maxRows) {
+  while (true) {
+    if (maxRows !== null && rows.length >= maxRows) {
+      capped = cursor !== null;
+      break;
+    }
     const query = new URLSearchParams({ limit: String(CAPABILITY_STATE_PAGE_SIZE) });
     if (cursor !== null) query.set("cursor", cursor);
     const page = await client.get(LIVE_MODELS_ENDPOINT, query, liveModelsResponseSchema);
@@ -1153,18 +1219,19 @@ async function scanLiveModels(
     );
     rowsScanned += selectedPageRows.length;
     const availablePageRows = selectedPageRows.filter((row) => row.availability === "available");
-    const remaining = maxRows - rows.length;
-    rows.push(...availablePageRows.slice(0, remaining));
+    const rowsToTake = maxRows === null
+      ? availablePageRows
+      : availablePageRows.slice(0, maxRows - rows.length);
+    rows.push(...rowsToTake);
     evidence.push(sourceEvidence(LIVE_MODELS_ENDPOINT, page));
     stale ||= page.stale;
     cursor = page.cursor;
-    if (availablePageRows.length > remaining || (rows.length >= maxRows && cursor !== null)) {
+    if (maxRows !== null && availablePageRows.length > rowsToTake.length) {
       capped = true;
       break;
     }
     if (cursor === null) break;
   }
-  if (pagesScanned >= CAPABILITY_STATE_PAGE_LIMIT && cursor !== null) capped = true;
   return { rows, evidence, stale, pagesScanned, rowsScanned, capped, nextCursor: capped ? cursor : null };
 }
 
@@ -1215,7 +1282,7 @@ export async function runCapabilityState(
         warnings: [],
       };
     }
-    const scan = await scanLiveModels(dependencies.client, input.max_rows, allowed);
+    const scan = await scanLiveModels(dependencies.client, input.max_rows ?? null, allowed);
     const now = (dependencies.now ?? (() => new Date()))().toISOString();
     const warnings: string[] = [];
     let costObservations: GenerationCostObservation[] | undefined;

@@ -419,3 +419,46 @@ test("the registered state scans live rows and carries source evidence", async (
   assert.deepEqual(parsed.evidence.map((entry) => entry.endpoint), ["/api/public/v2/manifest", liveModelsEndpoint]);
   assert.equal(parsed.pagination.capped, false);
 });
+
+test("the default scan exhausts the live-model cursor and reports explicit caps", async () => {
+  const client = {
+    async get(path: string, query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
+      if (path === "/api/public/v2/manifest") return schema.parse(manifestFixture);
+      assert.equal(path, liveModelsEndpoint);
+      return query.get("cursor") === null
+        ? schema.parse(collection([row({ id: "first" })], "next-page"))
+        : schema.parse(collection([row({ id: "second" })]));
+    },
+  } as never;
+
+  const full = capabilityStateOutputSchema.parse(await runCapabilityState({}, {
+    client,
+    now: () => new Date(checkedAt),
+  }));
+  assert.equal(full.status, "ok");
+  if (full.status !== "ok") return;
+  assert.equal(full.pagination.pages_scanned, 2);
+  assert.equal(full.pagination.rows_scanned, 2);
+  assert.equal(full.pagination.live_rows_returned, 2);
+  assert.equal(full.pagination.page_limit, null);
+  assert.equal(full.pagination.capped, false);
+  assert.equal(full.scope.completeness, "full");
+  assert.equal(full.queries.public_council.considered_rows, 2);
+  assert.equal(full.queries.public_council.candidate_rows, 0);
+  assert.equal(full.queries.public_council.elimination_breakdown.counts.generation_cost_unknown_or_expired, 2);
+  assert.deepEqual(full.queries.public_council.elimination_breakdown.not_evaluated, ["family_collision"]);
+
+  const bounded = capabilityStateOutputSchema.parse(await runCapabilityState({ max_rows: 1 }, {
+    client,
+    now: () => new Date(checkedAt),
+  }));
+  assert.equal(bounded.status, "ok");
+  if (bounded.status !== "ok") return;
+  assert.equal(bounded.pagination.pages_scanned, 1);
+  assert.equal(bounded.pagination.rows_scanned, 1);
+  assert.equal(bounded.pagination.live_rows_returned, 1);
+  assert.equal(bounded.pagination.capped, true);
+  assert.equal(bounded.pagination.next_cursor, "next-page");
+  assert.equal(bounded.scope.completeness, "partial_or_unknown");
+  assert.match(bounded.warnings.join("\n"), /declared bound/);
+});
