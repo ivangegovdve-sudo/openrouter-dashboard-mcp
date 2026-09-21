@@ -1450,7 +1450,7 @@ export async function runCapabilityState(
       rows: scan.rows,
       sourceStale: scan.stale,
       costSourceStale,
-      generationCostSourceEndpoint,
+      ...(generationCostSourceEndpoint === undefined ? {} : { generationCostSourceEndpoint }),
       observedAt: now,
       now,
       freshnessTtlSeconds: input.freshness_ttl_seconds,
