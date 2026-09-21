@@ -40,7 +40,8 @@
     "prepublishOnly": "npm run docs:check && npm run build && npm test",
     "docs:generate": "tsx scripts/generate-docs.ts",
     "docs:check": "tsx scripts/generate-docs.ts --check",
-    "verify:catalogue": "tsx scripts/verify-catalogue-stdio.ts"
+    "verify:catalogue": "tsx scripts/verify-catalogue-stdio.ts",
+    "smoke:capability-state": "tsx scripts/smoke-capability-state.ts"
   },
   "engines": {
     "node": ">=20"
