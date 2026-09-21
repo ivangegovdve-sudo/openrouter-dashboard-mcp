@@ -35,8 +35,12 @@ jobs:
           } else {
             git remote add origin $remote
           }
-          git -c ("http.extraheader=AUTHORIZATION: bearer " + $env:GITHUB_TOKEN) fetch --depth=1 origin $env:GITHUB_SHA
-          git checkout --detach FETCH_HEAD
+          $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GITHUB_TOKEN"))
+          git -c "http.extraheader=AUTHORIZATION: basic $basic" fetch --depth=1 origin $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "git fetch failed with exit code $LASTEXITCODE" }
+          git checkout --force --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "git checkout failed with exit code $LASTEXITCODE" }
+          git clean -ffdx
       - name: Verify pinned toolchain
         shell: pwsh
         run: |
