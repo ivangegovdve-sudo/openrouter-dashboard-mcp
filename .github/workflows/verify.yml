@@ -40,7 +40,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "git fetch failed with exit code $LASTEXITCODE" }
           git checkout --force --detach FETCH_HEAD
           if ($LASTEXITCODE -ne 0) { throw "git checkout failed with exit code $LASTEXITCODE" }
+          git config core.longpaths true
           git clean -ffdx
+          if ($LASTEXITCODE -ne 0) { throw "git clean failed with exit code $LASTEXITCODE" }
       - name: Verify pinned toolchain
         shell: pwsh
         run: |
