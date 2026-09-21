@@ -339,6 +339,38 @@ test("a numeric cost with unknown source cannot make the council decidable", () 
   );
 });
 
+test("a measured cost from an older route cannot decide the current routed provider", () => {
+  const olderMeasured = measured(liveModelFixture.id, "0.02", {
+    upstreamProvider: "provider-a",
+  });
+  const newerLag = generationCostObservationSchema.parse({
+    ...olderMeasured,
+    id: "observation-provider-b-lag",
+    upstreamProvider: "provider-b",
+    observedAt: "2026-09-20T08:30:00.000Z",
+    provenanceDate: "2026-09-20T08:30:00.000Z",
+    costUsd: null,
+    costState: "LAG",
+    provenance: "UNKNOWN",
+    measurementSource: "live_provider_read",
+    balanceDeltaUsd: "0",
+    authoritativeField: null,
+  });
+  const state = buildCapabilityState({
+    rows: [row({ generationCosts: [olderMeasured, newerLag] })],
+    sourceStale: false,
+    observedAt,
+    now: checkedAt,
+    freshnessTtlSeconds: 86_400,
+  });
+  const parsed = capabilityStateOutputSchema.parse(state);
+  assert.equal(parsed.status, "ok");
+  if (parsed.status !== "ok") return;
+  assert.equal(parsed.rows[0]!.routed_provider.value, "provider-b");
+  assert.equal(parsed.queries.public_council.decision_state, "blocked");
+  assert.equal(parsed.queries.public_council.selected, null);
+});
+
 test("private council requires the full functionality and lineage/capability ledgers", () => {
   const state = buildCapabilityState({
     rows: [row({ generationCosts: [measured(liveModelFixture.id, "0.02", { httpStatus: 200 })] })],

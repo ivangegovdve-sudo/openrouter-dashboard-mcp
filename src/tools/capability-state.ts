@@ -858,7 +858,7 @@ function latestMeasuredObservation(row: z.infer<typeof capabilityRowSchema>): Ge
   const matchingRoute = row.routed_provider.value === null
     ? values
     : values.filter((value) => value.upstreamProvider === row.routed_provider.value);
-  return latestByObservedAt(matchingRoute.length > 0 ? matchingRoute : values);
+  return latestByObservedAt(matchingRoute);
 }
 
 function selectionFor(
