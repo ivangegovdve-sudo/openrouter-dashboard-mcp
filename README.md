@@ -1,6 +1,6 @@
 # Open Dashboard MCP
 
-Agents need live model IDs and price provenance because stale slugs break prompts.
+A read-only model router for typed decision layers such as System One: it supplies live model IDs and price provenance so a selector can make evidence-backed choices.
 
 Read-only MCP access to live model catalogues, published media generation models and prices, and daily trending GitHub repos.
 
@@ -22,9 +22,6 @@ In the wire contract, this marker is `measurementSource` on ledger observations 
 `measured_cost_source` on a rendered council selection. `unknown` cannot produce a
 decidable selection. A measured cost is bound to its routed provider, so evidence from
 provider A can never appear beside provider B.
-
-Designed to feed typed decision layers such as System One models — every cost states
-where it came from, so a decision layer receives evidence rather than a bare number.
 
 The live-provider check behind this release established that one of four keyed lanes can
 supply a per-generation cost, while zero of four produced a request-level charge from
