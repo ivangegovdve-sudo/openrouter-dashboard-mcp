@@ -8,6 +8,29 @@ open-dashboard-mcp gives an agent live model IDs and published prices across Ope
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+## Evidence for decision layers
+
+Measured generation costs carry a `measurement_origin` marker so a number is never
+detached from how it was obtained:
+
+- `fixture` — deterministic test or loopback evidence.
+- `live_provider_read` — a provider response or settled provider billing read supplied
+  the observation.
+- `unknown` — no authoritative source was established.
+
+In the wire contract, this marker is `measurementSource` on ledger observations and
+`measured_cost_source` on a rendered council selection. `unknown` cannot produce a
+decidable selection. A measured cost is bound to its routed provider, so evidence from
+provider A can never appear beside provider B.
+
+Designed to feed typed decision layers such as System One models — every cost states
+where it came from, so a decision layer receives evidence rather than a bare number.
+
+The live-provider check behind this release established that one of four keyed lanes can
+supply a per-generation cost, while zero of four produced a request-level charge from
+BUTCHER. The genuine measured figure came from a settled running-counter delta rather
+than a request-level charge; catalogue prices are never substituted for it.
+
 # Use it
 
 ## Install
