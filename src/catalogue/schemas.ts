@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { pricePointSchema, type PricePoint } from "../contract.js";
+import { modelOfferingStateSchema, modelPriceStateSchema, providerPriceCoverageResultSchema } from "./price-coverage.js";
 
 export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes"]);
 export type MediaCatalogueProviderId = z.infer<typeof mediaCatalogueProviderIdSchema>;
@@ -19,6 +20,10 @@ export const catalogueModelSchema = z.object({
   outputModalities: z.array(z.string()).optional(),
   pricePoints: z.array(pricePointSchema),
   pricingState: pricingStateSchema,
+  /** Fine-grained source state when a provider page separates offers and prices. */
+  modelPriceState: modelPriceStateSchema.optional(),
+  /** Keeps a tier/price-table mismatch visible instead of silently reconciling it. */
+  modelOfferingState: modelOfferingStateSchema.optional(),
   pricingNote: z.string().optional(),
   nativePricing: z.unknown().optional(),
   provenance: z.object({
@@ -27,6 +32,12 @@ export const catalogueModelSchema = z.object({
     sourceIndex: z.number().int().nonnegative(),
   }).strict(),
 }).strict().superRefine((value, context) => {
+  if (value.modelPriceState === "priced" && value.pricePoints.length === 0) {
+    context.addIssue({ code: "custom", message: "A priced model state requires at least one price point", path: ["pricePoints"] });
+  }
+  if (value.modelPriceState !== undefined && value.modelPriceState !== "priced" && value.pricePoints.length > 0) {
+    context.addIssue({ code: "custom", message: "Only a priced model state may carry price points", path: ["modelPriceState"] });
+  }
   const hasCreditPrice = value.pricePoints.some((point) => point.unit.startsWith("credit_"));
   if (!hasCreditPrice) return;
   const hasCurrency = (candidate: unknown, depth = 0): boolean => {
@@ -74,6 +85,8 @@ export const catalogueProviderSchema = z.object({
   observedAt: z.string().datetime({ offset: true }),
   population: cataloguePopulationSchema,
   requestParameters: z.record(z.string(), z.unknown()),
+  /** Evidence-bound provider-level publication conclusion, when collected. */
+  priceCoverage: providerPriceCoverageResultSchema.optional(),
   error: z.string().optional(),
 }).strict();
 export type CatalogueProvider = z.infer<typeof catalogueProviderSchema>;

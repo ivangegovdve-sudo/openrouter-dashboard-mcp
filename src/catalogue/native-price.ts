@@ -1,6 +1,7 @@
 import { normalizePricePoint } from "./price-set.js";
 import { mediaKind, record, scalar, type NativeRecord } from "./normalize.js";
 import { catalogueModelSchema, catalogueProviderSchema, type CatalogueModel, type CatalogueProvider, type MediaKind } from "./schemas.js";
+import { resolveProviderPriceCoverage } from "./price-coverage.js";
 import type { PricePoint, PriceUnit } from "../contract.js";
 
 /** Providers with a native, machine-readable price source not covered by the media adapters. */
@@ -153,8 +154,8 @@ function genericModel(
     nativeType: scalar(row.model_type) ?? scalar(row.type) ?? "text-generation",
     ...(Array.isArray(row.output_modalities) && row.output_modalities.every((item) => typeof item === "string") ? { outputModalities: row.output_modalities } : {}),
     pricePoints: points,
-    pricingState: points.length > 0 ? "published" : Object.keys(pricing).length > 0 ? "unknown" : "not_published",
-    pricingNote: points.length > 0 ? (perMillion ? "Provider prices are published per million tokens and converted exactly to per-token points." : "Provider prices are published as native per-token rates.") : "No comparable price field was present in this row.",
+    pricingState: points.length > 0 ? "published" : "unknown",
+    pricingNote: points.length > 0 ? (perMillion ? "Provider prices are published per million tokens and converted exactly to per-token points." : "Provider prices are published as native per-token rates.") : "The model API did not expose a comparable price field; no rendered price-page finding was made.",
     nativePricing: safeNativePricing(row),
     provenance: { sourceUrl, observedAt, sourceIndex },
   });
@@ -211,7 +212,7 @@ function qwenModel(row: NativeRecord, sourceUrl: string, observedAt: string, sou
     nativeType: scalar(row.model_type) ?? "text-generation",
     ...(Array.isArray(row.output_modalities) && row.output_modalities.every((item) => typeof item === "string") ? { outputModalities: row.output_modalities } : {}),
     pricePoints: points,
-    pricingState: points.length > 0 ? "published" : ranges.length > 0 ? "unknown" : "not_published",
+    pricingState: points.length > 0 ? "published" : "unknown",
     pricingNote: "QwenCloud ranges are retained natively; only the unambiguous Default range and supported units become comparable points.",
     nativePricing: row.prices ?? null,
     provenance: { sourceUrl, observedAt, sourceIndex },
@@ -241,7 +242,7 @@ function novitaModel(row: NativeRecord, sourceUrl: string, observedAt: string, s
     nativeType: scalar(row.model_type) ?? "text-generation",
     ...(Array.isArray(row.output_modalities) && row.output_modalities.every((item) => typeof item === "string") ? { outputModalities: row.output_modalities } : {}),
     pricePoints: points,
-    pricingState: points.length > 0 ? "published" : Object.keys(pricing).length > 0 ? "unknown" : "not_published",
+    pricingState: points.length > 0 ? "published" : "unknown",
     pricingNote: tiered ? "Novita marks this model tiered; no single rate is inferred from the tiered source." : "Novita publishes per-million-token rates; comparable points are converted exactly to per-token units.",
     nativePricing: row.pricing ?? null,
     provenance: { sourceUrl, observedAt, sourceIndex },
@@ -265,13 +266,20 @@ function providerStatus(
   models: CatalogueModel[],
   requestParameters: Record<string, unknown>,
 ): CatalogueProvider {
+  const priceRows = models.reduce((sum, model) => sum + model.pricePoints.length, 0);
+  const priceCoverage = resolveProviderPriceCoverage({
+    provider,
+    apiPriceObservation: priceRows > 0 ? "prices_found" : "no_prices",
+    apiPriceRowCount: priceRows,
+  });
   return catalogueProviderSchema.parse({
     provider,
     status: "available",
     sourceUrl,
     observedAt,
     population: { listed: rows.length, received: rows.length, retained: models.length, excluded: rows.length - models.length, exclusionRules: ["Rows without a stable provider model id are excluded."], completeness: "full" },
-    requestParameters: { ...requestParameters, priceRows: models.reduce((sum, model) => sum + model.pricePoints.length, 0), measurementOrigin: "catalogue", observedChargeField: null },
+    requestParameters: { ...requestParameters, priceRows, measurementOrigin: "catalogue", observedChargeField: null },
+    priceCoverage,
   });
 }
 
@@ -308,6 +316,7 @@ function needsKey(provider: NativePriceProviderId): boolean {
 }
 
 function emptyProvider(provider: NativePriceProviderId, sourceUrl: string, observedAt: string, error: SourceErrorCode): CatalogueProvider {
+  const priceCoverage = resolveProviderPriceCoverage({ provider, apiPriceObservation: "unavailable", sourceReachable: false });
   return catalogueProviderSchema.parse({
     provider,
     status: "unavailable",
@@ -315,6 +324,7 @@ function emptyProvider(provider: NativePriceProviderId, sourceUrl: string, obser
     observedAt,
     population: { listed: null, received: null, retained: null, excluded: null, exclusionRules: [], completeness: "unavailable" },
     requestParameters: { measurementOrigin: "catalogue", observedChargeField: null },
+    priceCoverage,
     error,
   });
 }

@@ -5,6 +5,8 @@ import { collectDashboardCatalogue } from "../dashboard/catalogue.js";
 import { collectMediaCatalogue } from "../catalogue/index.js";
 import { collectCrazyrouterCatalogue } from "../catalogue/crazyrouter.js";
 import { collectNativePriceCatalogue, NATIVE_PRICE_PROVIDER_IDS } from "../catalogue/native-price.js";
+import { collectRenderedPriceCatalogue, RENDERED_PRICE_PROVIDER_IDS } from "../catalogue/rendered-price.js";
+import type { RenderedPageFetcher } from "../catalogue/rendered-page.js";
 import { catalogueModelSchema, catalogueProviderSchema, mediaCatalogueProviderIdSchema, mediaKindSchema, type MediaCatalogue } from "../catalogue/schemas.js";
 import { PROVIDER_IDS, describeProvider, providerDescriptorSchema } from "../providers/registry.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -30,14 +32,15 @@ export const catalogueOutputSchema = z.object({
 }).strict();
 export type CatalogueInput = z.infer<typeof catalogueInputSchema>;
 export type CatalogueOutput = z.infer<typeof catalogueOutputSchema>;
-export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[]; useNativePriceSources?: boolean };
+export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[]; useNativePriceSources?: boolean; renderedPageFetcher?: RenderedPageFetcher };
 
 export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
   const allowed = dependencies.allowedProviders === undefined ? undefined : new Set(dependencies.allowedProviders);
   const ids = [...new Set((input.providers ?? dependencies.allowedProviders ?? PROVIDER_IDS).filter((id) => allowed === undefined || allowed.has(id)))];
   const direct = ids.filter(id => mediaCatalogueProviderIdSchema.safeParse(id).success) as z.infer<typeof mediaCatalogueProviderIdSchema>[];
   const native = dependencies.useNativePriceSources === false ? [] : ids.filter(id => NATIVE_PRICE_PROVIDER_IDS.includes(id as typeof NATIVE_PRICE_PROVIDER_IDS[number]));
-  const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]) && !native.includes(id));
+  const rendered = dependencies.useNativePriceSources === false ? [] : ids.filter(id => RENDERED_PRICE_PROVIDER_IDS.includes(id as typeof RENDERED_PRICE_PROVIDER_IDS[number]));
+  const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]) && !native.includes(id) && !rendered.includes(id));
   const results: MediaCatalogue[] = [];
   // Bounded serial source groups avoid a fan-out across every provider on one call.
   if (legacy.length) results.push(await collectDashboardCatalogue({ client: dependencies.client, providers: legacy, ...(dependencies.now ? { now: dependencies.now } : {}) }));
@@ -58,6 +61,24 @@ export async function runCatalogue(input: CatalogueInput, dependencies: Catalogu
         excluded: nativeResult.providers.every((provider) => provider.population.excluded !== null) ? nativeResult.providers.reduce((sum, provider) => sum + (provider.population.excluded ?? 0), 0) : null,
         exclusionRules: nativeResult.providers.flatMap((provider) => provider.population.exclusionRules),
         completeness: nativeResult.providers.every((provider) => provider.population.completeness === "full") ? "full" : nativeResult.models.length ? "partial" : "unavailable",
+      },
+    });
+  }
+  if (rendered.length) {
+    const renderedResult = await collectRenderedPriceCatalogue({
+      providers: rendered as typeof RENDERED_PRICE_PROVIDER_IDS[number][],
+      ...(dependencies.renderedPageFetcher ? { renderedPageFetcher: dependencies.renderedPageFetcher } : {}),
+    });
+    results.push({
+      models: renderedResult.models,
+      providers: renderedResult.providers,
+      population: {
+        listed: renderedResult.providers.every((provider) => provider.population.listed !== null) ? renderedResult.providers.reduce((sum, provider) => sum + (provider.population.listed ?? 0), 0) : null,
+        received: renderedResult.providers.every((provider) => provider.population.received !== null) ? renderedResult.providers.reduce((sum, provider) => sum + (provider.population.received ?? 0), 0) : null,
+        retained: renderedResult.providers.every((provider) => provider.population.retained !== null) ? renderedResult.providers.reduce((sum, provider) => sum + (provider.population.retained ?? 0), 0) : null,
+        excluded: renderedResult.providers.every((provider) => provider.population.excluded !== null) ? renderedResult.providers.reduce((sum, provider) => sum + (provider.population.excluded ?? 0), 0) : null,
+        exclusionRules: renderedResult.providers.flatMap((provider) => provider.population.exclusionRules),
+        completeness: renderedResult.providers.every((provider) => provider.population.completeness === "full") ? "full" : renderedResult.models.length ? "partial" : "unavailable",
       },
     });
   }

@@ -33,7 +33,9 @@ function pricing(
   nativePricing: unknown,
   pricePoints: PricePoint[],
   note: string,
-  state: "published" | "not_published" | "unknown" = pricePoints.length ? "published" : "not_published",
+  // An empty API/media record is an unread price, not proof the provider has
+  // no published price. Only rendered-page evidence may make that conclusion.
+  state: "published" | "not_published" | "unknown" = pricePoints.length ? "published" : "unknown",
 ): Pick<CatalogueModel, "pricePoints" | "pricingState" | "pricingNote" | "nativePricing"> {
   return {
     pricePoints,

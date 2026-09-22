@@ -1,0 +1,45 @@
+{
+  "url": "https://www.cerebras.ai/pricing",
+  "fetchedAt": "2026-09-23T09:00:00.000Z",
+  "domSettled": true,
+  "tables": [
+    {
+      "caption": { "visibleText": "Product tier", "ariaLabel": "Developer tier prices are $999/M" },
+      "rows": [
+        [
+          { "visibleText": "Product Tier", "ariaLabel": "Tier" },
+          { "visibleText": "Developer Exploration workloads", "ariaLabel": "Developer prices $999/M" },
+          { "visibleText": "Enterprise Production workloads", "ariaLabel": "Enterprise" }
+        ],
+        [
+          { "visibleText": "Models", "ariaLabel": "Models" },
+          { "visibleText": "gpt-oss 120b, gemma-4-31b", "ariaLabel": "gpt-oss 120b $999/M, gemma-4-31b $0.01/M" },
+          { "visibleText": "All models in preview, production and any supported models", "ariaLabel": "Enterprise models" }
+        ]
+      ]
+    },
+    {
+      "caption": { "visibleText": "Model pricing", "ariaLabel": "All prices shown are $999/M" },
+      "rows": [
+        [
+          { "visibleText": "Model", "ariaLabel": "Model" },
+          { "visibleText": "Tokens/s", "ariaLabel": "Speed $999 tokens/s" },
+          { "visibleText": "Input price", "ariaLabel": "Input price $999/M" },
+          { "visibleText": "Output price", "ariaLabel": "Output price $999/M" }
+        ],
+        [
+          { "visibleText": "GPT OSS 120B", "ariaLabel": "GPT OSS 120B pricing: input $99.00/M, output $98.00/M" },
+          { "visibleText": "~3000 tokens/s", "ariaLabel": "999 tokens/s" },
+          { "visibleText": "$0.35 / 1M tokens", "ariaLabel": "$99.00 / 1M tokens" },
+          { "visibleText": "$0.75 / 1M tokens", "ariaLabel": "$98.00 / 1M tokens" }
+        ],
+        [
+          { "visibleText": "Qwen 3.8 27B", "ariaLabel": "Qwen 3.8 27B pricing: input $97.00/M, output $96.00/M" },
+          { "visibleText": "~1,850 tokens/s", "ariaLabel": "998 tokens/s" },
+          { "visibleText": "$0.99 / 1M tokens", "ariaLabel": "$97.00 / 1M tokens" },
+          { "visibleText": "$1.49 / 1M tokens", "ariaLabel": "$96.00 / 1M tokens" }
+        ]
+      ]
+    }
+  ]
+}
