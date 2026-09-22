@@ -42,6 +42,17 @@ test("Higgsfield keeps native web credits as catalogue-only price rows", () => {
   assert.equal(result.provider.requestParameters.observedAmountField, null);
 });
 
+test("Higgsfield plan metadata does not emit currency-denominated price fields", () => {
+  const result = parseHiggsfieldCompare(payload, observedAt);
+  const plans = result.provider.requestParameters.plans;
+  assert.ok(Array.isArray(plans));
+  for (const plan of plans) {
+    assert.equal(Object.hasOwn(plan, "price"), false);
+    assert.equal(Object.hasOwn(plan, "monthlyPrice"), false);
+    assert.equal(Object.hasOwn(plan, "currency"), false);
+  }
+});
+
 test("every Higgsfield price row must carry a non-default measurement origin", async () => {
   const result = await collectHiggsfieldCatalogue({
     now: () => new Date(observedAt),

@@ -47,9 +47,6 @@ function planSummary(value: unknown): Record<string, unknown>[] {
       planType: scalarOrNull(item.plan_type),
       billingPeriod: scalarOrNull(item.billing_period),
       credits: scalarOrNull(item.credits),
-      price: scalarOrNull(item.final_price),
-      monthlyPrice: scalarOrNull(item.final_monthly_price),
-      currency: scalarOrNull(item.currency),
     };
   });
 }
