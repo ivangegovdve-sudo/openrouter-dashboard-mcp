@@ -13,10 +13,21 @@ export const priceUnitSchema = z.enum([
   "megapixel",
   "video_second",
   "video",
+  "credit_image",
+  "credit_video",
+  "credit_audio",
   "request",
   "gpu_hour",
 ]);
 export type PriceUnit = z.infer<typeof priceUnitSchema>;
+
+/** Where the number in a price row came from. A catalogue quote is not a charge. */
+export const measurementOriginSchema = z.enum([
+  "catalogue",
+  "live_provider_read",
+  "unknown",
+]);
+export type MeasurementOrigin = z.infer<typeof measurementOriginSchema>;
 
 const latencyWindowConditionSchema = z
   .object({
@@ -82,7 +93,11 @@ export const pricePointSchema = z
   .object({
     id: z.string().min(1),
     amount: canonicalDecimalSchema,
+    /** The published/native amount. This field never carries a settled charge. */
     unit: priceUnitSchema,
+    /** A separately observed amount in the same unit, or null when none exists. */
+    observed: canonicalDecimalSchema.nullable(),
+    measurement_origin: measurementOriginSchema,
     condition: priceConditionSchema.nullable(),
     source: z
       .object({

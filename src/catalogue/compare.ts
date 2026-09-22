@@ -211,7 +211,7 @@ function openrouterPrices(row: NativeRecord, observedAt: string, dropped: string
     // unexpected numeric or object price disappeared without a word.
     if (native[field] === undefined || native[field] === null) continue;
     if (typeof native[field] !== "string") { dropped.push(`${String(row.id)} (${unit}: non-string native price)`); continue; }
-    try { points.push(pricePoint({ id: `openrouter:${String(row.id)}:${unit}`, amount: native[field], unit, condition: null, sourceUrl: OPENROUTER_COMPARISON_URL, readAt: observedAt, provenance: "published" })); } catch { dropped.push(`${String(row.id)} (${unit})`); }
+    try { points.push(pricePoint({ id: `openrouter:${String(row.id)}:${unit}`, amount: native[field], unit, condition: null, sourceUrl: OPENROUTER_COMPARISON_URL, readAt: observedAt, provenance: "published", measurementOrigin: "catalogue", observed: null })); } catch { dropped.push(`${String(row.id)} (${unit})`); }
   }
   return points;
 }
@@ -221,7 +221,7 @@ function directReference(identity: CrazyrouterIdentity, observedAt: string): { i
   if (identity.authorNamespace !== "openai" || !Object.hasOwn(directReferences, identity.exactModelAlias)) return null;
   const [input, output] = directReferences[identity.exactModelAlias]!;
   const sourceUrl = `https://developers.openai.com/api/docs/models/${identity.exactModelAlias}`;
-  const point = (value: string, unit: PriceUnit, leg: string) => pricePoint({ id: `openai:${identity.exactModelAlias}:${leg}`, amount: exactDecimalRatio(value, "1", "1000000").value!, unit, condition: null, sourceUrl, readAt: `${observedAt.slice(0, 10)}T00:00:00.000Z`, provenance: "published" });
+  const point = (value: string, unit: PriceUnit, leg: string) => pricePoint({ id: `openai:${identity.exactModelAlias}:${leg}`, amount: exactDecimalRatio(value, "1", "1000000").value!, unit, condition: null, sourceUrl, readAt: `${observedAt.slice(0, 10)}T00:00:00.000Z`, provenance: "published", measurementOrigin: "catalogue", observed: null });
   return { input: point(input, "token_in", "input"), output: point(output, "token_out", "output") };
 }
 

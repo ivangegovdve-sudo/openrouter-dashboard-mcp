@@ -148,6 +148,8 @@ function normalizeModel(args: {
               sourceUrl: CRAZYROUTER_PRICING_URL,
               readAt: args.observedAt,
               provenance: "published",
+              measurementOrigin: "catalogue",
+              observed: null,
             }));
           }
         }
@@ -176,6 +178,8 @@ function normalizeModel(args: {
             sourceUrl: CRAZYROUTER_PRICING_URL,
             readAt: args.observedAt,
             provenance: discount.provenance,
+            measurementOrigin: "catalogue",
+            observed: null,
             ...(discount.derivedFrom === undefined ? {} : { derivedFrom: discount.derivedFrom }),
             ...(discount.provenance === "derived" ? { sourceText: `Crazyrouter model discount badge: ${discount.factor}` } : {}),
           }));

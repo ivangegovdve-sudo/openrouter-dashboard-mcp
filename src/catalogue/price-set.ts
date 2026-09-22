@@ -1,4 +1,4 @@
-import { pricePointSchema, type PriceCondition, type PricePoint, type PriceUnit } from "../contract.js";
+import { pricePointSchema, type MeasurementOrigin, type PriceCondition, type PricePoint, type PriceUnit } from "../contract.js";
 import { exactDecimalRatio } from "./decimal.js";
 
 export type SailPricingRow = {
@@ -32,6 +32,8 @@ export function pricePoint(args: {
   sourceUrl: string;
   readAt: string;
   provenance: PricePoint["provenance"];
+  measurementOrigin: MeasurementOrigin;
+  observed: string | null;
   derivedFrom?: string;
   sourceText?: string;
 }): PricePoint {
@@ -39,6 +41,8 @@ export function pricePoint(args: {
     id: args.id,
     amount: args.amount,
     unit: args.unit,
+    observed: args.observed,
+    measurement_origin: args.measurementOrigin,
     condition: args.condition,
     source: { url: args.sourceUrl, readAt: args.readAt },
     provenance: args.provenance,
@@ -54,7 +58,9 @@ export function normalizePricePoint(args: {
   condition?: PriceCondition;
   sourceUrl: string;
   readAt: string;
-  provenance?: PricePoint["provenance"];
+  provenance: PricePoint["provenance"];
+  measurementOrigin: MeasurementOrigin;
+  observed: string | null;
   derivedFrom?: string;
   divisor?: string;
   sourceText?: string;
@@ -70,7 +76,9 @@ export function normalizePricePoint(args: {
     condition: args.condition ?? null,
     sourceUrl: args.sourceUrl,
     readAt: args.readAt,
-    provenance: args.provenance ?? "published",
+    provenance: args.provenance,
+    measurementOrigin: args.measurementOrigin,
+    observed: args.observed,
     ...(args.derivedFrom === undefined ? {} : { derivedFrom: args.derivedFrom }),
     ...(args.sourceText === undefined ? {} : { sourceText: args.sourceText }),
   });
@@ -98,6 +106,9 @@ export function normalizeSailPricingRows(
         condition,
         sourceUrl,
         readAt,
+        provenance: "published",
+        measurementOrigin: "catalogue",
+        observed: null,
       }));
     }
   }

@@ -398,7 +398,7 @@ function trimOpenRouterDetail(
     if (amount === null) return [];
     if (typeof amount !== "string") { dropped.push(`${detail.id} (${unit}: non-string amount)`); return []; }
     try {
-      return [pricePoint({ id: `openrouter:${detail.id}:${unit}`, amount, unit, condition: null, sourceUrl: new URL(`${MODELS_ENDPOINT}/${encodeURIComponent(detail.id)}`, dashboardBaseUrl()).href, readAt: new Date().toISOString(), provenance: "published" })];
+      return [pricePoint({ id: `openrouter:${detail.id}:${unit}`, amount, unit, condition: null, sourceUrl: new URL(`${MODELS_ENDPOINT}/${encodeURIComponent(detail.id)}`, dashboardBaseUrl()).href, readAt: new Date().toISOString(), provenance: "published", measurementOrigin: "catalogue", observed: null })];
     } catch {
       dropped.push(`${detail.id} (${unit})`);
       return [];

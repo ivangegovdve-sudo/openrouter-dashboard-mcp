@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { pricePointSchema, type PricePoint } from "../contract.js";
 
-export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes"]);
+export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes", "higgsfield"]);
 export type MediaCatalogueProviderId = z.infer<typeof mediaCatalogueProviderIdSchema>;
 export const mediaKindSchema = z.enum(["image", "video", "text", "audio", "other", "unknown"]);
 export type MediaKind = z.infer<typeof mediaKindSchema>;

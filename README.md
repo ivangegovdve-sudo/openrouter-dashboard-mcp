@@ -4,13 +4,13 @@ Agents need live model IDs and price provenance because stale slugs break prompt
 
 Read-only MCP access to live model catalogues, published media generation models and prices, and daily trending GitHub repos.
 
-open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, Crazyrouter, fal, and WaveSpeedAI. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
+open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, Crazyrouter, fal, WaveSpeedAI, and Higgsfield. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
 ## Evidence for decision layers
 
-Measured generation costs carry a `measurement_origin` marker so a number is never
+Measured generation costs carry a `measurementSource` marker so a number is never
 detached from how it was obtained:
 
 - `fixture` — deterministic test or loopback evidence.
@@ -22,6 +22,11 @@ In the wire contract, this marker is `measurementSource` on ledger observations 
 `measured_cost_source` on a rendered council selection. `unknown` cannot produce a
 decidable selection. A measured cost is bound to its routed provider, so evidence from
 provider A can never appear beside provider B.
+
+Price rows use the separate `measurement_origin` field: `catalogue` for a published
+rate, `live_provider_read` for a provider billing observation, and `unknown` when the
+source cannot be established. Their `amount` and nullable `observed` fields never share
+a number between catalogue price and price paid.
 
 Designed to feed typed decision layers such as System One models — every cost states
 where it came from, so a decision layer receives evidence rather than a bare number.
@@ -148,15 +153,15 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.6** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, Higgsfield**. Version **1.1.6** registers **14 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
 **What you actually get:**
 
-- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
-  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
-  Crazyrouter.
+- **One catalogue across fourteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal,
+  Crazyrouter and Higgsfield.
 - **Prices you can compare, or a refusal.** Two prices are compared only when they share a
   unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
   number that looks right and is not.
@@ -220,7 +225,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.6**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **14 providers** in **open-dashboard-mcp 1.1.6**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -237,6 +242,7 @@ Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="wavespeed">WaveSpeedAI</span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="fal">fal</span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="crazyrouter">Crazyrouter</span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
+| <span data-provider-id="higgsfield">Higgsfield</span><br>Media generation platform | [Catalogue](https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare?plan_set_key=ps_a3&billing_period=monthly&with_localization=true) · [Documentation](https://higgsfield.ai/pricing) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not established | Not established |
 
 ### Provider pitches and structured caveats
 
@@ -320,6 +326,12 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://crazyrouter.com/tools/); checked 2026-09-08.
 
+**Higgsfield**
+
+> “Pricing plans for Higgsfield's image, video and audio tools.” — [Higgsfield public pricing page](https://higgsfield.ai/pricing), observed 2026-09-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://higgsfield.ai/pricing); checked 2026-09-08.
+
 <!-- providers:end -->
 
 DeepInfra, Novita, SambaNova and Chutes publish their collected catalogues without a credential. QwenCloud requires the collector's region-bound international key. Both paths produce public dashboard data that this MCP reads without credentials. Mistral, xAI, Together, Fireworks, Nebius, Hyperbolic and Parasail returned 401 in the earlier catalogue probes; that observation describes those endpoints, not what the providers publish elsewhere.
@@ -343,7 +355,7 @@ Four rules follow from that table, and the tools enforce all four:
 
 ## Full catalogue and comparable media prices
 
-`dashboard_catalogue` keeps acquired model identities even when no comparable price is available. DeepInfra, WaveSpeedAI and Chutes use public native sources. fal uses authenticated model/pricing sources when `FAL_API_KEY` is supplied, and public catalogue/summary pricing otherwise. Crazyrouter uses key-visible identities when `CRAZYROUTER_API_KEY` is supplied, and public pricing identities otherwise. Other providers retain their dashboard archive. All requests are read-only metadata requests.
+`dashboard_catalogue` keeps acquired model identities even when no comparable price is available. DeepInfra, WaveSpeedAI, Chutes and Higgsfield use public native sources. Higgsfield rows retain native web-plan credit units and do not convert them to currency or price paid. fal uses authenticated model/pricing sources when `FAL_API_KEY` is supplied, and public catalogue/summary pricing otherwise. Crazyrouter uses key-visible identities when `CRAZYROUTER_API_KEY` is supplied, and public pricing identities otherwise. Other providers retain their dashboard archive. All requests are read-only metadata requests.
 
 For example, request WaveSpeed video detail with:
 
@@ -609,13 +621,15 @@ Everything above rests on these definitions. Read this when a number surprises y
 
 A model does not have *a* price. It has a **set** of price points, each valid only under a stated condition, and the set is the unit this package publishes.
 
-A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. Amounts are exact decimal strings, never floats, so a sub-cent per-token rate survives a round trip. `source` names the page it was read from and when; a price whose read time cannot be established is not emitted at all.
+A point is `{ amount, observed, unit, measurement_origin, condition, source: { url, readAt }, provenance }`. `amount` is the published/native catalogue quote; `observed` is a separate settled amount and is `null` until a provider billing read supplies one. Amounts are exact decimal strings, never floats, so a sub-cent per-token rate survives a round trip. `source` names the page it was read from and when; a price whose read time cannot be established is not emitted at all.
 
-**Units** (10): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `request`, `gpu_hour`.
+**Units** (13): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `credit_image`, `credit_video`, `credit_audio`, `request`, `gpu_hour`.
 
 **Condition kinds** (five): `latency_window`, `time_band`, `tier`, `rate_class`, `price_scope`. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. `price_scope` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.
 
 **Provenance**: `published`, `derived`, `parsed_from_prose`, `unknown`. A `derived` point names `derivedFrom`; a `parsed_from_prose` point retains the `sourceText` it was read out of. `unknown` is a real answer and is never rounded to a number.
+
+**Measurement origin**: `catalogue`, `live_provider_read`, or `unknown`. Higgsfield's rows use `catalogue` for native web-plan credits and leave `observed` null; credits are not converted to currency and do not claim a price paid. A value from one routed provider can never be placed beside a different routed provider's observation.
 
 **The refusal rule.** A comparison returns every compatible pair or it refuses. Two points compare only under the same unit AND the same condition; mismatched units, mismatched conditions, or a zero baseline refuse, always with a reason. The refusal surfaces under two names, one per layer: the price-set primitive returns `status: "refused"`, and a tool response carries that through as a comparison leg with `status: "not_comparable"` and the same reason. Nothing is coerced to make a comparison possible, because a comparison across conditions is not a weaker answer, it is a wrong one.
 

@@ -51,6 +51,7 @@ export const providerIdSchema = z.enum([
   "wavespeed",
   "fal",
   "crazyrouter",
+  "higgsfield",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -68,6 +69,7 @@ export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note
   wavespeed: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   fal: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   crazyrouter: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  higgsfield: { state: "UNKNOWN", note: "Higgsfield publishes web-plan credit rates; this integration does not observe a settled price paid per generation." },
 };
 
 export const publicationSchema = z.enum([
@@ -425,6 +427,27 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. The exact GPT-4o, GPT-4o mini and GPT-4.1 default-group figures that equal 0.65x OpenAI list prices are marked derived with their source and observed multiplier, and are excluded from competition claims. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected independently comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
+  },
+  higgsfield: {
+    id: "higgsfield",
+    ...providerEvidence("higgsfield"),
+    displayName: "Higgsfield",
+    providerKind: "media",
+    catalogueUrl: "https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare?plan_set_key=ps_a3&billing_period=monthly&with_localization=true",
+    citationUrl: "https://higgsfield.ai/pricing",
+    publishes: {
+      pricing: "partial",
+      contextLength: "never",
+      outputModalities: "partial",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "unknown",
+      discountExpiry: "unknown",
+      lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "Higgsfield's public comparison source publishes native web-plan credit rates for video, image and lipsync features. Credits are retained in their native units; no USD/EUR conversion or price-paid claim is made, and web-plan access does not establish MCP or CLI inference availability.",
   },
 };
 
