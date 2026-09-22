@@ -70,8 +70,8 @@ function liveModel(overrides: LiveOverrides) {
         ? false
         : null;
   const pricePoints = [
-    ...(prompt === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_in`, amount: prompt, unit: "token_in", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
-    ...(completion === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_out`, amount: completion, unit: "token_out", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
+    ...(prompt === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_in`, amount: prompt, unit: "token_in", observed: null, measurement_origin: "catalogue", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
+    ...(completion === null ? [] : [{ id: `${overrides.provider}:${overrides.id}:token_out`, amount: completion, unit: "token_out", observed: null, measurement_origin: "catalogue", condition: null, source: { url: "https://catalogue.test/live-models", readAt: STAMP }, provenance: "published" }]),
   ];
   return {
     provider: overrides.provider,

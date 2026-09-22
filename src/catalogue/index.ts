@@ -5,6 +5,7 @@ export * from "./schemas.js";
 export * from "./decimal.js";
 export * from "./json.js";
 export * from "./price-set.js";
+export * from "./native-price.js";
 
 export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes"];
 export const MEDIA_CATALOGUE_SOURCES: Record<MediaCatalogueProviderId, string> = {

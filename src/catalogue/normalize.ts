@@ -66,6 +66,9 @@ export function normalizeDeepInfra(
         divisor: "100",
         sourceUrl,
         readAt: observedAt,
+        provenance: "published",
+        measurementOrigin: "catalogue",
+        observed: null,
       }));
     }
   };
@@ -132,6 +135,9 @@ export function normalizeWaveSpeed(
         divisor: microUsdQuantityDivisor(duration),
         sourceUrl,
         readAt: observedAt,
+        provenance: "published",
+        measurementOrigin: "catalogue",
+        observed: null,
       }));
     } else if (base !== undefined && kind === "image" && flat) {
       const count = scalar(record(defaults.num_images).default ?? record(defaults.num_outputs).default ?? record(defaults.output_count).default);
@@ -143,6 +149,9 @@ export function normalizeWaveSpeed(
           divisor: microUsdQuantityDivisor(count),
           sourceUrl,
           readAt: observedAt,
+          provenance: "published",
+          measurementOrigin: "catalogue",
+          observed: null,
         }));
       } else note = "base_run_output_image_count_not_established";
     } else if (formula !== undefined) {
@@ -224,6 +233,8 @@ export function normalizeFal(
         sourceUrl: published.sourceUrl,
         readAt: observedAt,
         provenance: published.provenance ?? "published",
+        measurementOrigin: "catalogue",
+        observed: null,
         ...(published.sourceText === undefined ? {} : { sourceText: published.sourceText }),
       }));
     } catch {
@@ -295,6 +306,8 @@ export function normalizeFalAuthenticated(
           sourceUrl: priceSource,
           readAt: observedAt,
           provenance: sourceText === undefined ? "published" : "parsed_from_prose",
+          measurementOrigin: "catalogue",
+          observed: null,
           ...(sourceText === undefined ? {} : { sourceText }),
         }));
       } catch {
@@ -332,6 +345,9 @@ export function normalizeChutes(
           divisor: "1000000",
           sourceUrl,
           readAt: observedAt,
+          provenance: "published",
+          measurementOrigin: "catalogue",
+          observed: null,
         }));
       }
     }

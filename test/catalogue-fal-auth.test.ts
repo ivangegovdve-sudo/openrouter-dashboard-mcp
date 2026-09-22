@@ -177,7 +177,7 @@ test("an authenticated fal price says whose price it is, and will not compare wi
   const { comparePriceSets } = await import("../src/catalogue/compare.js");
   const make = (id: string, condition: unknown) => pricePoint({
     id, amount: "0.03", unit: "image", condition: condition as never,
-    sourceUrl: "https://api.fal.ai/v1/models/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published",
+    sourceUrl: "https://api.fal.ai/v1/models/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published", measurementOrigin: "catalogue", observed: null,
   });
   const account = make("fal:x:image:account", { kind: "price_scope", name: "authenticated_account" });
   const publicList = make("fal:x:image", null);

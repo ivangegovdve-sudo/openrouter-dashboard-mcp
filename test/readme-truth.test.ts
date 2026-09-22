@@ -172,7 +172,7 @@ test("the documented refusal statuses are the statuses the code returns", async 
   const { pricePoint } = await import("../src/catalogue/price-set.js");
   const point = (id: string, amount: string, condition: unknown) => pricePoint({
     id, amount, unit: "image", condition: condition as never,
-    sourceUrl: "https://example.test/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published",
+    sourceUrl: "https://example.test/pricing", readAt: "2026-09-08T15:00:00Z", provenance: "published", measurementOrigin: "catalogue", observed: null,
   });
   const basis = { unit: "image" as const, assumption: "one generated image" };
 

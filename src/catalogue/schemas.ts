@@ -26,7 +26,19 @@ export const catalogueModelSchema = z.object({
     observedAt: z.string().datetime({ offset: true }),
     sourceIndex: z.number().int().nonnegative(),
   }).strict(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  const hasCreditPrice = value.pricePoints.some((point) => point.unit.startsWith("credit_"));
+  if (!hasCreditPrice) return;
+  const hasCurrency = (candidate: unknown, depth = 0): boolean => {
+    if (depth > 4 || candidate === null || typeof candidate !== "object") return false;
+    if (Array.isArray(candidate)) return candidate.some((item) => hasCurrency(item, depth + 1));
+    return Object.entries(candidate).some(([key, item]) =>
+      /^(?:currency|currency_code|currencyCode)$/i.test(key) || hasCurrency(item, depth + 1));
+  };
+  if (hasCurrency(value.nativePricing)) {
+    context.addIssue({ code: "custom", message: "Credit-priced providers must not emit a currency field", path: ["nativePricing"] });
+  }
+});
 export type CatalogueModel = z.infer<typeof catalogueModelSchema>;
 
 /** The public pricing projection is now the set itself, never a scalar alias. */

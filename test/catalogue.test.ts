@@ -120,7 +120,7 @@ test("WaveSpeed follows all pages, records no model exclusions, and does not fet
 test("pricing schema forbids fabricated available empty prices and unexplained absence", () => {
   assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [] }).success, false);
   assert.equal(cataloguePricingSchema.safeParse({ state: "not_published", pricePoints: [] }).success, true);
-  const price = normalizePricePoint({ id: "test:image", value: "0", unit: "image", sourceUrl, readAt: observedAt });
+  const price = normalizePricePoint({ id: "test:image", value: "0", unit: "image", sourceUrl, readAt: observedAt, provenance: "published", measurementOrigin: "catalogue", observed: null });
   assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [price] }).success, true);
 });
 

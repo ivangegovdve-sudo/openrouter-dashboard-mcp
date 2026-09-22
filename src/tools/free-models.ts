@@ -266,7 +266,7 @@ function cataloguePricePoints(model: CatalogueModel, observedAt: string, dropped
     if (amount === null) return [];
     if (typeof amount !== "string") { dropped.push(`${model.id} (${unit}: non-string amount)`); return []; }
     try {
-      return [pricePoint({ id: `openrouter:${model.id}:${unit}`, amount, unit, condition: null, sourceUrl, readAt: observedAt, provenance: "published" })];
+      return [pricePoint({ id: `openrouter:${model.id}:${unit}`, amount, unit, condition: null, sourceUrl, readAt: observedAt, provenance: "published", measurementOrigin: "catalogue", observed: null })];
     } catch {
       dropped.push(`${model.id} (${unit})`);
       return [];

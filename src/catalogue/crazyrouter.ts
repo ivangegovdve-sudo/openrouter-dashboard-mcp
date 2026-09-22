@@ -148,6 +148,8 @@ function normalizeModel(args: {
               sourceUrl: CRAZYROUTER_PRICING_URL,
               readAt: args.observedAt,
               provenance: "published",
+              measurementOrigin: "catalogue",
+              observed: null,
             }));
           }
         }
@@ -167,15 +169,17 @@ function normalizeModel(args: {
         const groupRatio = decimal(args.groupRatios[args.group]);
         const discount = discountFor(args.id, row);
         for (const [leg, coefficient, unit] of [["input", "1", "token_in"], ["output", completion, "token_out"]] as const) {
-            const gross = multiply(ratio, "2", coefficient, groupRatio);
-            const net = multiply(gross, discount.factor);
-            pricePoints.push(normalizePricePoint({
-              id: `crazyrouter:${args.id}:${leg}`,
-              value: perMillionToToken(net),
+          const gross = multiply(ratio, "2", coefficient, groupRatio);
+          const net = multiply(gross, discount.factor);
+          pricePoints.push(normalizePricePoint({
+            id: `crazyrouter:${args.id}:${leg}`,
+            value: perMillionToToken(net),
             unit,
             sourceUrl: CRAZYROUTER_PRICING_URL,
             readAt: args.observedAt,
             provenance: discount.provenance,
+            measurementOrigin: "catalogue",
+            observed: null,
             ...(discount.derivedFrom === undefined ? {} : { derivedFrom: discount.derivedFrom }),
             ...(discount.provenance === "derived" ? { sourceText: `Crazyrouter model discount badge: ${discount.factor}` } : {}),
           }));

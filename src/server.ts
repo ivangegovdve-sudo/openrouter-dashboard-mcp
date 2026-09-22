@@ -43,6 +43,8 @@ export type CreateServerOptions = DashboardClientOptions & {
   modelLineageLedger?: ModelLineageLedgerEntry[];
   /** Optional dated per-slug tool/input-modality capability ledger. */
   modelCapabilityLedger?: ModelCapabilityLedgerEntry[];
+  /** Use native provider price sources from dashboard_catalogue (default true). */
+  useNativePriceSources?: boolean;
 };
 
 function csv(value: string | undefined): string[] | undefined {
@@ -75,7 +77,7 @@ export function createServer(
   if (enabled("dashboard_matrix")) registerMatrix(server, { client });
   if (enabled("dashboard_github_movers")) registerGithubMovers(server, { client });
   if (enabled("dashboard_key_inventory")) registerKeyInventory(server);
-  if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}), useNativePriceSources: options.useNativePriceSources ?? true });
   if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   if (enabled("dashboard_contract")) registerContract(server);
   if (enabled("dashboard_speed")) registerSpeed(server);

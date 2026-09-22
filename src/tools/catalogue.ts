@@ -4,6 +4,7 @@ import type { DashboardClient } from "../dashboard/client.js";
 import { collectDashboardCatalogue } from "../dashboard/catalogue.js";
 import { collectMediaCatalogue } from "../catalogue/index.js";
 import { collectCrazyrouterCatalogue } from "../catalogue/crazyrouter.js";
+import { collectNativePriceCatalogue, NATIVE_PRICE_PROVIDER_IDS } from "../catalogue/native-price.js";
 import { catalogueModelSchema, catalogueProviderSchema, mediaCatalogueProviderIdSchema, mediaKindSchema, type MediaCatalogue } from "../catalogue/schemas.js";
 import { PROVIDER_IDS, describeProvider, providerDescriptorSchema } from "../providers/registry.js";
 import { READ_ONLY_TOOL_ANNOTATIONS, toolResult } from "./shared.js";
@@ -29,17 +30,37 @@ export const catalogueOutputSchema = z.object({
 }).strict();
 export type CatalogueInput = z.infer<typeof catalogueInputSchema>;
 export type CatalogueOutput = z.infer<typeof catalogueOutputSchema>;
-export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[] };
+export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[]; useNativePriceSources?: boolean };
 
 export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
   const allowed = dependencies.allowedProviders === undefined ? undefined : new Set(dependencies.allowedProviders);
   const ids = [...new Set((input.providers ?? dependencies.allowedProviders ?? PROVIDER_IDS).filter((id) => allowed === undefined || allowed.has(id)))];
   const direct = ids.filter(id => mediaCatalogueProviderIdSchema.safeParse(id).success) as z.infer<typeof mediaCatalogueProviderIdSchema>[];
-  const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]));
+  const native = dependencies.useNativePriceSources === false ? [] : ids.filter(id => NATIVE_PRICE_PROVIDER_IDS.includes(id as typeof NATIVE_PRICE_PROVIDER_IDS[number]));
+  const legacy = ids.filter(id => id !== "crazyrouter" && !direct.includes(id as typeof direct[number]) && !native.includes(id));
   const results: MediaCatalogue[] = [];
   // Bounded serial source groups avoid a fan-out across every provider on one call.
   if (legacy.length) results.push(await collectDashboardCatalogue({ client: dependencies.client, providers: legacy, ...(dependencies.now ? { now: dependencies.now } : {}) }));
   if (direct.length) results.push(await collectMediaCatalogue({ providers: direct, ...(input.modelIds ? { enrichIds: input.modelIds } : {}), ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}), ...(dependencies.now ? { now: dependencies.now } : {}) }));
+  if (native.length) {
+    const nativeResult = await collectNativePriceCatalogue({
+      providers: native as typeof NATIVE_PRICE_PROVIDER_IDS[number][],
+      ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}),
+      ...(dependencies.now ? { now: dependencies.now } : {}),
+    });
+    results.push({
+      models: nativeResult.models,
+      providers: nativeResult.providers,
+      population: {
+        listed: nativeResult.providers.every((provider) => provider.population.listed !== null) ? nativeResult.providers.reduce((sum, provider) => sum + (provider.population.listed ?? 0), 0) : null,
+        received: nativeResult.providers.every((provider) => provider.population.received !== null) ? nativeResult.providers.reduce((sum, provider) => sum + (provider.population.received ?? 0), 0) : null,
+        retained: nativeResult.providers.every((provider) => provider.population.retained !== null) ? nativeResult.providers.reduce((sum, provider) => sum + (provider.population.retained ?? 0), 0) : null,
+        excluded: nativeResult.providers.every((provider) => provider.population.excluded !== null) ? nativeResult.providers.reduce((sum, provider) => sum + (provider.population.excluded ?? 0), 0) : null,
+        exclusionRules: nativeResult.providers.flatMap((provider) => provider.population.exclusionRules),
+        completeness: nativeResult.providers.every((provider) => provider.population.completeness === "full") ? "full" : nativeResult.models.length ? "partial" : "unavailable",
+      },
+    });
+  }
   const aggregator = ids.includes("crazyrouter") ? await collectCrazyrouterCatalogue({ ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}), ...(dependencies.now ? { now: dependencies.now } : {}) }) : undefined;
   const providers = [...results.flatMap(result => result.providers), ...(aggregator ? [aggregator.provider] : [])];
   const all = [...results.flatMap(result => result.models), ...(aggregator?.models ?? [])].sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));

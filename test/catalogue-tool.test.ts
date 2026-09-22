@@ -19,6 +19,22 @@ const dependencies = () => ({
   client: createDashboardClient({ baseUrl: "https://fixture.test", cache: false,
     fetchImpl: async () => new Response(JSON.stringify(envelope(rows)), { headers: { "content-type": "application/json" } }),
   }),
+  useNativePriceSources: false,
+});
+
+test("dashboard_catalogue uses a native price source for a publishing provider by default", async () => {
+  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), {
+    client: {} as never,
+    fetchImpl: async input => {
+      assert.equal(String(input), "https://openrouter.ai/api/v1/models");
+      return Response.json({ data: [{ id: "openrouter/native", model_type: "text-generation", pricing: { prompt: "0.000001", completion: "0.000002" } }] });
+    },
+  });
+  assert.equal(result.status, "ok");
+  assert.equal(result.providers[0]?.provider, "openrouter");
+  assert.equal(result.models[0]?.id, "openrouter/native");
+  assert.equal(result.models[0]?.pricePoints[0]?.measurement_origin, "catalogue");
+  assert.equal(result.models[0]?.pricePoints[0]?.observed, null);
 });
 
 test("catalogue retains unpriced identities and reports unknown native denominator", async () => {
@@ -50,7 +66,7 @@ test("preserves source origin, price window and legal offset timestamps", async 
   const client = createDashboardClient({ baseUrl: "https://custom.test/", cache: false,
     fetchImpl: async () => new Response(JSON.stringify(envelope([{ ...liveModelFixture, pricePoints: liveModelFixture.pricePoints.map((point) => ({ ...point, condition: { kind: "latency_window", name: "Flex" } })), isFree: null, lastConfirmedAt: "2026-09-08T10:00:00+02:00" }])), { headers: { "content-type": "application/json" } }),
   });
-  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), { client });
+  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), { client, useNativePriceSources: false });
   assert.equal(result.models[0]?.provenance.sourceUrl, "https://custom.test/api/public/v2/live-models");
   assert.equal(result.models[0]?.pricePoints[0]?.condition?.kind, "latency_window");
   assert.equal(result.models[0]?.pricePoints[0]?.condition?.name, "Flex");
@@ -61,7 +77,7 @@ test("media filtering includes every published output modality", async () => {
   const client = createDashboardClient({ baseUrl: "https://fixture.test/", cache: false,
     fetchImpl: async () => new Response(JSON.stringify(envelope([{ ...liveModelFixture, outputModalities: ["text", "image"] }])), { headers: { "content-type": "application/json" } }),
   });
-  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"], mediaKind: "image" }), { client });
+  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"], mediaKind: "image" }), { client, useNativePriceSources: false });
   assert.equal(result.models.length, 1);
   assert.deepEqual(result.models[0]?.outputModalities, ["text", "image"]);
 });
@@ -89,7 +105,7 @@ test("failed sources remain unknown and contain no internal diagnostic", async (
   const client = createDashboardClient({ baseUrl: "https://fixture.test", cache: false,
     fetchImpl: async () => { throw new Error("private diagnostic sentinel"); },
   });
-  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), { client });
+  const result = await runCatalogue(catalogueInputSchema.parse({ providers: ["openrouter"] }), { client, useNativePriceSources: false });
   assert.equal(result.status, "unavailable");
   assert.equal(result.providers[0]?.population.received, null);
   assert.doesNotMatch(JSON.stringify(result), /private diagnostic sentinel/);
@@ -97,7 +113,7 @@ test("failed sources remain unknown and contain no internal diagnostic", async (
 
 test("tools/call exposes validated catalogue output and tools/list never fetches", async () => {
   let calls = 0;
-  const server = createServer({ fetchImpl: async () => { calls++; return new Response(JSON.stringify(envelope(rows)), { headers: { "content-type": "application/json" } }); } });
+  const server = createServer({ useNativePriceSources: false, fetchImpl: async () => { calls++; return new Response(JSON.stringify(envelope(rows)), { headers: { "content-type": "application/json" } }); } });
   const [ct, st] = InMemoryTransport.createLinkedPair();
   await server.connect(st);
   const client = new Client({ name: "catalogue-test", version: "1" });
