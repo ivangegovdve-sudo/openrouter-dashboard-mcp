@@ -25,6 +25,7 @@ test("covers every provider this build normalises", () => {
       "deepinfra",
       "fal",
       "groq",
+      "higgsfield",
       "ionet",
       "kie",
       "nous",

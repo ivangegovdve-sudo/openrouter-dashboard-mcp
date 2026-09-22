@@ -94,6 +94,7 @@ export const pricePointSchema = z
     id: z.string().min(1),
     /** The published/native quote. This is never a settled charge. */
     amount: canonicalDecimalSchema,
+    /** The published/native amount. This field never carries a settled charge. */
     unit: priceUnitSchema,
     /** A separately observed charge in the same unit, or null when unread. */
     observed: canonicalDecimalSchema.nullable(),

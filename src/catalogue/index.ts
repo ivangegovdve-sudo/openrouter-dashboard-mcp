@@ -2,6 +2,7 @@ import { mediaCatalogueSchema, type CatalogueModel, type CatalogueProvider, type
 import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeFalAuthenticated, normalizeKie, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
 import { parseNativeJson } from "./json.js";
 import { resolveProviderPriceCoverage } from "./price-coverage.js";
+import { collectHiggsfieldCatalogue, HIGGSFIELD_COMPARE_URL } from "./higgsfield.js";
 export * from "./schemas.js";
 export * from "./decimal.js";
 export * from "./json.js";
@@ -11,13 +12,14 @@ export * from "./price-coverage.js";
 export * from "./rendered-page.js";
 export * from "./rendered-price.js";
 
-export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes", "kie"];
+export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes", "kie", "higgsfield"];
 export const MEDIA_CATALOGUE_SOURCES: Record<MediaCatalogueProviderId, string> = {
   deepinfra: "https://api.deepinfra.com/models/list",
   wavespeed: "https://wavespeed.ai/api/models",
   fal: "https://api.fal.ai/v1/models",
   chutes: "https://api.chutes.ai/chutes/",
   kie: "https://api.kie.ai/client/v1/model-pricing/page",
+  higgsfield: HIGGSFIELD_COMPARE_URL,
 };
 export const DEFAULT_WAVESPEED_ENRICH_IDS = [
   "wavespeed-ai/wan-2.2/t2v-720p",
@@ -72,6 +74,7 @@ async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: numbe
 }
 type Collection = { provider: CatalogueProvider; models: CatalogueModel[] };
 async function collectProvider(provider: MediaCatalogueProviderId, options: CollectMediaCatalogueOptions): Promise<Collection> {
+  if (provider === "higgsfield") return collectHiggsfieldCatalogue(options);
   const sourceUrl = MEDIA_CATALOGUE_SOURCES[provider], observedAt = (options.now ?? (() => new Date()))().toISOString();
   const fetchImpl = options.fetchImpl ?? fetch, timeout = Math.min(Math.max(options.timeoutMs ?? 10000, 1), 30000), maxPages = Math.min(Math.max(options.maxPages ?? 32, 1), 64);
   const deadline = Date.now() + 60000;
