@@ -13,7 +13,8 @@ jobs:
     # bounded but realistic envelope for npm install, the clean build, the
     # 364-test suite, and package validation.
     timeout-minutes: 10
-    runs-on: [self-hosted, Windows, X64, local-gpu, jan]
+    # Repository-local runner; all labels are measured from GitHub's runner API.
+    runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
