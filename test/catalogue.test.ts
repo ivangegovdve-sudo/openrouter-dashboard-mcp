@@ -43,7 +43,7 @@ test("compute time, frame units, absent prices, and video image-units keep ident
     [null, "text-to-image", "price_absent"],
   ] as const) {
     const m = deep(pricing, type);
-    assert.equal(m.id, "vendor/model"); assert.equal(m.pricingState, "not_published"); assert.deepEqual(m.pricePoints, []); assert.match(m.pricingNote!, new RegExp(reason));
+    assert.equal(m.id, "vendor/model"); assert.equal(m.pricingState, "unknown"); assert.deepEqual(m.pricePoints, []); assert.match(m.pricingNote!, new RegExp(reason));
   }
 });
 test("WaveSpeed microUSD/base-duration conversion gives exact 0.075/output second", () => {
@@ -57,12 +57,12 @@ test("WaveSpeed native detail input is a JSON encoded string and still normalize
 });
 test("WaveSpeed rejects unknown quantity, mismatched base duration, and dynamic or executable formulas", () => {
   for (const extra of [{ input: {} }, { formula: undefined }, { formula: '{"total_price": base_price * duration / 10}' }, { formula: '{"total_price": base_price * (resolution == "1080p" ? 2 : 1)}' }, { formula: 'process.exit()' }, { base_price: "-1" }]) {
-    assert.equal(wave(extra).pricingState, "not_published");
+    assert.equal(wave(extra).pricingState, "unknown");
   }
 });
 test("WaveSpeed flat image pricing requires an explicit supported output count", () => {
   const row = { type: "text-to-image", formula: '{"total_price": base_price}', input: { properties: { batch_size: { default: "4" } } } };
-  assert.equal(wave(row).pricingState, "not_published");
+  assert.equal(wave(row).pricingState, "unknown");
   assert.equal(wave({ ...row, input: { properties: { num_images: { default: "4" } } } }).pricePoints[0]?.amount, "0.09375");
 });
 test("Fal unit cells drive conversions; whole-video prices retain their video unit", () => {
@@ -77,7 +77,7 @@ test("Fal unit cells drive conversions; whole-video prices retain their video un
 });
 test("Chutes identity is chute_id and infrastructure prices never become generated image prices", () => {
   const model = normalizeChutes({ chute_id: "abc", name: "image-name", standard_template: null, current_estimated_price: { usd: { second: "0.0005" } } }, sourceUrl, observedAt, 0);
-  assert.equal(model.id, "abc"); assert.equal(model.mediaKind, "unknown"); assert.equal(model.pricingState, "not_published");
+  assert.equal(model.id, "abc"); assert.equal(model.mediaKind, "unknown"); assert.equal(model.pricingState, "unknown");
 });
 test("Chutes explicit USD per-million token rates coexist with compute prices", () => {
   const model = normalizeChutes({ chute_id: "abc", name: "model", standard_template: "vllm", current_estimated_price: { usd: { second: "0.0005" }, per_million_tokens: { input: { usd: "0.12" }, output: { usd: "0.37" } } } }, sourceUrl, observedAt, 0);
@@ -115,12 +115,12 @@ test("WaveSpeed follows all pages, records no model exclusions, and does not fet
   const calls: string[] = [];
   const result = await collectMediaCatalogue({ providers: ["wavespeed"], enrichIds: ["not-listed"], fetchImpl: mockFetch(url => { calls.push(url.href); return { total: 2, items: [{ model_uuid: `image-${url.searchParams.get("page")}`, type: "text-to-image", base_price: "1000" }] }; }) });
   assert.equal(calls.length, 2); assert.equal(result.models.length, 2); assert.equal(result.population.listed, 2); assert.equal(result.population.excluded, 0); assert.equal(result.population.completeness, "full");
-  assert.ok(result.models.every(m => m.pricingState === "not_published"));
+  assert.ok(result.models.every(m => m.pricingState === "unknown"));
 });
-test("pricing schema forbids fabricated available empty prices and unexplained absence", () => {
+test("pricing schema forbids fabricated available empty prices and keeps unread prices unknown", () => {
   assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [] }).success, false);
-  assert.equal(cataloguePricingSchema.safeParse({ state: "not_published", pricePoints: [] }).success, true);
-  const price = normalizePricePoint({ id: "test:image", value: "0", unit: "image", sourceUrl, readAt: observedAt });
+  assert.equal(cataloguePricingSchema.safeParse({ state: "unknown", pricePoints: [] }).success, true);
+  const price = normalizePricePoint({ id: "test:image", value: "0", unit: "image", sourceUrl, readAt: observedAt, provenance: "published", measurementOrigin: "catalogue", observed: null });
   assert.equal(cataloguePricingSchema.safeParse({ state: "published", pricePoints: [price] }).success, true);
 });
 

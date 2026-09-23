@@ -588,6 +588,8 @@ export async function runModelEconomics(
                 sourceUrl: sailDocUrl,
                 readAt: asOfIso,
                 provenance: "published",
+                measurementOrigin: "catalogue",
+                observed: null,
                 sourceText: rowMatch[0],
               }));
             }

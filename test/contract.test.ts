@@ -22,6 +22,22 @@ test("price points require a sourced dated exact amount", () => {
   );
 });
 
+test("price points reject null or defaulted measurement origins", () => {
+  const base = {
+    id: "higgsfield:video/seedance-2-0-720p",
+    amount: "22",
+    unit: "credit_video",
+    observed: null,
+    condition: null,
+    source: { url: "https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare", readAt: "2026-09-22T12:00:00.000Z" },
+    provenance: "parsed_from_prose",
+  };
+  for (const origin of [undefined, null, ""]) {
+    assert.equal(pricePointSchema.safeParse({ ...base, measurement_origin: origin }).success, false);
+  }
+  assert.equal(pricePointSchema.safeParse({ ...base, measurement_origin: "catalogue" }).success, true);
+});
+
 test("normalized figures require an explicit assumption and source point", () => {
   assert.throws(() =>
     normalizedFigureSchema.parse({

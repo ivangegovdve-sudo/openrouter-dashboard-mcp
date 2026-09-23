@@ -13,10 +13,21 @@ export const priceUnitSchema = z.enum([
   "megapixel",
   "video_second",
   "video",
+  "credit_image",
+  "credit_video",
+  "credit_audio",
   "request",
   "gpu_hour",
 ]);
 export type PriceUnit = z.infer<typeof priceUnitSchema>;
+
+/** Provenance of the numeric observation associated with a published price. */
+export const measurementOriginSchema = z.enum([
+  "catalogue",
+  "live_provider_read",
+  "unknown",
+]);
+export type MeasurementOrigin = z.infer<typeof measurementOriginSchema>;
 
 const latencyWindowConditionSchema = z
   .object({
@@ -81,8 +92,12 @@ export type PriceCondition = z.infer<typeof priceConditionSchema> | null;
 export const pricePointSchema = z
   .object({
     id: z.string().min(1),
+    /** The published/native quote. This is never a settled charge. */
     amount: canonicalDecimalSchema,
     unit: priceUnitSchema,
+    /** A separately observed charge in the same unit, or null when unread. */
+    observed: canonicalDecimalSchema.nullable(),
+    measurement_origin: measurementOriginSchema,
     condition: priceConditionSchema.nullable(),
     source: z
       .object({

@@ -39,8 +39,8 @@ test("Crazyrouter retains every key-visible identity even when price metadata is
   assert.deepEqual(result.provider.population, { listed: 3, received: 3, retained: 3, excluded: 0, exclusionRules: [], completeness: "full" });
   assert.equal(result.provider.requestParameters.populationScope, "models_visible_to_current_api_key");
   assert.equal(result.provider.requestParameters.platformModelCount, null);
-  assert.equal(result.models[1]?.pricingState, "not_published");
-  assert.equal(result.models[2]?.pricingState, "not_published", "no approximate model-name join");
+  assert.equal(result.models[1]?.pricingState, "unknown");
+  assert.equal(result.models[2]?.pricingState, "unknown", "no approximate model-name join");
   const prices = result.models[0]!.pricePoints;
   assert.deepEqual(prices.map(price => [price.unit, price.amount]), [
     ["token_in", "0.000001625"], ["token_out", "0.0000065"],
@@ -84,7 +84,7 @@ test("Crazyrouter does not apply plain token ratios to custom billing or unsuppo
   ];
   const result = await collect({ apiKey: "synthetic-key", now, fetchImpl: source(list(rows.map(row => row.model_name)), pricing(rows)) });
   assert.equal(result.models.length, 6);
-  assert.ok(result.models.every(model => model.pricePoints.length === 0 && model.pricingState === "not_published"));
+  assert.ok(result.models.every(model => model.pricePoints.length === 0 && model.pricingState === "unknown"));
   assert.equal(result.models[3]!.mediaKind, "image");
 });
 

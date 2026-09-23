@@ -2,6 +2,7 @@ import { exactDecimalRatio } from "./decimal.js";
 import { parseNativeJson } from "./json.js";
 import { normalizePricePoint, pricePoint } from "./price-set.js";
 import { record, type NativeRecord, scalar } from "./normalize.js";
+import { resolveProviderPriceCoverage } from "./price-coverage.js";
 import { catalogueModelSchema, catalogueProviderSchema, type CatalogueModel, type CatalogueProvider, type MediaKind } from "./schemas.js";
 import type { PricePoint } from "../contract.js";
 
@@ -148,6 +149,8 @@ function normalizeModel(args: {
               sourceUrl: CRAZYROUTER_PRICING_URL,
               readAt: args.observedAt,
               provenance: "published",
+              measurementOrigin: "catalogue",
+              observed: null,
             }));
           }
         }
@@ -167,15 +170,17 @@ function normalizeModel(args: {
         const groupRatio = decimal(args.groupRatios[args.group]);
         const discount = discountFor(args.id, row);
         for (const [leg, coefficient, unit] of [["input", "1", "token_in"], ["output", completion, "token_out"]] as const) {
-            const gross = multiply(ratio, "2", coefficient, groupRatio);
-            const net = multiply(gross, discount.factor);
-            pricePoints.push(normalizePricePoint({
-              id: `crazyrouter:${args.id}:${leg}`,
-              value: perMillionToToken(net),
+          const gross = multiply(ratio, "2", coefficient, groupRatio);
+          const net = multiply(gross, discount.factor);
+          pricePoints.push(normalizePricePoint({
+            id: `crazyrouter:${args.id}:${leg}`,
+            value: perMillionToToken(net),
             unit,
             sourceUrl: CRAZYROUTER_PRICING_URL,
             readAt: args.observedAt,
             provenance: discount.provenance,
+            measurementOrigin: "catalogue",
+            observed: null,
             ...(discount.derivedFrom === undefined ? {} : { derivedFrom: discount.derivedFrom }),
             ...(discount.provenance === "derived" ? { sourceText: `Crazyrouter model discount badge: ${discount.factor}` } : {}),
           }));
@@ -183,12 +188,10 @@ function normalizeModel(args: {
       } catch { pricePoints.length = 0; }
     }
   }
-  // The third state is decided by matching the note, which couples a state to the
-  // spelling of a free-text string -- add a reason and forget to list it here and the
-  // model silently claims "not_published", i.e. that the provider publishes no price,
-  // when the truth is that we could not read one. "unparseable" is listed for exactly
-  // that reason; a source we failed to parse is unknown, never an absence of price.
-  const pricingState = pricePoints.length > 0 ? "published" : /unavailable|incomplete|unparseable/.test(note) ? "unknown" : "not_published";
+  // A missing API row or an unparseable formula is never evidence of universal
+  // price nonpublication. The rendered-page coverage state machine owns that
+  // stronger conclusion and requires its own page evidence.
+  const pricingState = pricePoints.length > 0 ? "published" : "unknown";
   return catalogueModelSchema.parse({ provider: "crazyrouter", id: args.id, displayName: args.id, mediaKind, nativeType,
     ...(outputModalities ? { outputModalities } : {}), pricePoints, pricingState, pricingNote: note,
     nativePricing: { catalogueRow: args.catalogueRow, pricingRow: row ?? null, vendor: args.vendor ?? null, groupRatios: args.groupRatios, identitySource: args.sourceUrl },
@@ -286,7 +289,13 @@ export async function collectCrazyrouterCatalogue(options: CollectCrazyrouterOpt
   requestParameters.excludedCount = exclusions.length;
   requestParameters.exclusionRules = exclusions;
   requestParameters.pricingMatchedModels = models.filter(model => model.pricePoints.length > 0).length;
-  const provider = catalogueProviderSchema.parse({ provider: "crazyrouter", status: pricingFailed || pricingIncomplete || incomplete ? "partial" : "available", sourceUrl, observedAt, requestParameters,
+  const normalizedPriceRows = models.reduce((sum, model) => sum + model.pricePoints.length, 0);
+  const priceCoverage = resolveProviderPriceCoverage({
+    provider: "crazyrouter",
+    apiPriceObservation: normalizedPriceRows > 0 ? "prices_found" : "no_prices",
+    apiPriceRowCount: normalizedPriceRows,
+  });
+  const provider = catalogueProviderSchema.parse({ provider: "crazyrouter", status: pricingFailed || pricingIncomplete || incomplete ? "partial" : "available", sourceUrl, observedAt, requestParameters, priceCoverage,
     ...(incomplete ? { error: duplicate ? "DUPLICATE_IDENTITY" : exclusions.length ? "INVALID_MODEL_IDENTITY" : "UNEXPECTED_PAGINATION_OR_TOTAL" } : {}),
     population: { listed: authenticated ? (payload.total === undefined ? rows.length : declaredTotal) : null, received: rows.length, retained: models.length, excluded: exclusions.length,
       exclusionRules: exclusions, completeness: incomplete ? "partial" : authenticated ? "full" : "unknown" } });

@@ -1,10 +1,15 @@
 import { mediaCatalogueSchema, type CatalogueModel, type CatalogueProvider, type MediaCatalogue, type MediaCatalogueProviderId } from "./schemas.js";
 import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeFalAuthenticated, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
 import { parseNativeJson } from "./json.js";
+import { resolveProviderPriceCoverage } from "./price-coverage.js";
 export * from "./schemas.js";
 export * from "./decimal.js";
 export * from "./json.js";
 export * from "./price-set.js";
+export * from "./native-price.js";
+export * from "./price-coverage.js";
+export * from "./rendered-page.js";
+export * from "./rendered-price.js";
 
 export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes"];
 export const MEDIA_CATALOGUE_SOURCES: Record<MediaCatalogueProviderId, string> = {
@@ -285,10 +290,17 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     requestParameters.detailPriceObservations = detailPriceObservations;
   }
   if (provider === "chutes") requestParameters.priceCoverageRule = "Public deployments retained by chute_id, including custom deployments; explicit USD per-million token legs converted per token. Compute rental rates retained natively and never labelled output prices. Null template means modality unknown.";
+  const priceRows = models.reduce((sum, model) => sum + model.pricePoints.length, 0);
+  const priceCoverage = resolveProviderPriceCoverage({
+    provider,
+    apiPriceObservation: priceRows > 0 ? "prices_found" : received ? "no_prices" : "unavailable",
+    apiPriceRowCount: priceRows,
+    sourceReachable: received,
+  });
   return { models, provider: {
     provider, status: !received ? "unavailable" : complete && !pricingFailed ? "available" : "partial", sourceUrl, observedAt,
     population: { listed, received: received ? rows.length : null, retained: received ? models.length : null, excluded: received ? exclusions.length : null, exclusionRules: exclusions, completeness: !received ? "unavailable" : complete ? "full" : "partial" },
-    requestParameters, ...(error ? { error } : {}),
+    requestParameters, priceCoverage, ...(error ? { error } : {}),
   } };
 }
 export async function collectMediaCatalogue(options: CollectMediaCatalogueOptions = {}): Promise<MediaCatalogue> {

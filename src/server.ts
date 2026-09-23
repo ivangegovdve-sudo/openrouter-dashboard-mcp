@@ -21,6 +21,7 @@ import { registerUsageLeaders } from "./tools/usage-leaders.js";
 import { registerWhatsChanged } from "./tools/whats-changed.js";
 import { SERVER_VERSION } from "./version.js";
 import { registerCatalogue } from "./tools/catalogue.js";
+import type { RenderedPageFetcher } from "./catalogue/rendered-page.js";
 import { registerPriceComparison } from "./tools/price-comparison.js";
 import { registerContract } from "./tools/contract.js";
 import { registerSpeed } from "./tools/speed.js";
@@ -43,6 +44,10 @@ export type CreateServerOptions = DashboardClientOptions & {
   modelLineageLedger?: ModelLineageLedgerEntry[];
   /** Optional dated per-slug tool/input-modality capability ledger. */
   modelCapabilityLedger?: ModelCapabilityLedgerEntry[];
+  /** Use native provider price sources from dashboard_catalogue (default true). */
+  useNativePriceSources?: boolean;
+  /** Optional rendered-page adapter for deterministic/offline catalogue collection. */
+  renderedPageFetcher?: RenderedPageFetcher;
 };
 
 function csv(value: string | undefined): string[] | undefined {
@@ -75,7 +80,7 @@ export function createServer(
   if (enabled("dashboard_matrix")) registerMatrix(server, { client });
   if (enabled("dashboard_github_movers")) registerGithubMovers(server, { client });
   if (enabled("dashboard_key_inventory")) registerKeyInventory(server);
-  if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
+  if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}), ...(options.renderedPageFetcher ? { renderedPageFetcher: options.renderedPageFetcher } : {}), useNativePriceSources: options.useNativePriceSources ?? true });
   if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   if (enabled("dashboard_contract")) registerContract(server);
   if (enabled("dashboard_speed")) registerSpeed(server);

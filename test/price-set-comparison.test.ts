@@ -6,7 +6,7 @@ import { comparePriceSets } from "../src/catalogue/compare.js";
 
 const sourceUrl = "https://example.test/pricing";
 const point = (id: string, amount: string, unit: "image" | "video_second", condition: null | { kind: "latency_window"; name: "ASAP" | "Balanced" | "Flex" }) =>
-  pricePoint({ id, amount, unit, condition, sourceUrl, readAt: "2026-09-08T15:00:00Z", provenance: "published" });
+  pricePoint({ id, amount, unit, condition, sourceUrl, readAt: "2026-09-08T15:00:00Z", provenance: "published", measurementOrigin: "catalogue", observed: null });
 
 test("comparison refuses incompatible native units instead of coercing them", () => {
   const result = comparePriceSets([point("left-video", "0.06", "video_second", null)], [point("right-image", "0.03", "image", null)], { unit: "video_second", assumption: "one second of generated video" });

@@ -67,8 +67,8 @@ export const liveModelFixture = {
   ownedBy: "example",
   contextLength: "90071992547409930001",
   pricePoints: [
-    { id: "openrouter:example/very-large-model:token_in", amount: "0.0000001250", unit: "token_in", condition: null, source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" }, provenance: "published" },
-    { id: "openrouter:example/very-large-model:token_out", amount: "0.0000005000", unit: "token_out", condition: null, source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" }, provenance: "published" },
+    { id: "openrouter:example/very-large-model:token_in", amount: "0.0000001250", unit: "token_in", observed: null, measurement_origin: "catalogue", condition: null, source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" }, provenance: "published" },
+    { id: "openrouter:example/very-large-model:token_out", amount: "0.0000005000", unit: "token_out", observed: null, measurement_origin: "catalogue", condition: null, source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" }, provenance: "published" },
   ],
   pricingState: "published",
   isFree: false,

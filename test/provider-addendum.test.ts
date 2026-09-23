@@ -57,7 +57,7 @@ test("catalogue routes Crazyrouter to its own source and preserves unpriced iden
   });
   assert.deepEqual(urls, ["https://crazyrouter.com/api/pricing"]);
   assert.equal(result.models[0]?.id, "no-price");
-  assert.equal(result.models[0]?.pricingState, "not_published");
+  assert.equal(result.models[0]?.pricingState, "unknown");
   assert.equal(result.providers[0]?.population.received, 1);
   assert.equal(result.providers[0]?.population.retained, 1);
   assert.equal(result.providers[0]?.population.excluded, 0);

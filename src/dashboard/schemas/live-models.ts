@@ -163,7 +163,7 @@ export const liveModelSchema = z.preprocess((raw) => {
   const pricePoints = source === null ? [] : Object.entries(pricing as Record<string, unknown>).flatMap(([name, amount]) => {
     if (typeof amount !== "string") return [];
     const unit = name === "promptUsdPerToken" ? "token_in" : name === "completionUsdPerToken" ? "token_out" : null;
-    return unit === null ? [] : [{ id: `${String(value.provider)}:${String(value.id)}:${unit}`, amount, unit, condition, source, provenance: "published" }];
+    return unit === null ? [] : [{ id: `${String(value.provider)}:${String(value.id)}:${unit}`, amount, unit, condition, source, observed: null, measurement_origin: "catalogue", provenance: "published" }];
   });
   const { pricing: _pricing, pricingWindow: _pricingWindow, ...rest } = value;
   // A legacy record whose read time was never confirmed is unknown, not unpriced: the
