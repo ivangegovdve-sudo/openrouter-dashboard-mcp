@@ -74,9 +74,9 @@ permissions:
   statuses: read
 
 env:
-  # Measured on the repository-local Windows service host; the service PATH
-  # does not contain Python, so use the installed uv-managed interpreter.
-  PYTHON_EXE: 'C:\Users\ivang\AppData\Roaming\uv\python\cpython-3.11.15-windows-x86_64-none\python.exe'
+  # Measured shared runner toolcache path; the service PATH does not contain
+  # Python, and this tree is readable by the runner service account.
+  PYTHON_EXE: 'D:\actions-runner-morning-news-anchor\_work\_tool\Python\3.11.9\x64\python.exe'
 
 concurrency:
   group: merge-on-approval-${{ github.event.pull_request.number }}
