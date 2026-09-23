@@ -73,6 +73,11 @@ permissions:
   checks: read
   statuses: read
 
+env:
+  # Measured on the repository-local Windows service host; the service PATH
+  # does not contain Python, so use the installed uv-managed interpreter.
+  PYTHON_EXE: 'C:\Users\ivang\AppData\Roaming\uv\python\cpython-3.11.15-windows-x86_64-none\python.exe'
+
 concurrency:
   group: merge-on-approval-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -98,14 +103,15 @@ jobs:
     runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: source-${{ github.run_id }}
       - name: Verify runner Python for the merge gate
         shell: pwsh
         run: |
-          $python = Get-Command python -ErrorAction SilentlyContinue
-          if ($null -eq $python) {
-            throw "The self-hosted merge runner must provide python on PATH"
+          if (-not (Test-Path -LiteralPath $env:PYTHON_EXE)) {
+            throw "Measured runner Python was not found: $env:PYTHON_EXE"
           }
-          & $python.Source --version
+          & $env:PYTHON_EXE --version
 
       - name: Ensure GitHub CLI for the merge gate
         shell: pwsh
@@ -197,7 +203,7 @@ jobs:
             "--reference", "${{ github.event.review.html_url }}",
             "--merge-method", "squash"
           )
-          $gateOutput = & python @gateArgs 2>&1
+          $gateOutput = & $env:PYTHON_EXE @gateArgs 2>&1
           $gateExit = $LASTEXITCODE
           $gateOutput | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
           exit $gateExit
