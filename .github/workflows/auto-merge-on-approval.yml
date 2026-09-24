@@ -103,8 +103,6 @@ jobs:
     runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: source-${{ github.run_id }}
       - name: Verify runner Python for the merge gate
         shell: pwsh
         run: |
