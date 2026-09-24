@@ -28,6 +28,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $remote = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git"
+          git config --global --add safe.directory '*'
           git init .
           git config core.longpaths true
           git remote get-url origin *> $null
