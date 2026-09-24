@@ -330,6 +330,40 @@ test("does not silently add or drop constraints", async () => {
       promptUsdPerToken: "0.000001",
       completionUsdPerToken: "0.000001",
     },
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "cerebras",
+        upstreamProvider: "cerebras",
+        model: "cerebras/audio",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "0.0001",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://example.test",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
   });
   const text = liveModel({
     provider: "openrouter",
@@ -342,6 +376,40 @@ test("does not silently add or drop constraints", async () => {
       promptUsdPerToken: "0.000002",
       completionUsdPerToken: "0.000002",
     },
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "openrouter",
+        upstreamProvider: "openrouter",
+        model: "openrouter/text",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "0.0002",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://example.test",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
   });
   const { client } = snapshotClient([text, audio]);
 
@@ -439,6 +507,40 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
       promptUsdPerToken: "90071992547409930001",
       completionUsdPerToken: "0",
     },
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "groq",
+        upstreamProvider: "groq",
+        model: "groq/larger",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "90071992547409930001",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://example.test",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
   });
   const smaller = liveModel({
     id: "groq/smaller",
@@ -448,6 +550,40 @@ test("ranks unrestricted cheapest prices as exact decimals and excludes unpublis
       promptUsdPerToken: "90071992547409930000",
       completionUsdPerToken: "0",
     },
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "groq",
+        upstreamProvider: "groq",
+        model: "groq/smaller",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "90071992547409930000",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://example.test",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
   });
   const { client, requests } = snapshotClient([
     nativeMediaPriceUnknown,
@@ -497,6 +633,40 @@ test("uses published token prices when only separate native output pricing is mi
       completionUsdPerToken: "0.00000097",
     },
     missingFields: ["native_output_pricing"],
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "openrouter",
+        upstreamProvider: "openrouter",
+        model: "openrouter/mixed-modality-priced-text",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "0.61",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://example.test",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
   });
   const { client } = snapshotClient([mixedModality]);
 
@@ -789,4 +959,124 @@ test("registers a read-only resolver with matching structured and JSON output", 
   } finally {
     await client.close();
   }
+});
+
+test("a null price is UNKNOWN and can never win a cheapest-first selection", async () => {
+  const unknownMeasured = liveModel({
+    id: "groq/unknown-measured",
+    isFree: false,
+    freeKind: "paid_or_unknown",
+    pricingState: "published",
+    pricePoints: [
+      {
+        id: "groq:groq/unknown-measured:token_in",
+        amount: "0.000001",
+        unit: "token_in",
+        observed: null,
+        measurement_origin: "catalogue",
+        condition: null,
+        source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" },
+        provenance: "published",
+      },
+      {
+        id: "groq:groq/unknown-measured:token_out",
+        amount: "0.000001",
+        unit: "token_out",
+        observed: null,
+        measurement_origin: "catalogue",
+        condition: null,
+        source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" },
+        provenance: "published",
+      },
+    ],
+    generationCosts: [], // null measured price
+  });
+
+  const pricedMeasured = liveModel({
+    id: "groq/priced-measured",
+    isFree: false,
+    freeKind: "paid_or_unknown",
+    pricingState: "published",
+    pricePoints: [
+      {
+        id: "groq:groq/priced-measured:token_in",
+        amount: "0.000001",
+        unit: "token_in",
+        observed: null,
+        measurement_origin: "catalogue",
+        condition: null,
+        source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" },
+        provenance: "published",
+      },
+      {
+        id: "groq:groq/priced-measured:token_out",
+        amount: "0.000001",
+        unit: "token_out",
+        observed: null,
+        measurement_origin: "catalogue",
+        condition: null,
+        source: { url: "https://catalogue.test/source", readAt: "2026-08-19T06:00:00.000Z" },
+        provenance: "published",
+      },
+    ],
+    generationCosts: [
+      {
+        id: "cost-1",
+        provider: "groq",
+        upstreamProvider: "groq",
+        model: "groq/priced-measured",
+        observedAt: "2026-08-19T06:00:00.000Z",
+        provenanceDate: "2026-08-19T06:00:00.000Z",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenCounts: { input: "100", output: "50", total: "150" },
+        costUsd: "0.00015",
+        costState: "MEASURED",
+        provenance: "MEASURED",
+        measurementSource: "live_provider_read",
+        httpStatus: 200,
+        errorBucket: null,
+        balanceDeltaUsd: null,
+        authoritativeField: "usage.cost",
+        sourceUrl: "https://api.groq.com/openai/v1/chat/completions",
+        latency: {
+          ttftMs: "100",
+          roundTripMs: "200",
+          sustainedThroughputTps: "10",
+          workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+          vantagePoint: "test",
+          tokenBudget: { inputTokens: "100", outputTokens: "50" },
+          n: "1",
+          percentileMethod: "single_observation",
+          observedAt: "2026-08-19T06:00:00.000Z",
+        },
+        note: "test",
+      }
+    ],
+  });
+
+  const { client } = snapshotClient([unknownMeasured, pricedMeasured]);
+
+  const result = await runResolveModel(
+    { intent: "cheapest_capable" },
+    { client },
+  );
+
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+
+  assert.deepEqual(
+    result.resolved.map((row) => row.id),
+    ["groq/priced-measured"],
+  );
+
+  assert.ok(
+    result.excluded.some(
+      (row) => row.id === "groq/unknown-measured" && row.reason === "pricing_not_published"
+    ),
+    "unknown measured price should be excluded for cheapest_capable"
+  );
+
+  assert.equal(result.resolved[0]?.priceState, "priced");
+  assert.equal(result.resolved[0]?.measuredPrice, "0.00015");
 });

@@ -66,6 +66,40 @@ const knownFreeModel = {
   freeKind: "concrete_free" as const,
   outputModalities: ["text"],
   availability: "available" as const,
+  generationCosts: [
+    {
+      id: "cost-1",
+      provider: "openrouter",
+      upstreamProvider: "openrouter",
+      model: "fixture/free-text",
+      observedAt: "2026-08-19T06:00:00.000Z",
+      provenanceDate: "2026-08-19T06:00:00.000Z",
+      workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+      vantagePoint: "test",
+      tokenCounts: { input: "100", output: "50", total: "150" },
+      costUsd: "0",
+      costState: "MEASURED",
+      provenance: "MEASURED",
+      measurementSource: "live_provider_read",
+      httpStatus: 200,
+      errorBucket: null,
+      balanceDeltaUsd: null,
+      authoritativeField: "usage.cost",
+      sourceUrl: "https://example.test",
+      latency: {
+        ttftMs: "100",
+        roundTripMs: "200",
+        sustainedThroughputTps: "10",
+        workload: { name: "test", inputTokens: "100", outputTokens: "50", maxOutputTokens: null },
+        vantagePoint: "test",
+        tokenBudget: { inputTokens: "100", outputTokens: "50" },
+        n: "1",
+        percentileMethod: "single_observation",
+        observedAt: "2026-08-19T06:00:00.000Z",
+      },
+      note: "test",
+    }
+  ],
 };
 
 const unknownModel = {
