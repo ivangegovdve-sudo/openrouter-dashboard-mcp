@@ -399,7 +399,7 @@ test("live normal-branch validation enforces schemas and tool invariants", async
   try {
     const client = createDashboardClient({ baseUrl: fixture.baseUrl });
     const resolverArguments = {
-      intent: "cheapest_capable" as const,
+      intent: "any_available" as const,
       constraints: { free: true, outputModality: "text" },
       fallbackDepth: 3,
       verbose: true,

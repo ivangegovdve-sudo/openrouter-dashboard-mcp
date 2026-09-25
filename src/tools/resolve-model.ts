@@ -13,6 +13,7 @@ import {
   providerIdSchema,
 } from "../dashboard/schemas/live-models.js";
 import { manifestSchema } from "../dashboard/schemas/openrouter.js";
+import { type GenerationCostObservation } from "../generation-cost.js";
 import {
   READ_ONLY_TOOL_ANNOTATIONS,
   safeDashboardError,
@@ -105,6 +106,7 @@ const resolvedModelSchema = z
     id: z.string().min(1),
     rank: z.number().int().positive(),
     basis: z.enum([
+      "measured_generation_cost",
       "usd_per_1m_blended",
       "context_length",
       "throughput_tps",
@@ -116,6 +118,10 @@ const resolvedModelSchema = z
     isFree: z.boolean().nullable(),
     availability: z.literal("available"),
     lastConfirmedAt: z.string().datetime({ offset: true }),
+    priceState: z.enum(["priced", "offered_unpriced", "not_offered", "unknown"]),
+    measuredPrice: z.string().nullable(),
+    priceMeasuredAt: z.string().datetime({ offset: true }).nullable(),
+    priceEvidence: z.string().url().nullable(),
     details: liveModelSchema.optional(),
   })
   .strict();
@@ -544,8 +550,14 @@ function exclusionReasons(
     }
   }
 
-  if (intent === "cheapest_capable" && knownPriceSum(model) === null) {
-    pushReason(reasons, "pricing_not_published");
+  if (intent === "cheapest_capable") {
+    if (knownPriceSum(model) === null) {
+      pushReason(reasons, "pricing_not_published");
+    }
+    const latestCost = latestMeasuredObservation(model);
+    if (!latestCost || latestCost.costUsd === null) {
+      pushReason(reasons, "pricing_not_published");
+    }
   }
   if (intent === "largest_context" && model.contextLength === null) {
     pushReason(reasons, "context_not_published");
@@ -590,10 +602,16 @@ function rankCandidates(
   return [...rows].sort((left, right) => {
     let comparison = 0;
     if (intent === "cheapest_capable") {
-      const leftPrice = knownPriceSum(left);
-      const rightPrice = knownPriceSum(right);
-      if (leftPrice !== null && rightPrice !== null) {
-        comparison = compareExactDecimal(leftPrice, rightPrice);
+      const leftMeasured = latestMeasuredObservation(left)?.costUsd ?? null;
+      const rightMeasured = latestMeasuredObservation(right)?.costUsd ?? null;
+      if (leftMeasured !== null && rightMeasured !== null) {
+        comparison = compareExactDecimal(leftMeasured, rightMeasured);
+      } else {
+        const leftPrice = knownPriceSum(left);
+        const rightPrice = knownPriceSum(right);
+        if (leftPrice !== null && rightPrice !== null) {
+          comparison = compareExactDecimal(leftPrice, rightPrice);
+        }
       }
     } else if (intent === "largest_context") {
       if (left.contextLength !== null && right.contextLength !== null) {
@@ -613,19 +631,43 @@ function rankCandidates(
 }
 
 function resolvedBasis(intent: Intent): z.infer<typeof resolvedModelSchema>["basis"] {
-  if (intent === "cheapest_capable") return "usd_per_1m_blended";
+  if (intent === "cheapest_capable") return "measured_generation_cost";
   if (intent === "largest_context") return "context_length";
   if (intent === "fastest_available") return "throughput_tps";
   return "provider_order_then_id";
 }
 
 function resolvedValue(model: LiveModel, intent: Intent): string | null {
-  if (intent === "cheapest_capable") return blendedUsdPerMillion(model);
+  if (intent === "cheapest_capable") {
+    const latestCost = latestMeasuredObservation(model);
+    return latestCost ? latestCost.costUsd : blendedUsdPerMillion(model);
+  }
   if (intent === "largest_context") return model.contextLength;
   if (intent === "fastest_available") {
     return model.performance?.throughputTps ?? null;
   }
   return null;
+}
+
+
+function latestMeasuredObservation(model: LiveModel): GenerationCostObservation | null {
+  const values = model.generationCosts;
+  if (!values || values.length === 0) return null;
+  const measured = values.filter((item) => item.costState === "MEASURED" && item.costUsd !== null);
+  if (measured.length === 0) return null;
+  return measured.sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt))[0] ?? null;
+}
+
+function determinePriceState(model: LiveModel): "priced" | "offered_unpriced" | "not_offered" | "unknown" {
+  if (model.availability === "disappeared") {
+    return "not_offered";
+  }
+  if (model.pricingState === "published") {
+    return "priced";
+  } else if (model.pricingState === "not_published") {
+    return "offered_unpriced";
+  }
+  return "unknown";
 }
 
 function measurementFor(
@@ -737,7 +779,9 @@ export async function runResolveModel(
       .map(([, row]) => row);
     const ranked = rankCandidates(eligible, input.intent, input.constraints);
     const selected = ranked.slice(0, input.fallbackDepth);
-    const resolved = selected.map((model, index) => ({
+    const resolved = selected.map((model, index) => {
+      const latestCost = latestMeasuredObservation(model);
+      return {
       provider: model.provider,
       id: model.id,
       rank: index + 1,
@@ -748,8 +792,12 @@ export async function runResolveModel(
       isFree: model.isFree,
       availability: "available" as const,
       lastConfirmedAt: model.lastConfirmedAt,
+      priceState: determinePriceState(model),
+      measuredPrice: latestCost?.costUsd ?? null,
+      priceMeasuredAt: latestCost?.observedAt ?? null,
+      priceEvidence: latestCost?.sourceUrl ?? null,
       ...(input.verbose ? { details: model } : {}),
-    }));
+    };});
     const unsatisfiable = resolved.length === 0;
 
     const warnings = [
