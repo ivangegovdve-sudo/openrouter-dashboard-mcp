@@ -45,7 +45,11 @@ jobs:
   # UNPRIVILEGED. Runs all repository and dependency code. Cannot mint a token.
   # ---------------------------------------------------------------------------
   verify:
-    runs-on: ubuntu-latest
+    # PRIVATE repo: GitHub never allocates a hosted runner, so this job
+    # completed in ~2s with ZERO STEPS and no log -- indistinguishable
+    # from a failing test. kvm2-openrouter-dashboard-mcp-linux is
+    # registered here and online; Linux keeps the publish path unchanged.
+    runs-on: [self-hosted, Linux, X64, kvm2]
     permissions:
       contents: read
     outputs:
@@ -103,7 +107,11 @@ jobs:
   # ---------------------------------------------------------------------------
   publish:
     needs: verify
-    runs-on: ubuntu-latest
+    # PRIVATE repo: GitHub never allocates a hosted runner, so this job
+    # completed in ~2s with ZERO STEPS and no log -- indistinguishable
+    # from a failing test. kvm2-openrouter-dashboard-mcp-linux is
+    # registered here and online; Linux keeps the publish path unchanged.
+    runs-on: [self-hosted, Linux, X64, kvm2]
     permissions:
       contents: read
       id-token: write
