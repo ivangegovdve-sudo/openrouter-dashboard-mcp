@@ -259,6 +259,9 @@ test("Sail rows are priced only from the digest-verified document and carry meas
 
   const stale = await collect(Buffer.from("a repriced document"));
   assert.equal(stale.providers[0]?.requestParameters.pricingDigest, "stale");
+  assert.equal(stale.providers[0]?.status, "partial");
+  assert.equal(stale.providers[0]?.error, "PRICING_STALE");
+  assert.equal(verified.providers[0]?.status, "available");
   assert.ok(stale.models.every(model => model.pricePoints.length === 0 && model.pricingState === "unknown"));
   assert.match(stale.models[0]?.pricingNote ?? "", /PRICES ARE STALE/);
 });

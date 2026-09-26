@@ -509,7 +509,13 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
                 ? sailModel(row, sailPricing, sourceUrl, observedAt, index)
                 : genericModel(provider, row, sourceUrl, observedAt, index))
         .filter((model): model is CatalogueModel => model !== null);
-      return { provider: providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable" } : {}) }), models };
+      const status = providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable" } : {}) });
+      // Identities without their only price source are a degraded answer, not a
+      // complete one: a Sail-only catalogue must not report ok while quoting nothing.
+      if (provider === "sail" && sailPricing?.state !== "verified") {
+        return { provider: catalogueProviderSchema.parse({ ...status, status: "partial", error: sailPricing ? "PRICING_STALE" : "PRICING_UNAVAILABLE" }), models };
+      }
+      return { provider: status, models };
     } catch (error) {
       const code = error instanceof SourceError ? error.code : "SOURCE_FETCH_FAILED";
       return { provider: emptyProvider(provider, sourceUrl, observedAt, code), models: [] };
