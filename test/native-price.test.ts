@@ -355,3 +355,21 @@ test("an unreadable OpenRouter leaves the Nous comparison unknown, never assumed
   assert.equal(result.models[0]?.resale?.versusOpenRouter, "unknown");
   assert.equal(result.models[0]?.resale?.openRouterPrice, null);
 });
+
+test("a failed read of Sail's models page is reported as unavailable, not as no context published", async () => {
+  const fs = await import("node:fs");
+  const doc = fs.readFileSync("sail-pricing.md");
+  const result = await collectNativePriceCatalogue({
+    providers: ["sail"],
+    apiKeys: { sail: "test-sail-key" },
+    fetchImpl: async (input) => String(input) === NATIVE_PRICE_SOURCES.sail
+      ? Response.json({ object: "list", data: [{ id: "zai-org/GLM-5.3" }] })
+      : String(input).endsWith("/models.md") ? new Response("down", { status: 503 }) : new Response(new Uint8Array(doc)),
+  });
+  const params = result.providers[0]?.requestParameters;
+  assert.equal(params?.contextSourceState, "unavailable");
+  assert.equal(params?.contextSourceError, "HTTP_503");
+  assert.equal(result.models[0]?.contextLengthLabel, undefined);
+  // Prices were read independently and are unaffected.
+  assert.equal(params?.pricingDigest, "verified");
+});

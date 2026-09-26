@@ -377,13 +377,16 @@ export function parseSailContextLabels(doc: string, ids: ReadonlySet<string>): M
   return labels;
 }
 
-async function fetchSailContextLabels(fetchImpl: typeof fetch, timeoutMs: number, ids: ReadonlySet<string>): Promise<Map<string, string>> {
+type SailContext = { state: "read" | "unavailable"; labels: Map<string, string>; error?: string };
+
+/** A failed read is reported as unavailable, never as "no context published". */
+async function fetchSailContextLabels(fetchImpl: typeof fetch, timeoutMs: number, ids: ReadonlySet<string>): Promise<SailContext> {
   try {
     const response = await fetchImpl(SAIL_MODELS_URL, { headers: { "User-Agent": "open-dashboard-mcp native-price catalogue/1.4" }, signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
-    if (!response.ok) return new Map();
-    return parseSailContextLabels(await response.text(), ids);
-  } catch {
-    return new Map();
+    if (!response.ok) return { state: "unavailable", labels: new Map(), error: `HTTP_${response.status}` };
+    return { state: "read", labels: parseSailContextLabels(await response.text(), ids) };
+  } catch (error) {
+    return { state: "unavailable", labels: new Map(), error: error instanceof Error && error.name === "TimeoutError" ? "SOURCE_TIMEOUT" : "SOURCE_FETCH_FAILED" };
   }
 }
 
@@ -603,7 +606,7 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
       const rows = rowsFor(provider, payload);
       if (!rows.length) throw new SourceError("SOURCE_SHAPE_CHANGED");
       const sailPricing = provider === "sail" ? await fetchSailPricing(fetchImpl, timeoutMs, observedAt) : null;
-      const sailContext = provider === "sail" ? await fetchSailContextLabels(fetchImpl, timeoutMs, new Set(rows.map((row) => modelId(row)).filter((id): id is string => Boolean(id)))) : new Map<string, string>();
+      const sailContext: SailContext | null = provider === "sail" ? await fetchSailContextLabels(fetchImpl, timeoutMs, new Set(rows.map((row) => modelId(row)).filter((id): id is string => Boolean(id)))) : null;
       const models = rows.map((row, index) => provider === "qwencloud"
         ? qwenModel(row, sourceUrl, observedAt, index)
         : provider === "novita"
@@ -613,10 +616,10 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
             : provider === "ionet"
               ? ionetModel(row, sourceUrl, observedAt, index)
               : provider === "sail"
-                ? sailModel(row, sailPricing, sourceUrl, observedAt, index, sailContext)
+                ? sailModel(row, sailPricing, sourceUrl, observedAt, index, sailContext?.labels)
                 : genericModel(provider, row, sourceUrl, observedAt, index))
         .filter((model): model is CatalogueModel => model !== null);
-      const status = providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable" } : {}) });
+      const status = providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable", contextSource: SAIL_MODELS_URL, contextSourceState: sailContext?.state ?? "unavailable", contextLabels: sailContext?.labels.size ?? 0, ...(sailContext?.error ? { contextSourceError: sailContext.error } : {}) } : {}) });
       // Identities without their only price source are a degraded answer, not a
       // complete one: a Sail-only catalogue must not report ok while quoting nothing.
       if (provider === "sail" && sailPricing?.state !== "verified") {
