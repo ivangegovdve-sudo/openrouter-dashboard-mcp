@@ -1,7 +1,13 @@
 name: Verify package and generated documentation
 on:
   push:
+    branches:
+      - main
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 concurrency:
   group: verify-${{ github.ref }}
@@ -16,10 +22,30 @@ jobs:
     # Repository-local runner; all labels are measured from GitHub's runner API.
     runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+      - name: Check out repository
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $remote = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY.git"
+          git config --global --add safe.directory '*'
+          git init .
+          git config core.longpaths true
+          git remote get-url origin *> $null
+          if ($LASTEXITCODE -eq 0) {
+            git remote set-url origin $remote
+            git reset --hard
+            git clean -ffdx
+            if ($LASTEXITCODE -ne 0) { throw "git clean failed with exit code $LASTEXITCODE" }
+          } else {
+            git remote add origin $remote
+          }
+          $basic = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GITHUB_TOKEN"))
+          git -c "http.extraheader=AUTHORIZATION: basic $basic" fetch --depth=1 origin $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "git fetch failed with exit code $LASTEXITCODE" }
+          git checkout --force --detach FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "git checkout failed with exit code $LASTEXITCODE" }
       - name: Verify pinned toolchain
         shell: pwsh
         run: |
