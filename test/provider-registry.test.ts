@@ -18,12 +18,14 @@ test("covers every provider this build normalises", () => {
   assert.deepEqual(
     [...PROVIDER_IDS].sort(),
     [
+      "akashml",
       "cerebras",
       "chutes",
       "crazyrouter",
       "deepinfra",
       "fal",
       "groq",
+      "ionet",
       "nous",
       "novita",
       "openrouter",

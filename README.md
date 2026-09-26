@@ -1,12 +1,53 @@
 # Open Dashboard MCP
 
-A read-only model router for typed decision layers such as System One: it supplies live model IDs and price provenance so a selector can make evidence-backed choices.
+Ask an agent "which provider is cheapest for this model right now?" and get an answer with a
+source and a timestamp on every number — or a plain "unknown" where nobody publishes one.
 
-Read-only MCP access to live model catalogues, published media generation models and prices, and daily trending GitHub repos.
-
-open-dashboard-mcp gives an agent live model IDs and published prices across OpenRouter, Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, Crazyrouter, fal, and WaveSpeedAI. The catalogue covers text, image, video, and audio, and each figure carries its source and check date so a published rate is not mistaken for measured request cost.
+open-dashboard-mcp is the evidence layer for a model selector, such as a typed decision layer
+like System One. It gives an agent live model IDs and published prices across OpenRouter,
+Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes,
+Crazyrouter, fal, WaveSpeedAI, AkashML and io.net, plus daily trending GitHub repos. The
+catalogue covers text, image, video, and audio, and each figure carries its source and check
+date so a published rate is not mistaken for measured request cost. It never sends inference
+traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
+
+## New in 1.2.0: AkashML, io.net, and the empty-answer trap
+
+- **AkashML** (Akash Network's managed inference) is priced **per model** from its own
+  `/models`. Its six models span about 44x on output price — `openai/gpt-oss-20b` at
+  $0.10/M to `zai-org/GLM-5.3` at $4.40/M — so the homepage line "starting from $0.15/M
+  tokens" describes none of them. Set `AKASHML_API_KEY` to include it; without a key it
+  reports `KEY_NOT_CONFIGURED` rather than an empty or free catalogue.
+- **io.net** (IO Intelligence) publishes per-token prices for 37 models on a public `/models`,
+  no key needed. 31 of the 37 need an access tier above the free one, so a listed price is not
+  proof a free key can call the model; `min_access_tier` is kept on every row.
+- **`responseShape` on catalogue rows.** A reasoning model writes its thinking to
+  `message.reasoning_content` and its answer to `message.content`. With a small
+  `max_tokens` the whole budget can go to thinking: HTTP 200, every token billed, and
+  `content` is an empty string. On AkashML (measured 2026-09-25) five of six models did this
+  at `max_tokens: 16`, and GLM-5.3 spent a 6,000-token budget on reasoning alone. The same
+  model had answered a one-word prompt in 3 tokens earlier, so one clean probe proves
+  nothing. Each row reports `reasoningAdvertised` (the provider's flag), `reasoningField`,
+  `emptyContentObserved` (`observed` / `not_observed` / `unknown`) and the dated
+  observations behind it. A model this build never called is `unknown`, never "safe".
+
+Same six models, published rates per million tokens (input / output), read 2026-09-25/26:
+
+| Model | AkashML | io.net |
+|---|---|---|
+| `openai/gpt-oss-120b` | $0.03 / $0.17 | $0.178 / $0.68 (tier 2) |
+| `zai-org/GLM-5.3` | $1.30 / $4.40 | $1.358 / $4.268 (tier 2) |
+| `Qwen/Qwen3.8-27B` | $0.25 / $2.20 | $0.345 / $2.69 (tier 2) |
+| `Qwen/Qwen3.6-35B-A3B` | $0.10 / $0.90 | $0.1672 / $1.107 (tier 2) |
+| `openai/gpt-oss-20b` | $0.02 / $0.10 | $0.057 / $0.196 (tier 1) |
+| `meta-llama/Llama-3.3-70B-Instruct` | $0.20 / $0.52 | $0.5466 / $1.023 (tier 1) |
+
+AkashML is cheaper on eleven of the twelve legs; io.net is cheaper on GLM-5.3 output. These are
+published catalogue rates, not measured charges: neither provider returns a per-call cost
+field, so generation cost for both stays `UNKNOWN`. Call `dashboard_catalogue` for the live
+figures rather than trusting this table's date.
 
 ## Evidence for decision layers
 
@@ -44,7 +85,7 @@ Claude Code starts the server when it needs it and connects over MCP.
 
 ### Installing only the tools you want
 
-All seventeen tools are enabled by default. To install a subset, set
+All eighteen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
@@ -97,7 +138,7 @@ Without `@version`, npx resolves the latest published release. That is the point
 the catalogue this package reports on changes underneath you, so an unpinned
 command keeps reading the current one instead of freezing to a snapshot.
 
-Requires Node.js 20 or newer. No API key is needed for any tool except the optional key inventory.
+Requires Node.js 20 or newer. No API key is needed to start. Keys only widen what the catalogue can see: `AKASHML_API_KEY`, `GROQ_API_KEY` and `QWENCLOUD_API_KEY` add those providers' native catalogues, and a missing key is reported as `KEY_NOT_CONFIGURED`, never as an empty or free result. The optional key inventory has its own opt-in path.
 
 ### Where the data comes from
 
@@ -145,15 +186,18 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter**. Version **1.1.7** registers **13 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.2.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
 **What you actually get:**
 
-- **One catalogue across thirteen named providers** — OpenRouter, Groq, Cerebras, Sail,
-  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal and
-  Crazyrouter.
+- **One catalogue across fifteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal,
+  Crazyrouter, AkashML and io.net.
+- **Which field a model answers in.** Catalogue rows carry `responseShape`, so a selector can
+  see that a reasoning model has been observed returning an empty `content` before it
+  recommends one.
 - **Prices you can compare, or a refusal.** Two prices are compared only when they share a
   unit *and* a condition. Otherwise you get `not_comparable` and the reason — never a
   number that looks right and is not.
@@ -168,9 +212,9 @@ Read-only MCP access to public model and GitHub evidence, covering **OpenRouter,
 - **No credentials needed to start.** It reads public endpoints by default; keys only
   widen what it can see.
 
-**What it is not:** not a proxy, not a router, not a billing dashboard. It answers
-questions about models and prices. It never sends inference traffic, and it never writes
-anything anywhere.
+**What it is not:** not an inference proxy and not a billing dashboard. It supplies the
+evidence a router or selector decides on; it never forwards inference traffic, and it never
+writes anything anywhere.
 
 ## Tools
 
@@ -217,7 +261,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.1.7**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.2.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -234,6 +278,8 @@ Generated from the package registry: **13 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="wavespeed">WaveSpeedAI</span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="fal">fal</span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="crazyrouter">Crazyrouter</span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
+| <span data-provider-id="akashml">AkashML</span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="ionet">io.net</span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
 
 ### Provider pitches and structured caveats
 
@@ -316,6 +362,18 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 > “Same OpenAI-style workflow. More models. Lower pricing. Easier experimentation.” — [Crazyrouter](https://crazyrouter.com/tools/), observed 2026-09-08.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://crazyrouter.com/tools/); checked 2026-09-08.
+
+**AkashML**
+
+> “competitive pricing starting from $0.15/M tokens” — [AkashML homepage pricing claim, contradicted by its own /models rates](https://akashml.com/), observed 2026-09-26.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://akashml.com/); checked 2026-09-26.
+
+**io.net**
+
+> “Free inference platform powered by io.net's decentralized GPU network.” — [io.net IO Intelligence page description](https://io.net/intelligence), observed 2026-09-26.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://io.net/intelligence); checked 2026-09-26.
 
 <!-- providers:end -->
 
