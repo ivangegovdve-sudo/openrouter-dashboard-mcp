@@ -174,3 +174,47 @@ test("io.net JSON-number prices convert exactly, including exponent notation", a
   assert.equal(model?.responseShape?.emptyContentObserved, "unknown");
   assert.equal(model?.responseShape?.answerField, "unknown");
 });
+
+test("io.net reasoning models carry measured empty answers and an answer-budget range, not a single floor", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["ionet"],
+    now: () => new Date(observedAt),
+    fetchImpl: async () => Response.json({ object: "list", data: [
+      { id: "zai-org/GLM-5.3-Flash", output_modalities: ["text"], supports_reasoning: true, input_token_price: 2.1e-7, output_token_price: 7e-7 },
+      { id: "deepseek-ai/DeepSeek-V4.1-Flash", output_modalities: ["text"], supports_reasoning: true, input_token_price: 2.8e-7, output_token_price: 0.00000109 },
+    ] }),
+  });
+  const glm = result.models.find(model => model.id === "zai-org/GLM-5.3-Flash")?.responseShape;
+  const deepseek = result.models.find(model => model.id === "deepseek-ai/DeepSeek-V4.1-Flash")?.responseShape;
+  assert.equal(glm?.emptyContentObserved, "observed");
+  assert.equal(glm?.reasoningField, "message.reasoning_content");
+  assert.equal(deepseek?.emptyContentObserved, "observed");
+  // The budget a one-word answer needed differs by model AND by call.
+  assert.equal(glm?.answerCompletionTokens?.min, "95");
+  assert.equal(glm?.answerCompletionTokens?.max, "218");
+  assert.equal(glm?.answerCompletionTokens?.samples, 3);
+  assert.ok(Number(deepseek?.answerCompletionTokens?.max) < Number(glm?.answerCompletionTokens?.min));
+});
+
+test("a Cloudflare 1010 on a keyed catalogue is an edge block, not a rejected credential", async () => {
+  const edge = await collectNativePriceCatalogue({
+    providers: ["akashml"],
+    apiKeys: { akashml: "valid-key" },
+    fetchImpl: async () => new Response("error code: 1010", { status: 403, headers: { server: "cloudflare", "cf-ray": "abc-SOF" } }),
+  });
+  assert.equal(edge.providers[0]?.error, "EDGE_BLOCKED");
+  const rejected = await collectNativePriceCatalogue({
+    providers: ["akashml"],
+    apiKeys: { akashml: "dead-key" },
+    fetchImpl: async () => new Response('{"detail":"Invalid API Key"}', { status: 401, headers: { server: "cloudflare", "cf-ray": "abc-SOF" } }),
+  });
+  assert.equal(rejected.providers[0]?.error, "PROVIDER_REJECTED");
+});
+
+test("a public catalogue's 401/403 is an HTTP error, never a rejected credential", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["ionet"],
+    fetchImpl: async () => new Response("forbidden", { status: 403, headers: { server: "cloudflare" } }),
+  });
+  assert.equal(result.providers[0]?.error, "HTTP_ERROR");
+});

@@ -4,6 +4,7 @@ import { catalogueModelSchema, catalogueProviderSchema, type CatalogueModel, typ
 import { resolveProviderPriceCoverage } from "./price-coverage.js";
 import type { PricePoint, PriceUnit } from "../contract.js";
 import { responseShapeFor } from "../providers/response-shape.js";
+import { classifyProviderBlock } from "../providers/registry.js";
 
 /** Providers with a native, machine-readable price source not covered by the media adapters. */
 export const NATIVE_PRICE_PROVIDER_IDS = [
@@ -32,6 +33,10 @@ export const NATIVE_PRICE_SOURCES: Record<NativePriceProviderId, string> = {
 type SourceErrorCode =
   | "SOURCE_TIMEOUT"
   | "HTTP_ERROR"
+  /** A Cloudflare edge rejected the request (e.g. error 1010); says nothing about the key. */
+  | "EDGE_BLOCKED"
+  /** The provider itself rejected the credential. */
+  | "PROVIDER_REJECTED"
   | "SOURCE_SHAPE_CHANGED"
   | "PRICE_SHAPE_CHANGED"
   | "KEY_NOT_CONFIGURED"
@@ -381,6 +386,12 @@ async function fetchJson(fetchImpl: typeof fetch, url: string, timeoutMs: number
       signal: controller.signal,
       redirect: "error",
     });
+    // Only a request that carried a key can have its credential rejected; a
+    // public catalogue's 401/403 stays a plain HTTP error (reviewer finding, #49).
+    if (apiKey && (response.status === 401 || response.status === 403)) {
+      const body = (await response.text()).slice(0, 4096);
+      throw new SourceError(classifyProviderBlock(response.status, body, response.headers) === "edge_blocked" ? "EDGE_BLOCKED" : "PROVIDER_REJECTED");
+    }
     if (!response.ok) throw new SourceError("HTTP_ERROR");
     const text = await response.text();
     if (text.length > 16 * 1024 * 1024) throw new SourceError("SOURCE_SHAPE_CHANGED");

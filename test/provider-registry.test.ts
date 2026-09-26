@@ -155,3 +155,12 @@ test("tells a Cloudflare edge block apart from a credential rejection", () => {
   assert.equal(classifyProviderBlock(500, "error code: 1010 Cloudflare"), null);
   assert.equal(classifyProviderBlock(200, "fine"), null);
 });
+
+test("a bare Cloudflare error code counts as an edge block only when the edge headers say Cloudflare", () => {
+  const cloudflare = new Headers({ server: "cloudflare", "cf-ray": "a41071b1f85af899-SOF" });
+  assert.equal(classifyProviderBlock(403, "error code: 1010", cloudflare), "edge_blocked");
+  // A provider behind Cloudflare still owns its own auth errors.
+  assert.equal(classifyProviderBlock(401, '{"detail":"Invalid API Key"}', cloudflare), "provider_rejected");
+  // Without the headers the bare code stays a rejection, as before.
+  assert.equal(classifyProviderBlock(403, "error code: 1010"), "provider_rejected");
+});

@@ -46,6 +46,19 @@ export const responseShapeSchema = z.object({
   /** Whether a billed 200 response with an empty answer has been observed for this model. */
   emptyContentObserved: z.enum(["observed", "not_observed", "unknown"]),
   observations: z.array(responseShapeObservationSchema),
+  /**
+   * Completion tokens spent on short-answer calls that finished with an answer:
+   * the budget the model actually needed, as an observed range. It varies per
+   * call -- io.net GLM-5.3-Flash used 95, 218 and 217 on identical calls -- so
+   * set max_tokens above max, with headroom, never at one global floor. Null
+   * when no such call has been observed.
+   */
+  answerCompletionTokens: z.object({
+    min: integerStringSchema,
+    max: integerStringSchema,
+    samples: z.number().int().positive(),
+    workload: z.literal("short-answer"),
+  }).strict().nullable(),
   note: z.string().min(1),
 }).strict();
 export type ResponseShape = z.infer<typeof responseShapeSchema>;
@@ -83,9 +96,47 @@ const AKASHML_OBSERVATIONS: Record<string, ResponseShapeObservation[]> = {
   ],
 };
 
+/** Measured 2026-09-26 with a key; every message carried content, reasoning_content and refusal. */
+const IONET_OBSERVATIONS: Record<string, ResponseShapeObservation[]> = {
+  "zai-org/GLM-5.3-Flash": [
+    { observedAt: "2026-09-26T07:10:07.017Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 0, reasoningChars: 72, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:10:17.833Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 425, completionTokens: "95" },
+    { observedAt: "2026-09-26T07:10:26.874Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 1060, completionTokens: "218" },
+    { observedAt: "2026-09-26T07:10:31.576Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 1010, completionTokens: "217" },
+    { observedAt: "2026-09-26T07:12:21.890Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 0, reasoningChars: 69, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:12:25.894Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 0, reasoningChars: 73, completionTokens: "16" },
+  ],
+  "deepseek-ai/DeepSeek-V4.1-Flash": [
+    { observedAt: "2026-09-26T07:10:08.606Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 0, reasoningChars: 65, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:10:25.510Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 136, completionTokens: "35" },
+    { observedAt: "2026-09-26T07:10:30.127Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 51, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:10:39.477Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 124, completionTokens: "32" },
+    { observedAt: "2026-09-26T07:12:22.642Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 0, reasoningChars: 75, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:12:26.744Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 5, reasoningChars: 52, completionTokens: "16" },
+  ],
+  "Qwen/Qwen3.8-27B": [
+    { observedAt: "2026-09-26T07:10:09.251Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 6, reasoningChars: 53, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:10:26.085Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 88, completionTokens: "25" },
+    { observedAt: "2026-09-26T07:10:30.637Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 93, completionTokens: "26" },
+    { observedAt: "2026-09-26T07:10:40.115Z", workload: "short-answer", maxTokens: "256", finishReason: "stop", contentChars: 5, reasoningChars: 97, completionTokens: "27" },
+    { observedAt: "2026-09-26T07:12:23.440Z", workload: "short-answer", maxTokens: "16", finishReason: "length", contentChars: 6, reasoningChars: 53, completionTokens: "16" },
+    { observedAt: "2026-09-26T07:12:27.274Z", workload: "short-answer", maxTokens: "16", finishReason: "stop", contentChars: 5, reasoningChars: 37, completionTokens: "13" },
+  ],
+};
+
 const OBSERVATIONS: Record<string, Record<string, ResponseShapeObservation[]>> = {
   akashml: AKASHML_OBSERVATIONS,
+  ionet: IONET_OBSERVATIONS,
 };
+
+function answerCompletionTokens(observations: ResponseShapeObservation[]): ResponseShape["answerCompletionTokens"] {
+  const answered = observations
+    .filter((item) => item.workload === "short-answer" && item.finishReason === "stop" && item.contentChars > 0)
+    .map((item) => BigInt(item.completionTokens))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  if (answered.length === 0) return null;
+  return { min: String(answered[0]), max: String(answered[answered.length - 1]), samples: answered.length, workload: "short-answer" };
+}
 
 /**
  * The response shape for one catalogue row. `reasoningAdvertised` comes from
@@ -100,6 +151,7 @@ export function responseShapeFor(provider: string, modelId: string, reasoningAdv
       answerField: "unknown",
       emptyContentObserved: "unknown",
       observations: [],
+      answerCompletionTokens: null,
       note: reasoningAdvertised
         ? "The provider advertises reasoning for this model, and no call has been observed by this build. A reasoning model can spend a small max_tokens budget entirely on reasoning and return an empty message.content while billing every token; size max_tokens with headroom and check content, not the HTTP status."
         : "No call to this model has been observed by this build, so where it writes its answer is unknown.",
@@ -107,17 +159,16 @@ export function responseShapeFor(provider: string, modelId: string, reasoningAdv
   }
   const reasoned = observations.some((item) => item.reasoningChars > 0);
   const empty = observations.some((item) => item.contentChars === 0);
-  const reasoningTokensForShort = observations
-    .filter((item) => item.workload === "short-answer" && item.contentChars > 0)
-    .map((item) => item.completionTokens);
+  const budget = answerCompletionTokens(observations);
   return responseShapeSchema.parse({
     reasoningAdvertised,
     reasoningField: reasoned ? "message.reasoning_content" : null,
     answerField: observations.some((item) => item.contentChars > 0) ? "message.content" : "unknown",
     emptyContentObserved: empty ? "observed" : "not_observed",
     observations,
+    answerCompletionTokens: budget,
     note: empty
-      ? `Observed returning HTTP 200 with an empty message.content while billing tokens: reasoning text went to message.reasoning_content and the max_tokens budget ran out before an answer. A one-word answer took ${reasoningTokensForShort.join(" and ")} completion tokens when it did arrive. Give reasoning models generous max_tokens and treat empty content as a failed call.`
+      ? `Observed returning HTTP 200 with an empty message.content while billing tokens: reasoning text went to message.reasoning_content and the max_tokens budget ran out before an answer. ${budget ? `A one-word answer took ${budget.min} to ${budget.max} completion tokens across ${budget.samples} observed calls when it did arrive.` : "No observed call produced an answer."} Give reasoning models generous max_tokens and treat empty content as a failed call.`
       : reasoned
         ? "Reasoning text was observed in message.reasoning_content alongside a non-empty answer in every observed call. That is a small sample, not a guarantee."
         : "Every observed call answered in message.content with no reasoning text. That is a small sample, not a guarantee.",
