@@ -41,7 +41,8 @@ export const responseShapeSchema = z.object({
   reasoningAdvertised: z.boolean().nullable(),
   /** The field reasoning text was observed in; null = observed calls carried none; "unknown" = never called. */
   reasoningField: z.union([z.literal("message.reasoning_content"), z.literal("unknown")]).nullable(),
-  answerField: z.literal("message.content"),
+  /** "unknown" until a call has been observed returning a non-empty answer there. */
+  answerField: z.enum(["message.content", "unknown"]),
   /** Whether a billed 200 response with an empty answer has been observed for this model. */
   emptyContentObserved: z.enum(["observed", "not_observed", "unknown"]),
   observations: z.array(responseShapeObservationSchema),
@@ -96,7 +97,7 @@ export function responseShapeFor(provider: string, modelId: string, reasoningAdv
     return responseShapeSchema.parse({
       reasoningAdvertised,
       reasoningField: "unknown",
-      answerField: "message.content",
+      answerField: "unknown",
       emptyContentObserved: "unknown",
       observations: [],
       note: reasoningAdvertised
@@ -112,7 +113,7 @@ export function responseShapeFor(provider: string, modelId: string, reasoningAdv
   return responseShapeSchema.parse({
     reasoningAdvertised,
     reasoningField: reasoned ? "message.reasoning_content" : null,
-    answerField: "message.content",
+    answerField: observations.some((item) => item.contentChars > 0) ? "message.content" : "unknown",
     emptyContentObserved: empty ? "observed" : "not_observed",
     observations,
     note: empty

@@ -135,6 +135,8 @@ test("AkashML is priced per model from its keyed catalogue and carries observed 
   // A model this build never called is unknown, not safe.
   assert.equal(fresh?.responseShape?.emptyContentObserved, "unknown");
   assert.equal(fresh?.responseShape?.reasoningField, "unknown");
+  assert.equal(fresh?.responseShape?.answerField, "unknown");
+  assert.equal(glm?.responseShape?.answerField, "message.content");
 });
 
 test("AkashML without a key is unavailable, not an empty or free catalogue", async () => {
@@ -170,4 +172,5 @@ test("io.net JSON-number prices convert exactly, including exponent notation", a
   assert.equal((model?.nativePricing as { min_access_tier?: number }).min_access_tier, 2);
   assert.equal(model?.responseShape?.reasoningAdvertised, true);
   assert.equal(model?.responseShape?.emptyContentObserved, "unknown");
+  assert.equal(model?.responseShape?.answerField, "unknown");
 });
