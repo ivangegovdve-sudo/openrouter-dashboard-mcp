@@ -3,6 +3,7 @@ import { mediaKind, record, scalar, type NativeRecord } from "./normalize.js";
 import { catalogueModelSchema, catalogueProviderSchema, type CatalogueModel, type CatalogueProvider, type MediaKind } from "./schemas.js";
 import { resolveProviderPriceCoverage } from "./price-coverage.js";
 import type { PricePoint, PriceUnit } from "../contract.js";
+import { responseShapeFor } from "../providers/response-shape.js";
 
 /** Providers with a native, machine-readable price source not covered by the media adapters. */
 export const NATIVE_PRICE_PROVIDER_IDS = [
@@ -12,6 +13,8 @@ export const NATIVE_PRICE_PROVIDER_IDS = [
   "qwencloud",
   "novita",
   "sambanova",
+  "akashml",
+  "ionet",
 ] as const;
 export type NativePriceProviderId = (typeof NATIVE_PRICE_PROVIDER_IDS)[number];
 
@@ -22,6 +25,8 @@ export const NATIVE_PRICE_SOURCES: Record<NativePriceProviderId, string> = {
   qwencloud: "https://dashscope-intl.aliyuncs.com/api/v1/models",
   novita: "https://api.novita.ai/v3/openai/models",
   sambanova: "https://api.sambanova.ai/v1/models",
+  akashml: "https://api.akashml.com/v1/models",
+  ionet: "https://api.intelligence.io.solutions/api/v1/models",
 };
 
 type SourceErrorCode =
@@ -249,6 +254,88 @@ function novitaModel(row: NativeRecord, sourceUrl: string, observedAt: string, s
   });
 }
 
+function textKind(row: NativeRecord): MediaKind {
+  const outputs = Array.isArray(row.output_modalities) ? row.output_modalities : [];
+  if (outputs.includes("image")) return "image";
+  if (outputs.includes("text")) return "text";
+  return "unknown";
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+/**
+ * AkashML publishes a USD-per-token `pricing` object per model on its keyed
+ * /models. Rates differ ~44x across its six models (measured 2026-09-25), so it
+ * is modelled per model, never as one provider rate.
+ */
+function akashmlModel(row: NativeRecord, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel | null {
+  const id = modelId(row);
+  if (!id) return null;
+  const pricing = record(row.pricing);
+  const points = tokenPricePoints("akashml", id, pricing, sourceUrl, observedAt);
+  const features = Array.isArray(row.supported_features) ? row.supported_features : [];
+  const contextLength = positiveInteger(row.context_length);
+  return catalogueModelSchema.parse({
+    provider: "akashml",
+    id,
+    displayName: scalar(row.name) ?? id,
+    mediaKind: textKind(row),
+    nativeType: "chat-completion",
+    ...(Array.isArray(row.output_modalities) && row.output_modalities.every((item) => typeof item === "string") ? { outputModalities: row.output_modalities } : {}),
+    pricePoints: points,
+    pricingState: points.length > 0 ? "published" : "unknown",
+    pricingNote: points.length > 0
+      ? "AkashML publishes per-model USD-per-token rates on its keyed /models; these are read as published. A single provider-wide rate is not used."
+      : "The AkashML model row carried no comparable price field.",
+    nativePricing: row.pricing ?? null,
+    ...(contextLength ? { contextLength } : {}),
+    responseShape: responseShapeFor("akashml", id, features.includes("reasoning")),
+    provenance: { sourceUrl, observedAt, sourceIndex },
+  });
+}
+
+/**
+ * io.net IO Intelligence publishes per-token prices as JSON numbers
+ * (`input_token_price`, `output_token_price`, `cache_read_token_price`) on a
+ * public /models. Numbers are converted via their decimal text, never floats.
+ */
+function ionetModel(row: NativeRecord, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel | null {
+  const id = modelId(row);
+  if (!id) return null;
+  const points: PricePoint[] = [];
+  for (const [field, unit] of [["input_token_price", "token_in"], ["output_token_price", "token_out"], ["cache_read_token_price", "token_cached"]] as const) {
+    const value = scalar(row[field]);
+    if (value === undefined) continue;
+    const point = pricePoint({ provider: "ionet", modelId: id, leg: field, value, unit, sourceUrl, readAt: observedAt });
+    if (point) points.push(point);
+  }
+  const contextLength = positiveInteger(row.context_window) ?? positiveInteger(row.max_model_len);
+  return catalogueModelSchema.parse({
+    provider: "ionet",
+    id,
+    displayName: scalar(row.name) ?? id,
+    mediaKind: textKind(row),
+    nativeType: "chat-completion",
+    ...(Array.isArray(row.output_modalities) && row.output_modalities.every((item) => typeof item === "string") ? { outputModalities: row.output_modalities } : {}),
+    pricePoints: points,
+    pricingState: points.length > 0 ? "published" : "unknown",
+    pricingNote: points.length > 0
+      ? "io.net publishes per-token USD rates as JSON numbers on its public /models; they are converted exactly from their decimal text."
+      : "The io.net model row carried no comparable price field.",
+    nativePricing: {
+      input_token_price: row.input_token_price ?? null,
+      output_token_price: row.output_token_price ?? null,
+      cache_read_token_price: row.cache_read_token_price ?? null,
+      min_access_tier: row.min_access_tier ?? null,
+    },
+    ...(contextLength ? { contextLength } : {}),
+    responseShape: responseShapeFor("ionet", id, typeof row.supports_reasoning === "boolean" ? row.supports_reasoning : null),
+    provenance: { sourceUrl, observedAt, sourceIndex },
+  });
+}
+
 function rowsFor(provider: NativePriceProviderId, payload: NativeRecord): NativeRecord[] {
   if (provider === "qwencloud") {
     const output = record(payload.output);
@@ -312,8 +399,14 @@ async function fetchJson(fetchImpl: typeof fetch, url: string, timeoutMs: number
 }
 
 function needsKey(provider: NativePriceProviderId): boolean {
-  return provider === "groq" || provider === "qwencloud";
+  return provider === "groq" || provider === "qwencloud" || provider === "akashml";
 }
+
+const KEY_ENV: Partial<Record<NativePriceProviderId, string>> = {
+  groq: "GROQ_API_KEY",
+  qwencloud: "QWENCLOUD_API_KEY",
+  akashml: "AKASHML_API_KEY",
+};
 
 function emptyProvider(provider: NativePriceProviderId, sourceUrl: string, observedAt: string, error: SourceErrorCode): CatalogueProvider {
   const priceCoverage = resolveProviderPriceCoverage({ provider, apiPriceObservation: "unavailable", sourceReachable: false });
@@ -337,7 +430,8 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
   const timeoutMs = Math.min(Math.max(options.timeoutMs ?? 15000, 1), 30000);
   const collections = await Promise.all(providers.map(async (provider) => {
     const sourceUrl = NATIVE_PRICE_SOURCES[provider];
-    const key = options.apiKeys?.[provider] ?? (provider === "groq" ? process.env.GROQ_API_KEY : provider === "qwencloud" ? process.env.QWENCLOUD_API_KEY : undefined);
+    const envName = KEY_ENV[provider];
+    const key = options.apiKeys?.[provider] ?? (envName ? process.env[envName] : undefined);
     if (needsKey(provider) && !key) return { provider: emptyProvider(provider, sourceUrl, observedAt, "KEY_NOT_CONFIGURED"), models: [] };
     try {
       const payload = await fetchJson(fetchImpl, sourceUrl, timeoutMs, key);
@@ -347,7 +441,11 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
         ? qwenModel(row, sourceUrl, observedAt, index)
         : provider === "novita"
           ? novitaModel(row, sourceUrl, observedAt, index)
-          : genericModel(provider, row, sourceUrl, observedAt, index))
+          : provider === "akashml"
+            ? akashmlModel(row, sourceUrl, observedAt, index)
+            : provider === "ionet"
+              ? ionetModel(row, sourceUrl, observedAt, index)
+              : genericModel(provider, row, sourceUrl, observedAt, index))
         .filter((model): model is CatalogueModel => model !== null);
       return { provider: providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json" }), models };
     } catch (error) {

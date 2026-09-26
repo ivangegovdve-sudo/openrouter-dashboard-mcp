@@ -51,6 +51,8 @@ export const providerIdSchema = z.enum([
   "wavespeed",
   "fal",
   "crazyrouter",
+  "akashml",
+  "ionet",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -68,6 +70,8 @@ export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note
   wavespeed: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   fal: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   crazyrouter: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  akashml: { state: "UNKNOWN", note: "AkashML's chat response usage object carries token counts and no cost field (measured 2026-09-25); per-call charges appear only in its web console, which this integration does not read." },
+  ionet: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
 };
 
 export const publicationSchema = z.enum([
@@ -425,6 +429,51 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "Crazyrouter is a multi-provider aggregator. With CRAZYROUTER_API_KEY the catalogue contains every model visible to that key; without it only public pricing identities are observed and the platform denominator is unknown. The separate comparison tool joins exact model aliases using explicit native author evidence to OpenRouter quotes and available dated direct-provider references. The exact GPT-4o, GPT-4o mini and GPT-4.1 default-group figures that equal 0.65x OpenAI list prices are marked derived with their source and observed multiplier, and are excluded from competition claims. Public default-group rates do not establish the caller's billing group or settled charges. Tiered or unsupported native billing remains unpriced for comparison. The vendor's dated discount claim is assessed against collected independently comparable quotes rather than assumed true; immutable model snapshot equivalence and account spend are not established.",
+  },
+  akashml: {
+    id: "akashml",
+    ...providerEvidence("akashml"),
+    displayName: "AkashML",
+    catalogueUrl: "https://api.akashml.com/v1/models",
+    citationUrl: "https://akashml.com/docs/platform/models",
+    publishes: {
+      // Measured 2026-09-25 with a key: 6 models, all priced, all with context
+      // length and input/output modalities. /models is keyed (401 without).
+      pricing: "always",
+      contextLength: "always",
+      outputModalities: "always",
+      // supported_features says "reasoning" but names no effort levels.
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "no_billing_api",
+    comparabilityNote:
+      "AkashML is Akash Network's managed inference service. Its keyed /models publishes USD-per-token rates per model, and they differ about 44x on output (gpt-oss-20b $0.10/M to GLM-5.3 $4.40/M, measured 2026-09-25), so it is priced per model, never as one provider rate. Its homepage claim of pricing 'starting from $0.15/M tokens' matches none of those rates, and billed charges observed in its console agreed with the per-model rates rather than the headline. Five of its six models are reasoning models that write thinking to message.reasoning_content and can return an empty message.content while billing tokens when max_tokens is small; each catalogue row carries dated response-shape observations. No billing API is documented, so per-key spend is not readable here. The catalogue needs AKASHML_API_KEY.",
+  },
+  ionet: {
+    id: "ionet",
+    ...providerEvidence("ionet"),
+    displayName: "io.net",
+    catalogueUrl: "https://api.intelligence.io.solutions/api/v1/models",
+    citationUrl: "https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md",
+    publishes: {
+      // Measured 2026-09-26 without a key: 37 models, all priced per token,
+      // all with a context window and modalities, 31 flagged supports_reasoning.
+      pricing: "always",
+      contextLength: "always",
+      outputModalities: "always",
+      reasoningEfforts: "never",
+      activeFlag: "never",
+      discounts: "never",
+      discountExpiry: "never",
+      lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "io.net sells both GPU rental (IO Cloud) and per-token inference (IO Intelligence); only the inference catalogue is collected. Its public /models publishes per-token USD prices as JSON numbers, converted exactly from their decimal text. 31 of 37 models (measured 2026-09-26) require an access tier above the free one (min_access_tier is retained in nativePricing), so a listed price is not proof a free key can call the model. GPU hourly rates on io.net's own pages disagree with each other and are not collected. Response shape is not observed for io.net, so where each model writes its answer is unknown.",
   },
 };
 

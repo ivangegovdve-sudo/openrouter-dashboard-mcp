@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { pricePointSchema, type PricePoint } from "../contract.js";
+import { responseShapeSchema } from "../providers/response-shape.js";
 import { modelOfferingStateSchema, modelPriceStateSchema, providerPriceCoverageResultSchema } from "./price-coverage.js";
 
 export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes"]);
@@ -26,6 +27,10 @@ export const catalogueModelSchema = z.object({
   modelOfferingState: modelOfferingStateSchema.optional(),
   pricingNote: z.string().optional(),
   nativePricing: z.unknown().optional(),
+  /** Context window in tokens, when the native catalogue publishes one. */
+  contextLength: z.number().int().positive().optional(),
+  /** Where a chat model writes its answer and reasoning, with dated observations. */
+  responseShape: responseShapeSchema.optional(),
   provenance: z.object({
     sourceUrl: z.string().url(),
     observedAt: z.string().datetime({ offset: true }),
