@@ -5,6 +5,7 @@ import { resolveProviderPriceCoverage } from "./price-coverage.js";
 import type { PricePoint, PriceUnit } from "../contract.js";
 import { responseShapeFor } from "../providers/response-shape.js";
 import { classifyProviderBlock } from "../providers/registry.js";
+import { parseSailPricing, SAIL_PRICING_URL, type SailPricing } from "./sail-pricing.js";
 
 /** Providers with a native, machine-readable price source not covered by the media adapters. */
 export const NATIVE_PRICE_PROVIDER_IDS = [
@@ -16,6 +17,7 @@ export const NATIVE_PRICE_PROVIDER_IDS = [
   "sambanova",
   "akashml",
   "ionet",
+  "sail",
 ] as const;
 export type NativePriceProviderId = (typeof NATIVE_PRICE_PROVIDER_IDS)[number];
 
@@ -28,6 +30,7 @@ export const NATIVE_PRICE_SOURCES: Record<NativePriceProviderId, string> = {
   sambanova: "https://api.sambanova.ai/v1/models",
   akashml: "https://api.akashml.com/v1/models",
   ionet: "https://api.intelligence.io.solutions/api/v1/models",
+  sail: "https://api.sailresearch.com/v1/models",
 };
 
 type SourceErrorCode =
@@ -167,6 +170,9 @@ function genericModel(
     pricingState: points.length > 0 ? "published" : "unknown",
     pricingNote: points.length > 0 ? (perMillion ? "Provider prices are published per million tokens and converted exactly to per-token points." : "Provider prices are published as native per-token rates.") : "The model API did not expose a comparable price field; no rendered price-page finding was made.",
     nativePricing: safeNativePricing(row),
+    // OpenRouter is in the starting set, so its rows say "unmeasured" explicitly
+    // rather than omitting the shape; its own reasoning flag is carried as advertised.
+    ...(provider === "openrouter" ? { responseShape: responseShapeFor("openrouter", id, Array.isArray(row.supported_parameters) ? row.supported_parameters.includes("reasoning") : null) } : {}),
     provenance: { sourceUrl, observedAt, sourceIndex },
   });
 }
@@ -341,6 +347,47 @@ function ionetModel(row: NativeRecord, sourceUrl: string, observedAt: string, so
   });
 }
 
+/**
+ * Sail's keyed /models returns identities only. Prices come from the pinned,
+ * digest-verified pricing document and from nowhere else: a stale digest
+ * leaves every Sail row unpriced with the reason, never on last week's rates.
+ */
+function sailModel(row: NativeRecord, pricing: SailPricing | null, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel | null {
+  const id = modelId(row);
+  if (!id) return null;
+  const points = pricing?.state === "verified" ? pricing.prices.get(id) ?? [] : [];
+  const pricingNote = pricing === null
+    ? "Sail's pricing document could not be fetched, so no price is quoted."
+    : pricing.state === "stale"
+      ? `PRICES ARE STALE: Sail's pricing document hashes to ${pricing.digest}, not the pinned digest, so no Sail price is quoted until the pin is reconciled.`
+      : points.length > 0
+        ? "Prices from Sail's digest-verified pricing document, one set per completion window (ASAP, Balanced, Flex); each price names its window."
+        : "Listed by Sail's /models but absent from its verified pricing document.";
+  return catalogueModelSchema.parse({
+    provider: "sail",
+    id,
+    displayName: id,
+    mediaKind: "text",
+    nativeType: "chat-completion",
+    pricePoints: points,
+    pricingState: points.length > 0 ? "published" : "unknown",
+    pricingNote,
+    nativePricing: null,
+    responseShape: responseShapeFor("sail", id, null),
+    provenance: { sourceUrl, observedAt, sourceIndex },
+  });
+}
+
+async function fetchSailPricing(fetchImpl: typeof fetch, timeoutMs: number, observedAt: string): Promise<SailPricing | null> {
+  try {
+    const response = await fetchImpl(SAIL_PRICING_URL, { headers: { "User-Agent": "open-dashboard-mcp native-price catalogue/1.3" }, signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
+    if (!response.ok) return null;
+    return parseSailPricing(Buffer.from(await response.arrayBuffer()), observedAt);
+  } catch {
+    return null;
+  }
+}
+
 function rowsFor(provider: NativePriceProviderId, payload: NativeRecord): NativeRecord[] {
   if (provider === "qwencloud") {
     const output = record(payload.output);
@@ -410,13 +457,14 @@ async function fetchJson(fetchImpl: typeof fetch, url: string, timeoutMs: number
 }
 
 function needsKey(provider: NativePriceProviderId): boolean {
-  return provider === "groq" || provider === "qwencloud" || provider === "akashml";
+  return provider === "groq" || provider === "qwencloud" || provider === "akashml" || provider === "sail";
 }
 
 const KEY_ENV: Partial<Record<NativePriceProviderId, string>> = {
   groq: "GROQ_API_KEY",
   qwencloud: "QWENCLOUD_API_KEY",
   akashml: "AKASHML_API_KEY",
+  sail: "SAIL_API_KEY",
 };
 
 function emptyProvider(provider: NativePriceProviderId, sourceUrl: string, observedAt: string, error: SourceErrorCode): CatalogueProvider {
@@ -448,6 +496,7 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
       const payload = await fetchJson(fetchImpl, sourceUrl, timeoutMs, key);
       const rows = rowsFor(provider, payload);
       if (!rows.length) throw new SourceError("SOURCE_SHAPE_CHANGED");
+      const sailPricing = provider === "sail" ? await fetchSailPricing(fetchImpl, timeoutMs, observedAt) : null;
       const models = rows.map((row, index) => provider === "qwencloud"
         ? qwenModel(row, sourceUrl, observedAt, index)
         : provider === "novita"
@@ -456,9 +505,11 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
             ? akashmlModel(row, sourceUrl, observedAt, index)
             : provider === "ionet"
               ? ionetModel(row, sourceUrl, observedAt, index)
-              : genericModel(provider, row, sourceUrl, observedAt, index))
+              : provider === "sail"
+                ? sailModel(row, sailPricing, sourceUrl, observedAt, index)
+                : genericModel(provider, row, sourceUrl, observedAt, index))
         .filter((model): model is CatalogueModel => model !== null);
-      return { provider: providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json" }), models };
+      return { provider: providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable" } : {}) }), models };
     } catch (error) {
       const code = error instanceof SourceError ? error.code : "SOURCE_FETCH_FAILED";
       return { provider: emptyProvider(provider, sourceUrl, observedAt, code), models: [] };
