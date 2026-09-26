@@ -164,3 +164,8 @@ test("a bare Cloudflare error code counts as an edge block only when the edge he
   // Without the headers the bare code stays a rejection, as before.
   assert.equal(classifyProviderBlock(403, "error code: 1010"), "provider_rejected");
 });
+
+test("Nous is declared correlated with OpenRouter, so failover never counts them as independent", () => {
+  assert.equal(PROVIDER_REGISTRY.nous.correlatedWith, "openrouter");
+  assert.equal(PROVIDER_REGISTRY.openrouter.correlatedWith, undefined);
+});

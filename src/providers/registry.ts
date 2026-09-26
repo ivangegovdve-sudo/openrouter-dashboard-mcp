@@ -114,6 +114,12 @@ export const providerDescriptorSchema = z
     displayName: z.string(),
     /** Declared product role; omitted when this build has not established it. */
     providerKind: z.enum(["aggregator", "media", "model_provider"]).optional(),
+    /**
+     * Another provider this one shares upstream supply with. Two correlated
+     * providers are not independent for failover: an outage or a withdrawn model
+     * upstream can take both down at once.
+     */
+    correlatedWith: z.enum(["openrouter"]).optional(),
     /** Where the dashboard's catalogue for this provider comes from. */
     catalogueUrl: z.string(),
     citationUrl: z.string(),
@@ -236,6 +242,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     ...providerEvidence("nous"),
     displayName: "Nous Research",
     providerKind: "model_provider",
+    correlatedWith: "openrouter",
     catalogueUrl: "https://nousresearch.com/",
     citationUrl: "https://nousresearch.com/",
     publishes: {
@@ -250,7 +257,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "Nous Research's public /v1/models catalogue is readable and carries provider-published token rates, but no authenticated balance, usage, or per-generation charge is established here. The Hermes API server key is a separate credential from a Nous Portal key, so inference and generation cost remain BLOCKED, not zero.",
+      "Nous Research resells OpenRouter's catalogue: 372 of its 417 model ids are OpenRouter ids and none are Hermes models (measured 2026-09-26), so it is correlated with OpenRouter and must not be counted as an independent failover path. Its public /v1/models carries the prices Nous charges, including promotions, plus a pricing.original list price on discounted models; the portal page shows the same numbers. Nous's advertised discount is measured against its own original, which is often above OpenRouter's price, so each row also compares Nous's charged price with OpenRouter's live price for the same id (resale.versusOpenRouter): many 'up to 88% off' models cost the same as on OpenRouter, a few are genuinely cheaper, and some are dearer. No authenticated balance, usage or per-generation charge is established here, so generation cost remains BLOCKED, not zero.",
   },
   qwencloud: {
     id: "qwencloud",
