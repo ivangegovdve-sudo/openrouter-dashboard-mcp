@@ -358,21 +358,19 @@ function ionetModel(row: NativeRecord, sourceUrl: string, observedAt: string, so
 const SAIL_MODELS_URL = "https://docs.sailresearch.com/models.md";
 
 /**
- * Sail publishes context sizes only on its models page, as rounded labels on
- * each model card, with the card's model id in a <code> element after them.
- * A label is bound to an id only when a Context value precedes that id's
- * <code> element within the same card; anything else stays absent.
+ * Sail publishes context sizes only on its models page, as rounded labels. Each
+ * model is one table row: a model cell carrying the Context label and a slug
+ * cell carrying the id in <code>. A label is bound only when both sit in the
+ * same row, so a row without a Context line never inherits a neighbour's, and
+ * a documented model missing from /models cannot pass its label on.
  */
 export function parseSailContextLabels(doc: string, ids: ReadonlySet<string>): Map<string, string> {
   const labels = new Map<string, string>();
-  let pending: string | null = null;
-  const tokenRe = /cap-expand-key">Context<\/span>\s*<span className="cap-expand-val">([^<]+)<\/span>|<code>([^<]+)<\/code>/g;
-  let match;
-  while ((match = tokenRe.exec(doc)) !== null) {
-    if (match[1] !== undefined) { pending = match[1].trim(); continue; }
-    const id = match[2]!.trim();
-    if (ids.has(id) && pending && !labels.has(id)) labels.set(id, pending);
-    if (ids.has(id)) pending = null;
+  for (const row of doc.split(/<tr\b/).slice(1)) {
+    const body = row.split(/<\/tr>/)[0] ?? "";
+    const slug = /cap-cell-slug[\s\S]*?<code>([^<]+)<\/code>/.exec(body)?.[1]?.trim();
+    const context = /cap-expand-key">Context<\/span>\s*<span className="cap-expand-val">([^<]+)<\/span>/.exec(body)?.[1]?.trim();
+    if (slug && context && ids.has(slug) && !labels.has(slug)) labels.set(slug, context);
   }
   return labels;
 }

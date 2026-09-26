@@ -86,9 +86,12 @@ test("keeps per-generation cost visibility distinct from catalogue pricing", () 
   assert.match(GENERATION_COST_POLICY.sail.note, /DERIVED/);
 });
 
-test("does not advertise Sail context values the connector does not collect", () => {
-  assert.equal(PROVIDER_REGISTRY.sail.publishes.contextLength, "never");
-  assert.match(PROVIDER_REGISTRY.sail.comparabilityNote, /does not yet collect.*context/i);
+test("declares Sail context as collected labels, not integers", () => {
+  // Since 1.4.0 the connector reads Sail's models page. It publishes rounded
+  // labels only, so the declaration is partial and names the label field.
+  assert.equal(PROVIDER_REGISTRY.sail.publishes.contextLength, "partial");
+  assert.match(PROVIDER_REGISTRY.sail.comparabilityNote, /contextLengthLabel/);
+  assert.doesNotMatch(PROVIDER_REGISTRY.sail.comparabilityNote, /does not yet collect.*context/i);
 });
 
 test("keeps DeepInfra's published denominator consistent with its media evidence", () => {

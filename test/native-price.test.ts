@@ -301,21 +301,22 @@ test("generic sources carry an exact published context length, and nothing when 
   assert.equal(result.models.find(m => m.id === "a/without")?.contextLength, undefined);
 });
 
-test("Sail context labels bind to the catalogue id on the same card and are never converted to integers", async () => {
+test("Sail context labels bind only within their own table row", async () => {
   const { parseSailContextLabels } = await import("../src/catalogue/native-price.js");
-  const doc = `
-    <span className="cap-expand-key">Context</span>
-    <span className="cap-expand-val">1M</span>
-    <code>zai-org/GLM-5.3</code> ... <code>none</code>
-    <span className="cap-expand-key">Context</span>
-    <span className="cap-expand-val">262K</span>
-    <code>moonshotai/Kimi-K2.6</code>
-    <code>unlisted/model</code>`;
+  const row = (context: string | null, id: string) => `<tr><td className="cap-cell cap-cell-model">${context ? `<span className="cap-expand-key">Context</span>
+    <span className="cap-expand-val">${context}</span>` : ""}</td><td className="cap-cell cap-cell-slug"><code>${id}</code></td></tr>`;
+  const doc = [
+    row("1M", "zai-org/GLM-5.3"),
+    // Documented but absent from /models: its label must not leak forward.
+    row("128K", "unlisted/model"),
+    row(null, "google/gemma-4-12B-it"),
+    row("262K", "moonshotai/Kimi-K2.6"),
+  ].join("\n");
   const labels = parseSailContextLabels(doc, new Set(["zai-org/GLM-5.3", "moonshotai/Kimi-K2.6", "google/gemma-4-12B-it"]));
   assert.equal(labels.get("zai-org/GLM-5.3"), "1M");
   assert.equal(labels.get("moonshotai/Kimi-K2.6"), "262K");
-  // No card, no label: absence is not filled from a neighbour.
   assert.equal(labels.has("google/gemma-4-12B-it"), false);
+  assert.equal(labels.has("unlisted/model"), false);
 });
 
 test("Nous rows are compared with OpenRouter's live price, not with Nous's own claimed original", async () => {
