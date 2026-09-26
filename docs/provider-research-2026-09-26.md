@@ -77,3 +77,33 @@ at 91 tokens and DeepSeek at 18, inside or near the ranges above.
 H100 PCIe ~$2.09/hr, H100 SXM5 ~$2.69/hr, A100 ~$1.00–2.50/hr via a bidding marketplace
 whose capacity contracted ~57% quarter-on-quarter. Supply is thin. Figures supplied by
 Ivan, not re-measured here.
+
+## Sail (measured 2026-09-26)
+
+- Keyed `/models` (401 without a key) lists 12 ids and nothing else. Prices come only from the
+  digest-verified pricing document, re-pinned today (`2a939cfd…`): all 12 ids priced, per
+  completion window (ASAP / Balanced / Flex; gpt-oss-120b ASAP only, Qwen3.6-35B-A3B Flex only).
+- Prompt "Reply with exactly one word: ready", temperature 0, budgets 16/64/256. The operator
+  measured gemma-4-12B-it, DeepSeek-V4.1-Flash, gpt-oss-120b and GLM-5.3-Flash; this build
+  measured the other eight.
+
+| Model | reasoning_content | 16 | 64 | 256 | latency (this build) |
+|---|---|---|---|---|---|
+| Gemma-4-31B-IT-NVFP4 | absent | ready (2) | ready (2) | ready (2) | 0.38–0.45 s |
+| gemma-4-31B-it | absent | ready (2) | ready (2) | ready (2) | 0.57–0.90 s |
+| DeepSeek-V4-Pro-0813 | absent | ready (2) | ready (2) | ready (2) | 1.8–2.4 s |
+| gemma-4-12B-it (operator) | absent | ready (2) | – | – | – |
+| DeepSeek-V4.1-Flash (operator) | present | ready (15) | – | – | – |
+| GLM-5.3 | present | empty | ready (38) | ready (38) | 0.53–0.73 s |
+| DeepSeek-V4-Flash-0731 | present | empty | ready (42) | ready (44) | 0.72–1.18 s |
+| Kimi-K2.6 | present | empty | ready (37) | ready (34) | 1.1–1.3 s |
+| Kimi-K3 | present | empty | ready (48) | ready (48) | 0.9–1.9 s |
+| gpt-oss-120b (operator) | present | empty | – | ready (46) | – |
+| GLM-5.3-Flash (operator) | present | empty | – | ready (36) | – |
+| Qwen3.6-35B-A3B (flex only) | present | empty | empty | ready (144) | 8.3–8.8 s |
+
+- Qwen3.6-35B-A3B returns HTTP 400 synchronously unless `metadata.completion_window` is
+  `flex`; with flex it returned `content: null`, not `""`, when the budget ran out.
+- Correction to the brief: gemma-4-12B-it is not the only zero-reasoning-tax model. Three more
+  Sail models and AkashML's Llama-3.3-70B-Instruct answer in 2 tokens with no reasoning, and
+  Gemma-4-31B-IT-NVFP4 is the cheapest and fastest of them.

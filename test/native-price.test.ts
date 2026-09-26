@@ -218,3 +218,73 @@ test("a public catalogue's 401/403 is an HTTP error, never a rejected credential
   });
   assert.equal(result.providers[0]?.error, "HTTP_ERROR");
 });
+
+test("Sail rows are priced only from the digest-verified document and carry measured shapes and the batch lane", async () => {
+  const fs = await import("node:fs");
+  const doc = fs.readFileSync("sail-pricing.md");
+  const ids = ["google/gemma-4-12B-it", "zai-org/GLM-5.3", "nvidia/Gemma-4-31B-IT-NVFP4", "Qwen/Qwen3.6-35B-A3B", "sail/never-called"];
+  const collect = (body: Buffer) => collectNativePriceCatalogue({
+    providers: ["sail"],
+    apiKeys: { sail: "test-sail-key" },
+    now: () => new Date(observedAt),
+    fetchImpl: async (input) => String(input) === NATIVE_PRICE_SOURCES.sail
+      ? Response.json({ object: "list", data: ids.map(id => ({ id, object: "model", owned_by: "x" })) })
+      : new Response(new Uint8Array(body)),
+  });
+
+  const verified = await collect(doc);
+  assert.equal(verified.providers[0]?.requestParameters.pricingDigest, "verified");
+  const glm = verified.models.find(model => model.id === "zai-org/GLM-5.3");
+  assert.equal(glm?.pricePoints.find(point => point.unit === "token_out" && point.condition?.name === "ASAP")?.amount, "0.00000308");
+  const gemma = verified.models.find(model => model.id === "google/gemma-4-12B-it")?.responseShape;
+  assert.equal(gemma?.measurement, "measured");
+  assert.equal(gemma?.reasoningContentField, "absent");
+  assert.equal(gemma?.minViableBudget?.lowestPassing, "16");
+  assert.equal(gemma?.lane?.kind, "batch");
+  // The fastest zero-reasoning model measured on Sail, answering in 2 tokens.
+  const nvfp4 = verified.models.find(model => model.id === "nvidia/Gemma-4-31B-IT-NVFP4")?.responseShape;
+  assert.equal(nvfp4?.reasoningContentField, "absent");
+  assert.equal(nvfp4?.answerCompletionTokens?.max, "2");
+  // A reasoning model: the budget is a bracket from what was actually tried.
+  const qwen = verified.models.find(model => model.id === "Qwen/Qwen3.6-35B-A3B")?.responseShape;
+  assert.deepEqual([qwen?.minViableBudget?.lowestPassing, qwen?.minViableBudget?.highestFailing], ["256", "64"]);
+  assert.equal(qwen?.emptyContentObserved, "observed");
+  assert.match(qwen?.note ?? "", /flex/);
+  // An id nobody called is distinguishable from a measured one.
+  const never = verified.models.find(model => model.id === "sail/never-called");
+  assert.equal(never?.pricingState, "unknown");
+  assert.equal(never?.responseShape?.measurement, "unmeasured");
+  assert.equal(never?.responseShape?.minViableBudget, null);
+  assert.equal(never?.responseShape?.latencyMs, null);
+
+  const stale = await collect(Buffer.from("a repriced document"));
+  assert.equal(stale.providers[0]?.requestParameters.pricingDigest, "stale");
+  assert.equal(stale.providers[0]?.status, "partial");
+  assert.equal(stale.providers[0]?.error, "PRICING_STALE");
+  assert.equal(verified.providers[0]?.status, "available");
+  assert.ok(stale.models.every(model => model.pricePoints.length === 0 && model.pricingState === "unknown"));
+  assert.match(stale.models[0]?.pricingNote ?? "", /PRICES ARE STALE/);
+});
+
+test("Sail without a key is unavailable, not an empty or free catalogue", async () => {
+  const previous = process.env.SAIL_API_KEY;
+  delete process.env.SAIL_API_KEY;
+  try {
+    const result = await collectNativePriceCatalogue({ providers: ["sail"], fetchImpl: async () => { throw new Error("must not fetch without a key"); } });
+    assert.equal(result.providers[0]?.error, "KEY_NOT_CONFIGURED");
+  } finally {
+    if (previous !== undefined) process.env.SAIL_API_KEY = previous;
+  }
+});
+
+test("OpenRouter rows say unmeasured explicitly instead of omitting the response shape", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["openrouter"],
+    fetchImpl: async () => Response.json({ data: [{ id: "openai/gpt-oss-120b", supported_parameters: ["reasoning", "max_tokens"], pricing: { prompt: "0.0000001", completion: "0.0000005" } }] }),
+  });
+  const shape = result.models[0]?.responseShape;
+  assert.equal(shape?.measurement, "unmeasured");
+  assert.equal(shape?.reasoningAdvertised, true);
+  assert.equal(shape?.minViableBudget, null);
+  assert.equal(shape?.lane, null);
+});

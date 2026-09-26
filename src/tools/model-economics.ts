@@ -6,6 +6,7 @@ import type { DashboardClient } from "../dashboard/client.js";
 import { liveModelsResponseSchema } from "../dashboard/schemas/live-models.js";
 import { normalizePricePoint } from "../catalogue/price-set.js";
 import { exactDecimalRatio } from "../catalogue/decimal.js";
+import { parseSailPricing, SAIL_PRICING_DIGEST, SAIL_PRICING_URL } from "../catalogue/sail-pricing.js";
 import { pricePointSchema, type PricePoint } from "../contract.js";
 import { generationCostObservationSchema } from "../generation-cost.js";
 import { providerEvidenceShape } from "../providers/evidence.js";
@@ -526,21 +527,16 @@ export async function runModelEconomics(
       if (liveRows[i]!.provider === "sail") liveRows.splice(i, 1);
     }
     try {
-      const sailDocUrl = "https://docs.sailresearch.com/pricing.md";
-      const sailRes = await fetch(sailDocUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const sailRes = await fetch(SAIL_PRICING_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       if (!sailRes.ok) {
         throw new Error(`Failed to fetch Sail pricing doc: ${sailRes.status}`);
       }
-      const docBuffer = await sailRes.arrayBuffer();
-      const doc = Buffer.from(docBuffer);
-      const digest = createHash("sha256").update(doc).digest("hex");
-      
-      const expectedDigest = "32447697c3305a5bc8c5c40c9923e1b81aaefbc5ab8092ee59fb94dfdfd017e6";
-      if (digest !== expectedDigest) {
-        warnings.push(`PRICES ARE STALE: Sail pricing document digest ${digest} does not match expected ${expectedDigest}. Sail models omitted.`);
+      const sail = parseSailPricing(Buffer.from(await sailRes.arrayBuffer()), asOfIso);
+      if (sail.state === "stale") {
+        warnings.push(`PRICES ARE STALE: Sail pricing document digest ${sail.digest} does not match expected ${SAIL_PRICING_DIGEST}. Sail models omitted.`);
       } else {
         evidence.push({
-          endpoint: sailDocUrl,
+          endpoint: SAIL_PRICING_URL,
           window: null,
           completeness: null,
           stale: false,
@@ -548,78 +544,30 @@ export async function runModelEconomics(
           provenance: [],
           freshness: null
         });
-        
-        const docStr = doc.toString('utf-8');
-        const groupRe = /data-model="([^"]+)"(.*?)(?=data-model="|$)/gs;
-        
-        let match;
-        while ((match = groupRe.exec(docStr)) !== null) {
-          const modelId = match[1] || "";
-          const block = match[2] || "";
-
-          const rowRe = /aria-label="([^"]*?) pricing: input \$([\d.]+), cached \$([\d.]+), output \$([\d.]+)/g;
-          const pricePoints: PricePoint[] = [];
-          let rowMatch;
-
-          while ((rowMatch = rowRe.exec(block)) !== null) {
-            if (!rowMatch[1] || !rowMatch[2] || !rowMatch[3] || !rowMatch[4]) continue;
-
-            const labelLower = rowMatch[1].toLowerCase();
-            let rowWindow: "asap" | "balanced" | "flex" | null = null;
-            if (labelLower.includes('asap')) rowWindow = 'asap';
-            else if (labelLower.includes('balanced')) rowWindow = 'balanced';
-            else if (labelLower.includes('flex')) rowWindow = 'flex';
-            else continue;
-
-            const condition = {
-              kind: "latency_window" as const,
-              name: rowWindow === "asap" ? "ASAP" as const : rowWindow === "balanced" ? "Balanced" as const : "Flex" as const,
-            };
-            for (const [leg, value, unit] of [
-              ["input", rowMatch[2], "token_in"],
-              ["cached", rowMatch[3], "token_cached"],
-              ["output", rowMatch[4], "token_out"],
-            ] as const) {
-              pricePoints.push(normalizePricePoint({
-                id: `sail:${modelId}:${rowWindow}:${leg}`,
-                value: exactDecimalRatio(value, "1", "1000000").value!,
-                unit,
-                condition,
-                sourceUrl: sailDocUrl,
-                readAt: asOfIso,
-                provenance: "published",
-                measurementOrigin: "catalogue",
-                observed: null,
-                sourceText: rowMatch[0],
-              }));
-            }
-          }
-
-          if (pricePoints.length > 0) {
-            liveRows.push({
-              provider: "sail",
-              id: modelId,
-              displayName: modelId,
-              ownedBy: null,
-              contextLength: null,
-              pricePoints,
-              pricingState: "published",
-              isFree: false,
-              freeKind: "paid_or_unknown",
-              providerActive: null,
-              reasoningEfforts: null,
-              outputModalities: null,
-              performance: null,
-              generationCosts: [],
-              availability: "available",
-              firstSeenAt: asOfIso,
-              lastSeenAt: asOfIso,
-              lastConfirmedAt: asOfIso,
-              disappearedAt: null,
-              absenceStreak: "0",
-              missingFields: ["availabilitySource_absent_assumed_available"]
-            });
-          }
+        for (const [modelId, pricePoints] of sail.prices) {
+          liveRows.push({
+            provider: "sail",
+            id: modelId,
+            displayName: modelId,
+            ownedBy: null,
+            contextLength: null,
+            pricePoints,
+            pricingState: "published",
+            isFree: false,
+            freeKind: "paid_or_unknown",
+            providerActive: null,
+            reasoningEfforts: null,
+            outputModalities: null,
+            performance: null,
+            generationCosts: [],
+            availability: "available",
+            firstSeenAt: asOfIso,
+            lastSeenAt: asOfIso,
+            lastConfirmedAt: asOfIso,
+            disappearedAt: null,
+            absenceStreak: "0",
+            missingFields: ["availabilitySource_absent_assumed_available"]
+          });
         }
       }
     } catch (e) {

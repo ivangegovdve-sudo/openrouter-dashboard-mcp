@@ -814,13 +814,12 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
     // fixture. The partial status keeps that incompleteness visible.
     assert.equal(output.status, "partial");
     
-    // The fixture has ASAP input $1.40 and output $4.40
-    // promptUsdPerToken = 0.0000014000
-    // completionUsdPerToken = 0.0000044000
+    // The fixture (re-pinned 2026-09-26) has ASAP input $0.98 and output $3.08;
+    // the previous pin said $1.40 / $4.40 before Sail repriced GLM-5.3.
     
     const sailModel = (output as any).models.find((m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3");
     assert.ok(sailModel, "Sail model should be injected");
-    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_in" && point.condition?.name === "ASAP")?.amount, "0.0000014");
+    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_in" && point.condition?.name === "ASAP")?.amount, "0.00000098");
     // The verified document's price, NOT the catalogue's 0.0000099999.
     assert.notEqual(sailModel.pricePoints.find((point: any) => point.unit === "token_in")?.amount, "0.0000099999");
     // Exactly one Sail row for this id -- the catalogue copy must be gone, not
@@ -829,7 +828,7 @@ test("Sail integration: parses three windows, matches fingerprint", async () => 
       (output as any).models.filter(
         (m: any) => m.provider === "sail" && m.id === "zai-org/GLM-5.3").length,
       1, "the catalogue row must be replaced, not duplicated");
-    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_out" && point.condition?.name === "ASAP")?.amount, "0.0000044");
+    assert.equal(sailModel.pricePoints.find((point: any) => point.unit === "token_out" && point.condition?.name === "ASAP")?.amount, "0.00000308");
     assert.deepEqual(sailModel.missingFields, ["availabilitySource_absent_assumed_available"]);
     // The window the price belongs to must travel WITH the price. Selection can
     // fall back to a faster window than requested, so two rows that look

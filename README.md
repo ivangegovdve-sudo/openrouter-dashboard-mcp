@@ -13,6 +13,52 @@ traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+> **`max_tokens` is a correctness parameter, not a safety cap.** On AkashML, io.net and Sail,
+> most models reason before they answer. With too small a budget the call returns HTTP 200,
+> bills every token, and `message.content` is empty (or `null`), with the text stranded in
+> `message.reasoning_content`. A caller that reads only `content` sees silence and blames the
+> key. Every catalogue row carries a measured `responseShape.minViableBudget`: set
+> `max_tokens` above it, with headroom, per model.
+
+## New in 1.3.0: Sail as a native-price provider
+
+The starting set is four providers, each read from its own catalogue:
+
+| Provider | Key | Priced from | Lane | Short-call latency | Response shapes |
+|---|---|---|---|---|---|
+| AkashML | `AKASHML_API_KEY` | its keyed `/models`, per model | interactive | 0.57–0.90 s | 6 of 6 measured |
+| io.net | none | its public `/models`, per model | interactive | 0.64–0.91 s | 3 of 37 measured |
+| Sail | `SAIL_API_KEY` | its digest-verified pricing document, per completion window | **batch** | 0.95–2.37 s | 12 of 12 measured |
+| OpenRouter | none | its public `/models` | not established | not measured | not measured |
+
+Latencies are the operator's 2026-09-26 short-call measurements. Per-model figures are in each
+row's `responseShape.latencyMs` and vary: on Sail, Gemma-4-31B-IT-NVFP4 answered in
+0.38–0.45 s and DeepSeek-V4-Pro-0813 in 1.8–2.4 s. Qwen3.6-35B-A3B took 8.3–9.4 s and accepts
+synchronous calls only with `metadata.completion_window: "flex"`; without it Sail returns 400.
+
+**Sail is the batch lane.** It is slower per call and cheaper: on every model it shares with
+AkashML or io.net, its cheapest window beats both, except `openai/gpt-oss-120b`, where
+AkashML's $0.03 / $0.17 per million undercuts Sail's $0.06 / $0.40. Use it for work nobody
+waits on (PR solving, extraction, overnight sweeps), not interactive calls.
+
+**Models with no reasoning tax.** Four Sail models return no `reasoning_content` field at all
+and answer a one-word prompt in 2 output tokens at `max_tokens: 16`:
+`nvidia/Gemma-4-31B-IT-NVFP4`, `google/gemma-4-31B-it`, `google/gemma-4-12B-it` and
+`deepseek-ai/DeepSeek-V4-Pro-0813`. AkashML's `meta-llama/Llama-3.3-70B-Instruct` behaved
+the same way. For short answers and classification, Gemma-4-31B-IT-NVFP4 was the cheapest
+($0.07 / $0.20 per million in the Flex window) and the fastest of them. gemma-4-12B-it answers
+just as briefly, but its output rate is five times higher ($1.00 per million in Flex). Each row
+reports `reasoningContentField: "absent"` where this was measured.
+
+Every model entry distinguishes measured from unmeasured: `responseShape.measurement` is
+`"measured"` or `"unmeasured"`, and an unmeasured model carries `null` budgets and
+latencies, never a default. Four of the Sail models were first measured by the operator; those
+observations are marked `origin: "operator_report"` and carry only what was reported.
+
+Sail's prices changed since the previous release. The pinned document is re-pinned to today's
+bytes: five models added, five repriced (GLM-5.3 ASAP from $1.40 / $4.40 to $0.98 / $3.08 per
+million), two retired. Before this, 1.2.1 was correctly reporting `PRICES ARE STALE` for Sail.
+
 ## New in 1.2.1: measured io.net shapes, answer budgets, and edge blocks
 
 - **io.net is now measured, not inferred.** With a key on 2026-09-26, reasoning models there
@@ -155,7 +201,7 @@ Without `@version`, npx resolves the latest published release. That is the point
 the catalogue this package reports on changes underneath you, so an unpinned
 command keeps reading the current one instead of freezing to a snapshot.
 
-Requires Node.js 20 or newer. No API key is needed to start. Keys only widen what the catalogue can see: `AKASHML_API_KEY`, `GROQ_API_KEY` and `QWENCLOUD_API_KEY` add those providers' native catalogues, and a missing key is reported as `KEY_NOT_CONFIGURED`, never as an empty or free result. The optional key inventory has its own opt-in path.
+Requires Node.js 20 or newer. No API key is needed to start. Keys only widen what the catalogue can see: `AKASHML_API_KEY`, `SAIL_API_KEY`, `GROQ_API_KEY` and `QWENCLOUD_API_KEY` add those providers' native catalogues, and a missing key is reported as `KEY_NOT_CONFIGURED`, never as an empty or free result. The optional key inventory has its own opt-in path.
 
 ### Where the data comes from
 
@@ -203,7 +249,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.2.1** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.3.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -278,7 +324,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.2.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.3.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -641,6 +687,8 @@ A page is not an API. It can be restructured, reworded or repriced without warni
 - **Digest differs** — Sail models are **omitted**, and the answer carries `PRICES ARE STALE`, naming both digests. It does not fall back to the last known prices, because a price that was true last week is not a price.
 
 The trade is deliberate: the tool goes quiet about Sail rather than quoting a number it cannot stand behind. What it costs is availability — every legitimate upstream change also silences Sail until the pin is reconciled against the live document.
+
+The pin was reconciled on 2026-09-26 against a real repricing: five models added, five repriced, two retired, all checked by hand before the digest moved. The same digest now also gates the Sail rows in `dashboard_catalogue`, which read identities from Sail's keyed `/models` (`SAIL_API_KEY`) and prices only from this document.
 
 That is not hypothetical. Between two captures the document grew about 10% and Sail's catalogue gained a model (`google/gemma-4-12B-it`, 9 → 10) while `zai-org/GLM-5.3` held at $1.40 / $4.40 per million. **A digest that changes tells you the document moved. It cannot tell you whether the prices did.**
 
