@@ -114,6 +114,12 @@ export const providerDescriptorSchema = z
     displayName: z.string(),
     /** Declared product role; omitted when this build has not established it. */
     providerKind: z.enum(["aggregator", "media", "model_provider"]).optional(),
+    /**
+     * Another provider this one shares upstream supply with. Two correlated
+     * providers are not independent for failover: an outage or a withdrawn model
+     * upstream can take both down at once.
+     */
+    correlatedWith: z.enum(["openrouter"]).optional(),
     /** Where the dashboard's catalogue for this provider comes from. */
     catalogueUrl: z.string(),
     citationUrl: z.string(),
@@ -219,7 +225,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     publishes: {
       // Public documents publish both, but this connector only reads pinned prices.
       pricing: "partial",
-      contextLength: "never",
+      contextLength: "partial",
       outputModalities: "never",
       reasoningEfforts: "never",
       activeFlag: "never",
@@ -229,13 +235,14 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "Sail publishes prices and context information in public documents. Its keyed /models (SAIL_API_KEY) lists identities only; this MCP prices them solely from its pinned, digest-verified pricing document and carries the completion window with each price. It does not yet collect the documented context values. Sail is the batch lane: slower per call than AkashML or io.net (operator-measured 0.95-2.37 s against 0.57-0.91 s) and cheaper on most shared models, so it suits work nobody waits on. Per-model response shapes, minimum viable budgets and latencies are measured (2026-09-26); Qwen3.6-35B-A3B accepts synchronous calls only in the flex window. The billing routes at https://docs.sailresearch.com/usage-endpoints.md are documented but not probed or read by this integration, so spend visibility is unknown here.",
+      "Sail publishes prices and context information in public documents. Its keyed /models (SAIL_API_KEY) lists identities only; this MCP prices them solely from its pinned, digest-verified pricing document and carries the completion window with each price. Context sizes are read live from docs.sailresearch.com/models.md as the published rounded labels (contextLengthLabel, e.g. \"262K\"), not converted to integers; a failed read is reported as contextSourceState unavailable. Sail is the batch lane: slower per call than AkashML or io.net (operator-measured 0.95-2.37 s against 0.57-0.91 s) and cheaper on most shared models, so it suits work nobody waits on. Per-model response shapes, minimum viable budgets and latencies are measured (2026-09-26); Qwen3.6-35B-A3B accepts synchronous calls only in the flex window. The billing routes at https://docs.sailresearch.com/usage-endpoints.md are documented but not probed or read by this integration, so spend visibility is unknown here.",
   },
   nous: {
     id: "nous",
     ...providerEvidence("nous"),
     displayName: "Nous Research",
     providerKind: "model_provider",
+    correlatedWith: "openrouter",
     catalogueUrl: "https://nousresearch.com/",
     citationUrl: "https://nousresearch.com/",
     publishes: {
@@ -250,7 +257,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "Nous Research's public /v1/models catalogue is readable and carries provider-published token rates, but no authenticated balance, usage, or per-generation charge is established here. The Hermes API server key is a separate credential from a Nous Portal key, so inference and generation cost remain BLOCKED, not zero.",
+      "Nous Research resells OpenRouter's catalogue: 372 of its 417 model ids are OpenRouter ids and none are Hermes models (measured 2026-09-26), so it is correlated with OpenRouter and must not be counted as an independent failover path. Its public /v1/models carries the prices Nous charges, including promotions, plus a pricing.original list price on discounted models; the portal page shows the same numbers. Nous's advertised discount is measured against its own original, which is often above OpenRouter's price, so each row also compares Nous's charged price with OpenRouter's live price for the same id (resale.versusOpenRouter): many 'up to 88% off' models cost the same as on OpenRouter, a few are genuinely cheaper, and some are dearer. No authenticated balance, usage or per-generation charge is established here, so generation cost remains BLOCKED, not zero.",
   },
   qwencloud: {
     id: "qwencloud",

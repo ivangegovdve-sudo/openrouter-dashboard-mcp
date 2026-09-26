@@ -1,4 +1,5 @@
 import { normalizePricePoint } from "./price-set.js";
+import { exactDecimalRatio } from "./decimal.js";
 import { mediaKind, record, scalar, type NativeRecord } from "./normalize.js";
 import { catalogueModelSchema, catalogueProviderSchema, type CatalogueModel, type CatalogueProvider, type MediaKind } from "./schemas.js";
 import { resolveProviderPriceCoverage } from "./price-coverage.js";
@@ -148,6 +149,7 @@ function genericModel(
   const pricing = record(row.pricing);
   const kind = modelKind(row);
   const points = tokenPricePoints(provider, id, pricing, sourceUrl, observedAt, perMillion);
+  const contextLength = positiveInteger(row.context_length) ?? positiveInteger(row.context_window);
   if (kind === "image") {
     const image = scalar(pricing.image);
     if (image !== undefined) {
@@ -170,6 +172,7 @@ function genericModel(
     pricingState: points.length > 0 ? "published" : "unknown",
     pricingNote: points.length > 0 ? (perMillion ? "Provider prices are published per million tokens and converted exactly to per-token points." : "Provider prices are published as native per-token rates.") : "The model API did not expose a comparable price field; no rendered price-page finding was made.",
     nativePricing: safeNativePricing(row),
+    ...(contextLength ? { contextLength } : {}),
     // OpenRouter is in the starting set, so its rows say "unmeasured" explicitly
     // rather than omitting the shape; its own reasoning flag is carried as advertised.
     ...(provider === "openrouter" ? { responseShape: responseShapeFor("openrouter", id, Array.isArray(row.supported_parameters) ? row.supported_parameters.includes("reasoning") : null) } : {}),
@@ -352,7 +355,40 @@ function ionetModel(row: NativeRecord, sourceUrl: string, observedAt: string, so
  * digest-verified pricing document and from nowhere else: a stale digest
  * leaves every Sail row unpriced with the reason, never on last week's rates.
  */
-function sailModel(row: NativeRecord, pricing: SailPricing | null, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel | null {
+const SAIL_MODELS_URL = "https://docs.sailresearch.com/models.md";
+
+/**
+ * Sail publishes context sizes only on its models page, as rounded labels. Each
+ * model is one table row: a model cell carrying the Context label and a slug
+ * cell carrying the id in <code>. A label is bound only when both sit in the
+ * same row, so a row without a Context line never inherits a neighbour's, and
+ * a documented model missing from /models cannot pass its label on.
+ */
+export function parseSailContextLabels(doc: string, ids: ReadonlySet<string>): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const row of doc.split(/<tr\b/).slice(1)) {
+    const body = row.split(/<\/tr>/)[0] ?? "";
+    const slug = /cap-cell-slug[\s\S]*?<code>([^<]+)<\/code>/.exec(body)?.[1]?.trim();
+    const context = /cap-expand-key">Context<\/span>\s*<span className="cap-expand-val">([^<]+)<\/span>/.exec(body)?.[1]?.trim();
+    if (slug && context && ids.has(slug) && !labels.has(slug)) labels.set(slug, context);
+  }
+  return labels;
+}
+
+type SailContext = { state: "read" | "unavailable"; labels: Map<string, string>; error?: string };
+
+/** A failed read is reported as unavailable, never as "no context published". */
+async function fetchSailContextLabels(fetchImpl: typeof fetch, timeoutMs: number, ids: ReadonlySet<string>): Promise<SailContext> {
+  try {
+    const response = await fetchImpl(SAIL_MODELS_URL, { headers: { "User-Agent": "open-dashboard-mcp native-price catalogue/1.4" }, signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
+    if (!response.ok) return { state: "unavailable", labels: new Map(), error: `HTTP_${response.status}` };
+    return { state: "read", labels: parseSailContextLabels(await response.text(), ids) };
+  } catch (error) {
+    return { state: "unavailable", labels: new Map(), error: error instanceof Error && error.name === "TimeoutError" ? "SOURCE_TIMEOUT" : "SOURCE_FETCH_FAILED" };
+  }
+}
+
+function sailModel(row: NativeRecord, pricing: SailPricing | null, sourceUrl: string, observedAt: string, sourceIndex: number, contextLabels: Map<string, string> = new Map()): CatalogueModel | null {
   const id = modelId(row);
   if (!id) return null;
   const points = pricing?.state === "verified" ? pricing.prices.get(id) ?? [] : [];
@@ -374,6 +410,7 @@ function sailModel(row: NativeRecord, pricing: SailPricing | null, sourceUrl: st
     pricingNote,
     nativePricing: null,
     responseShape: responseShapeFor("sail", id, null),
+    ...(contextLabels.has(id) ? { contextLengthLabel: { value: contextLabels.get(id)!, sourceUrl: SAIL_MODELS_URL, observedAt } } : {}),
     provenance: { sourceUrl, observedAt, sourceIndex },
   });
 }
@@ -385,6 +422,76 @@ async function fetchSailPricing(fetchImpl: typeof fetch, timeoutMs: number, obse
     return parseSailPricing(Buffer.from(await response.arrayBuffer()), observedAt);
   } catch {
     return null;
+  }
+}
+
+/** Exact decimal comparison: -1, 0 or 1. Never binary floating point. */
+function compareDecimal(a: string, b: string): number {
+  const x = exactDecimalRatio(a), y = exactDecimalRatio(b);
+  const left = BigInt(x.numerator) * BigInt(y.denominator), right = BigInt(y.numerator) * BigInt(x.denominator);
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function tokenLegs(model: CatalogueModel): { input: string | null; output: string | null } {
+  const leg = (unit: string) => model.pricePoints.find((point) => point.unit === unit && point.condition === null)?.amount ?? null;
+  return { input: leg("token_in"), output: leg("token_out") };
+}
+
+/**
+ * Nous resells OpenRouter's catalogue. Its advertised discounts are measured
+ * against its own pricing.original, often above OpenRouter's price, so each Nous
+ * row is compared with OpenRouter's live price for the same id. An OpenRouter
+ * read that fails leaves the comparison "unknown", never assumed.
+ */
+async function annotateNousResale(models: CatalogueModel[], options: { fetchImpl: typeof fetch; timeoutMs: number; observedAt: string; collectedOpenRouter: boolean }): Promise<void> {
+  let openRouter: Map<string, { input: string | null; output: string | null }> | null = null;
+  let openRouterReadAt: string | null = null;
+  if (options.collectedOpenRouter) {
+    openRouter = new Map(models.filter((model) => model.provider === "openrouter").map((model) => [model.id, tokenLegs(model)]));
+    openRouterReadAt = models.find((model) => model.provider === "openrouter")?.provenance.observedAt ?? null;
+    if (openRouter.size === 0) openRouter = null;
+  } else {
+    try {
+      const payload = await fetchJson(options.fetchImpl, NATIVE_PRICE_SOURCES.openrouter, options.timeoutMs);
+      const rows = rowsFor("openrouter", payload);
+      openRouter = new Map();
+      rows.forEach((row, index) => {
+        const model = genericModel("openrouter", row, NATIVE_PRICE_SOURCES.openrouter, options.observedAt, index);
+        if (model) openRouter!.set(model.id, tokenLegs(model));
+      });
+      openRouterReadAt = options.observedAt;
+      if (openRouter.size === 0) openRouter = null;
+    } catch {
+      openRouter = null;
+    }
+  }
+  for (const model of models) {
+    if (model.provider !== "nous") continue;
+    const original = record(record(model.nativePricing).original);
+    const claimedOriginal = Object.keys(original).length
+      ? { input: scalar(original.prompt) ?? null, output: scalar(original.completion) ?? null }
+      : null;
+    const nous = tokenLegs(model);
+    const or = openRouter?.get(model.id) ?? null;
+    let versus: NonNullable<CatalogueModel["resale"]>["versusOpenRouter"] = "unknown";
+    if (openRouter && !or) versus = "not_listed";
+    else if (or) {
+      const legs = ([["input", nous.input, or.input], ["output", nous.output, or.output]] as const)
+        .filter(([, a, b]) => a !== null && b !== null)
+        .map(([, a, b]) => compareDecimal(a!, b!));
+      if (legs.length === 0) versus = "unknown";
+      else if (legs.every((v) => v === 0)) versus = "identical";
+      else if (legs.every((v) => v <= 0)) versus = "cheaper";
+      else if (legs.every((v) => v >= 0)) versus = "dearer";
+      else versus = "mixed";
+    }
+    model.resale = {
+      correlatedWith: "openrouter",
+      claimedOriginal,
+      versusOpenRouter: versus,
+      openRouterPrice: or,
+      openRouterReadAt: or ? openRouterReadAt : null,
+    };
   }
 }
 
@@ -497,6 +604,7 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
       const rows = rowsFor(provider, payload);
       if (!rows.length) throw new SourceError("SOURCE_SHAPE_CHANGED");
       const sailPricing = provider === "sail" ? await fetchSailPricing(fetchImpl, timeoutMs, observedAt) : null;
+      const sailContext: SailContext | null = provider === "sail" ? await fetchSailContextLabels(fetchImpl, timeoutMs, new Set(rows.map((row) => modelId(row)).filter((id): id is string => Boolean(id)))) : null;
       const models = rows.map((row, index) => provider === "qwencloud"
         ? qwenModel(row, sourceUrl, observedAt, index)
         : provider === "novita"
@@ -506,10 +614,10 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
             : provider === "ionet"
               ? ionetModel(row, sourceUrl, observedAt, index)
               : provider === "sail"
-                ? sailModel(row, sailPricing, sourceUrl, observedAt, index)
+                ? sailModel(row, sailPricing, sourceUrl, observedAt, index, sailContext?.labels)
                 : genericModel(provider, row, sourceUrl, observedAt, index))
         .filter((model): model is CatalogueModel => model !== null);
-      const status = providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable" } : {}) });
+      const status = providerStatus(provider, sourceUrl, observedAt, rows, models, { apiKeyConfigured: Boolean(key), sourceKind: "native_json", ...(provider === "sail" ? { pricingSource: SAIL_PRICING_URL, pricingDigest: sailPricing?.state ?? "unavailable", contextSource: SAIL_MODELS_URL, contextSourceState: sailContext?.state ?? "unavailable", contextLabels: sailContext?.labels.size ?? 0, ...(sailContext?.error ? { contextSourceError: sailContext.error } : {}) } : {}) });
       // Identities without their only price source are a degraded answer, not a
       // complete one: a Sail-only catalogue must not report ok while quoting nothing.
       if (provider === "sail" && sailPricing?.state !== "verified") {
@@ -521,5 +629,9 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
       return { provider: emptyProvider(provider, sourceUrl, observedAt, code), models: [] };
     }
   }));
-  return { providers: collections.map((collection) => collection.provider), models: collections.flatMap((collection) => collection.models) };
+  const models = collections.flatMap((collection) => collection.models);
+  if (providers.includes("nous")) {
+    await annotateNousResale(models, { fetchImpl, timeoutMs, observedAt, collectedOpenRouter: providers.includes("openrouter") });
+  }
+  return { providers: collections.map((collection) => collection.provider), models };
 }

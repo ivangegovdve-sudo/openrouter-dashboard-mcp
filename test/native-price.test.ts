@@ -288,3 +288,89 @@ test("OpenRouter rows say unmeasured explicitly instead of omitting the response
   assert.equal(shape?.minViableBudget, null);
   assert.equal(shape?.lane, null);
 });
+
+test("generic sources carry an exact published context length, and nothing when none is published", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["openrouter"],
+    fetchImpl: async () => Response.json({ data: [
+      { id: "a/with-context", context_length: 131072, pricing: { prompt: "0.0000001", completion: "0.0000002" } },
+      { id: "a/without", pricing: { prompt: "0.0000001", completion: "0.0000002" } },
+    ] }),
+  });
+  assert.equal(result.models.find(m => m.id === "a/with-context")?.contextLength, 131072);
+  assert.equal(result.models.find(m => m.id === "a/without")?.contextLength, undefined);
+});
+
+test("Sail context labels bind only within their own table row", async () => {
+  const { parseSailContextLabels } = await import("../src/catalogue/native-price.js");
+  const row = (context: string | null, id: string) => `<tr><td className="cap-cell cap-cell-model">${context ? `<span className="cap-expand-key">Context</span>
+    <span className="cap-expand-val">${context}</span>` : ""}</td><td className="cap-cell cap-cell-slug"><code>${id}</code></td></tr>`;
+  const doc = [
+    row("1M", "zai-org/GLM-5.3"),
+    // Documented but absent from /models: its label must not leak forward.
+    row("128K", "unlisted/model"),
+    row(null, "google/gemma-4-12B-it"),
+    row("262K", "moonshotai/Kimi-K2.6"),
+  ].join("\n");
+  const labels = parseSailContextLabels(doc, new Set(["zai-org/GLM-5.3", "moonshotai/Kimi-K2.6", "google/gemma-4-12B-it"]));
+  assert.equal(labels.get("zai-org/GLM-5.3"), "1M");
+  assert.equal(labels.get("moonshotai/Kimi-K2.6"), "262K");
+  assert.equal(labels.has("google/gemma-4-12B-it"), false);
+  assert.equal(labels.has("unlisted/model"), false);
+});
+
+test("Nous rows are compared with OpenRouter's live price, not with Nous's own claimed original", async () => {
+  const nousRows = [
+    // Advertised as a deep discount, but the same price as OpenRouter.
+    { id: "m/same", pricing: { prompt: "0.0000000180", completion: "0.0000000300", original: { prompt: "0.00000015", completion: "0.00000015" } } },
+    { id: "m/cheaper", pricing: { prompt: "0.000000035", completion: "0.00000029", original: { prompt: "0.00000015", completion: "0.0000006" } } },
+    { id: "m/dearer-output", pricing: { prompt: "0.00000022", completion: "0.0000018", original: { prompt: "0.000000975", completion: "0.000004875" } } },
+    { id: "m/nous-only", pricing: { prompt: "0.000001", completion: "0.000002" } },
+  ];
+  const orRows = [
+    { id: "m/same", pricing: { prompt: "0.000000018", completion: "0.00000003" } },
+    { id: "m/cheaper", pricing: { prompt: "0.0000003", completion: "0.0000012" } },
+    { id: "m/dearer-output", pricing: { prompt: "0.0000003", completion: "0.000001" } },
+  ];
+  const result = await collectNativePriceCatalogue({
+    providers: ["nous"],
+    now: () => new Date(observedAt),
+    fetchImpl: async input => Response.json({ data: String(input) === NATIVE_PRICE_SOURCES.openrouter ? orRows : nousRows }),
+  });
+  const resale = (id: string) => result.models.find(m => m.id === id)?.resale;
+  assert.equal(resale("m/same")?.versusOpenRouter, "identical");
+  assert.deepEqual(resale("m/same")?.claimedOriginal, { input: "0.00000015", output: "0.00000015" });
+  assert.equal(resale("m/cheaper")?.versusOpenRouter, "cheaper");
+  assert.equal(resale("m/dearer-output")?.versusOpenRouter, "mixed");
+  assert.equal(resale("m/nous-only")?.versusOpenRouter, "not_listed");
+  assert.ok(result.models.every(m => m.resale?.correlatedWith === "openrouter"));
+});
+
+test("an unreadable OpenRouter leaves the Nous comparison unknown, never assumed", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["nous"],
+    fetchImpl: async input => String(input) === NATIVE_PRICE_SOURCES.openrouter
+      ? new Response("down", { status: 503 })
+      : Response.json({ data: [{ id: "m/a", pricing: { prompt: "0.000001", completion: "0.000002" } }] }),
+  });
+  assert.equal(result.models[0]?.resale?.versusOpenRouter, "unknown");
+  assert.equal(result.models[0]?.resale?.openRouterPrice, null);
+});
+
+test("a failed read of Sail's models page is reported as unavailable, not as no context published", async () => {
+  const fs = await import("node:fs");
+  const doc = fs.readFileSync("sail-pricing.md");
+  const result = await collectNativePriceCatalogue({
+    providers: ["sail"],
+    apiKeys: { sail: "test-sail-key" },
+    fetchImpl: async (input) => String(input) === NATIVE_PRICE_SOURCES.sail
+      ? Response.json({ object: "list", data: [{ id: "zai-org/GLM-5.3" }] })
+      : String(input).endsWith("/models.md") ? new Response("down", { status: 503 }) : new Response(new Uint8Array(doc)),
+  });
+  const params = result.providers[0]?.requestParameters;
+  assert.equal(params?.contextSourceState, "unavailable");
+  assert.equal(params?.contextSourceError, "HTTP_503");
+  assert.equal(result.models[0]?.contextLengthLabel, undefined);
+  // Prices were read independently and are unaffected.
+  assert.equal(params?.pricingDigest, "verified");
+});

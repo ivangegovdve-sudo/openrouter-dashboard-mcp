@@ -31,6 +31,29 @@ export const catalogueModelSchema = z.object({
   contextLength: z.number().int().positive().optional(),
   /** Where a chat model writes its answer and reasoning, with dated observations. */
   responseShape: responseShapeSchema.optional(),
+  /**
+   * A context size the source publishes only as a rounded label ("262K", "1M").
+   * Kept as the label: whether K means 1,000 or 1,024 is not stated, and
+   * converting it to an integer would be a guess presented as a measurement.
+   */
+  contextLengthLabel: z.object({
+    value: z.string().min(1),
+    sourceUrl: z.string().url(),
+    observedAt: z.string().datetime({ offset: true }),
+  }).strict().optional(),
+  /**
+   * For a reseller of another provider's catalogue: which provider it shares
+   * supply with, the list price it claims to discount from, and how its charged
+   * price compares with that provider's live price for the same id. The claimed
+   * discount is the reseller's statement; the comparison is the measurement.
+   */
+  resale: z.object({
+    correlatedWith: z.literal("openrouter"),
+    claimedOriginal: z.object({ input: z.string().nullable(), output: z.string().nullable() }).strict().nullable(),
+    versusOpenRouter: z.enum(["identical", "cheaper", "dearer", "mixed", "not_listed", "unknown"]),
+    openRouterPrice: z.object({ input: z.string().nullable(), output: z.string().nullable() }).strict().nullable(),
+    openRouterReadAt: z.string().datetime({ offset: true }).nullable(),
+  }).strict().optional(),
   provenance: z.object({
     sourceUrl: z.string().url(),
     observedAt: z.string().datetime({ offset: true }),

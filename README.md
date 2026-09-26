@@ -20,6 +20,43 @@ Read-only, free, no account. Choose only the tools and providers you need.
 > key. Every catalogue row carries a measured `responseShape.minViableBudget`: set
 > `max_tokens` above it, with headroom, per model.
 
+## Price sources, read live per run (1.4.0)
+
+`dashboard_catalogue` reads each provider's own source on every call. It does not go through
+a shared feed for these. Every row carries its source URL and read time, and a missing price is
+`unknown`, never zero and never borrowed from a sibling model. Status codes are what the
+sources returned on 2026-09-26.
+
+| Provider | Source | Auth | Status | Models / priced | Cached-input rate | Context |
+|---|---|---|---|---|---|---|
+| AkashML | `api.akashml.com/v1/models` | `AKASHML_API_KEY` | 200 | 6 / 6 | 5 models | exact |
+| io.net | `api.intelligence.io.solutions/api/v1/models` | none (User-Agent always sent) | 200 | 37 / 37 | 37 models | exact |
+| Groq | `api.groq.com/openai/v1/models` | `GROQ_API_KEY` | 200 | 11 / 8 | 8 models | exact |
+| OpenRouter | `openrouter.ai/api/v1/models` | none | 200 | 458 / 452 | 291 models | exact |
+| Sail | keyed `/v1/models` + digest-verified `docs.sailresearch.com/pricing.md` | `SAIL_API_KEY` | 200 / 200 | 12 / 12 | 12 models (per window) | published label, e.g. `262K` |
+| Cerebras | rendered `www.cerebras.ai/pricing` table, matched to API ids | none | 200 | 3 / 2 | not published | not published |
+| Nous | `inference-api.nousresearch.com/v1/models` | none | 200 | 417 / 417 | 280 models | exact |
+
+Notes that change a routing decision:
+
+- **Prices are exact decimals.** Every source's strings (and io.net's JSON numbers, via their
+  decimal text) are converted without binary floating point, so the sixth and seventh decimal
+  places survive.
+- **Cerebras** names on its pricing page do not match API ids. An id with no matching row is
+  reported `offered_unpriced`, not guessed; today that is `gemma-4-31b`.
+- **Sail** context sizes are kept as the published label (`contextLengthLabel`), because whether
+  "K" means 1,000 or 1,024 is not stated.
+- **Nous resells OpenRouter's catalogue** (372 of 417 ids; no Hermes models) and carries
+  `correlatedWith: "openrouter"`. Do not count the two as independent failover paths. Its API
+  prices are what Nous charges, promotions included, the same numbers its portal shows. Its
+  advertised discounts are measured against its own `pricing.original`, which is often above
+  OpenRouter's price. So every Nous row also reports `resale.versusOpenRouter`
+  (`identical` / `cheaper` / `dearer` / `mixed` / `not_listed` / `unknown`) against
+  OpenRouter's live price for the same id. mistral-nemo, advertised 80% off, is `cheaper` only because input is $0.018 against $0.019 per million, with output equal; mercury-2.5 and gemini-3.7-flash are `identical`;
+  deepseek-v4.1-flash is genuinely `cheaper`; qwen3-coder's output is dearer.
+- The previously circulated AkashML base `chatapi.akash.network/api/v1` answers 301 to an HTML
+  page; the package has only ever used `api.akashml.com/v1`.
+
 ## New in 1.3.0: Sail as a native-price provider
 
 The starting set is four providers, each read from its own catalogue:
@@ -249,7 +286,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.3.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.4.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -324,14 +361,14 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.3.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.4.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
 | <span data-provider-id="openrouter">OpenRouter</span><br>Multi-provider aggregator | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
 | <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="nous">Nous Research</span><br>Model provider | [Catalogue](https://nousresearch.com/) · [Documentation](https://nousresearch.com/) | Some collected models | Not established | Not established | Not established | Not established | Not established |
 | <span data-provider-id="qwencloud">QwenCloud</span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="deepinfra">DeepInfra</span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
