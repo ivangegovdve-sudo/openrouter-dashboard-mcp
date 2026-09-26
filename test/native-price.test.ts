@@ -210,3 +210,11 @@ test("a Cloudflare 1010 on a keyed catalogue is an edge block, not a rejected cr
   });
   assert.equal(rejected.providers[0]?.error, "PROVIDER_REJECTED");
 });
+
+test("a public catalogue's 401/403 is an HTTP error, never a rejected credential", async () => {
+  const result = await collectNativePriceCatalogue({
+    providers: ["ionet"],
+    fetchImpl: async () => new Response("forbidden", { status: 403, headers: { server: "cloudflare" } }),
+  });
+  assert.equal(result.providers[0]?.error, "HTTP_ERROR");
+});

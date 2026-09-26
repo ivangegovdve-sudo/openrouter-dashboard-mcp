@@ -386,7 +386,9 @@ async function fetchJson(fetchImpl: typeof fetch, url: string, timeoutMs: number
       signal: controller.signal,
       redirect: "error",
     });
-    if (response.status === 401 || response.status === 403) {
+    // Only a request that carried a key can have its credential rejected; a
+    // public catalogue's 401/403 stays a plain HTTP error (reviewer finding, #49).
+    if (apiKey && (response.status === 401 || response.status === 403)) {
       const body = (await response.text()).slice(0, 4096);
       throw new SourceError(classifyProviderBlock(response.status, body, response.headers) === "edge_blocked" ? "EDGE_BLOCKED" : "PROVIDER_REJECTED");
     }
