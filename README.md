@@ -13,6 +13,22 @@ traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+## New in 1.2.1: measured io.net shapes, answer budgets, and edge blocks
+
+- **io.net is now measured, not inferred.** With a key on 2026-09-26, reasoning models there
+  write `message.reasoning_content` beside `content` and `refusal`. At `max_tokens: 16`,
+  GLM-5.3-Flash returned an empty answer 3 of 3 times and DeepSeek-V4.1-Flash 2 of 3, each
+  billed. Their rows now say `emptyContentObserved: "observed"`.
+- **`answerCompletionTokens`**: the completion tokens a one-word answer actually took, as an
+  observed `min`/`max` over `samples` calls. It is a range because it moves per call:
+  GLM-5.3-Flash used 95, 218 and 217 tokens on three identical requests, DeepSeek-V4.1-Flash
+  16 to 35. A single global `max_tokens` floor is wrong in both directions; budget each model
+  above its observed `max`, with headroom.
+- **Edge block versus dead key in the catalogue.** io.net and other providers sit behind
+  Cloudflare, which can answer a valid key with `403 error code: 1010` depending on client
+  and User-Agent. A keyed catalogue now reports `EDGE_BLOCKED` for that and
+  `PROVIDER_REJECTED` only when the provider itself refused the credential.
+
 ## New in 1.2.0: AkashML, io.net, and the empty-answer trap
 
 - **AkashML** (Akash Network's managed inference) is priced **per model** from its own
@@ -21,8 +37,9 @@ Read-only, free, no account. Choose only the tools and providers you need.
   tokens" describes none of them. Set `AKASHML_API_KEY` to include it; without a key it
   reports `KEY_NOT_CONFIGURED` rather than an empty or free catalogue.
 - **io.net** (IO Intelligence) publishes per-token prices for 37 models on a public `/models`,
-  no key needed. 31 of the 37 need an access tier above the free one, so a listed price is not
-  proof a free key can call the model; `min_access_tier` is kept on every row.
+  no key needed. 31 of the 37 are marked as needing an access tier above the free one, so a
+  listed price is not proof a free key can call the model; `min_access_tier` is kept on every
+  row. A paid key measured 2026-09-26 reached all 37.
 - **`responseShape` on catalogue rows.** A reasoning model writes its thinking to
   `message.reasoning_content` and its answer to `message.content`. With a small
   `max_tokens` the whole budget can go to thinking: HTTP 200, every token billed, and
@@ -186,7 +203,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.2.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.2.1** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -261,7 +278,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.2.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.2.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|

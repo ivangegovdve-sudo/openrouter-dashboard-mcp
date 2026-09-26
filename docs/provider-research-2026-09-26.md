@@ -56,6 +56,22 @@ the same prompt varies between calls.
   H100 SXM $3.50–4/hr and A100 80GB $2.50–3/hr. The live cloud.io.net table sits behind a
   session gate. H200 price: unknown. GPU rental is not collected by this package.
 
+### io.net response shape (measured 2026-09-26, with a key)
+
+Prompt "Reply with exactly READY.", 18 calls. Every message carried `content`,
+`reasoning_content` and `refusal`. A key-bearing request can get Cloudflare
+`403 error code: 1010` depending on client and User-Agent (reported by Ivan; not reproduced
+from this desktop, where node, curl and an empty User-Agent all got 200).
+
+| Model | max_tokens 16 (3 calls) | tokens used for the answer at 256 (3 calls) |
+|---|---|---|
+| GLM-5.3-Flash | empty, empty, empty | 95, 218, 217 |
+| DeepSeek-V4.1-Flash | empty, empty, answered | 35, 16, 32 |
+| Qwen3.8-27B | truncated, truncated, answered (13 tok) | 25, 26, 27 |
+
+Ivan's probe the same day saw Qwen3.8-27B return empty at 16 tokens and measured GLM-5.3-Flash
+at 91 tokens and DeepSeek at 18, inside or near the ranges above.
+
 ## Akash (GPU marketplace, for comparison)
 
 H100 PCIe ~$2.09/hr, H100 SXM5 ~$2.69/hr, A100 ~$1.00–2.50/hr via a bidding marketplace

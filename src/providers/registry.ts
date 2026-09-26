@@ -473,7 +473,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "io.net sells both GPU rental (IO Cloud) and per-token inference (IO Intelligence); only the inference catalogue is collected. Its public /models publishes per-token USD prices as JSON numbers, converted exactly from their decimal text. 31 of 37 models (measured 2026-09-26) require an access tier above the free one (min_access_tier is retained in nativePricing), so a listed price is not proof a free key can call the model. GPU hourly rates on io.net's own pages disagree with each other and are not collected. Response shape is not observed for io.net, so where each model writes its answer is unknown.",
+      "io.net sells both GPU rental (IO Cloud) and per-token inference (IO Intelligence); only the inference catalogue is collected. Its public /models publishes per-token USD prices as JSON numbers, converted exactly from their decimal text. 31 of 37 models (measured 2026-09-26) require an access tier above the free one (min_access_tier is retained in nativePricing), so a listed price is not proof a free key can call the model. GPU hourly rates on io.net's own pages disagree with each other and are not collected. Measured with a key on 2026-09-26, all 37 listed models were reachable, and three reasoning models (GLM-5.3-Flash, DeepSeek-V4.1-Flash, Qwen3.8-27B) wrote message.reasoning_content beside content and refusal; at max_tokens 16 GLM-5.3-Flash returned an empty answer 3 of 3 times and DeepSeek-V4.1-Flash 2 of 3, while billing; Qwen3.8-27B answered or was truncated in this build's 3 calls, though an operator probe the same day saw it return empty, and the tokens a one-word answer needed ranged from 16 to 218 depending on model and call. Other io.net models are not observed. io.net sits behind Cloudflare: a request can get 403 'error code: 1010' on a valid key depending on client and User-Agent, which is reported as EDGE_BLOCKED, not a credential failure.",
   },
 };
 
@@ -568,8 +568,19 @@ export type ProviderBlockKind = z.infer<typeof providerBlockKindSchema>;
 export function classifyProviderBlock(
   status: number,
   body: string,
+  headers?: { get(name: string): string | null },
 ): ProviderBlockKind | null {
   if (status !== 401 && status !== 403) return null;
+
+  // A bare "error code: 1010" body carries no Cloudflare marker of its own; the
+  // edge identifies itself in the response headers instead. Reported 2026-09-26
+  // on io.net: a good key got 403 "error code: 1010" until a User-Agent was sent.
+  // The provider's own auth errors pass through Cloudflare too (io.net answers
+  // 401 {"detail":"Invalid API Key"} with server: cloudflare), so a header marker
+  // only counts together with an explicit Cloudflare error code in the body.
+  const edgeHeaders =
+    /cloudflare/i.test(headers?.get("server") ?? "") || Boolean(headers?.get("cf-ray"));
+  if (edgeHeaders && /error code:\s*1\d{3}/i.test(body)) return "edge_blocked";
 
   // Every edge verdict requires a Cloudflare marker. Matching a bare
   // "error code: 1xxx" would be worse than the bug it replaced: a provider that

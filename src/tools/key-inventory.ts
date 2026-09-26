@@ -467,7 +467,7 @@ async function readKey(
     const text = await response.text();
 
     if (response.status === 401 || response.status === 403) {
-      const kind = classifyProviderBlock(response.status, text);
+      const kind = classifyProviderBlock(response.status, text, response.headers);
       if (kind === "edge_blocked") {
         return {
           ...report,
