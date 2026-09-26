@@ -13,6 +13,10 @@ traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+**18 read-only tools. `dashboard_catalogue` reads 15 providers' own catalogues live on every
+call: 11 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
+source and read time, and a missing price is reported as unknown, never zero.**
+
 > **`max_tokens` is a correctness parameter, not a safety cap.** On AkashML, io.net and Sail,
 > most models reason before they answer. With too small a budget the call returns HTTP 200,
 > bills every token, and `message.content` is empty (or `null`), with the text stranded in
@@ -242,7 +246,12 @@ Requires Node.js 20 or newer. No API key is needed to start. Keys only widen wha
 
 ### Where the data comes from
 
-Dashboard-backed tools read a **public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result. The catalogue tool additionally reads public provider sources; optional key inventory has its own opt-in credential path. QwenCloud's native catalogue requires a credential held by the collector; MCP users read the public archived result. The MCP also reads Sail's pinned pricing document directly. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+There are two data paths, and they differ in freshness.
+
+- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table). All 15 providers are read this way. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
+- **The other tools read a public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result: model economics, status, free models, what changed, usage leaders and trending repositories. Their freshness is the archive's, and each answer says how old it is.
+
+The optional key inventory has its own opt-in credential path. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -286,7 +295,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.4.0** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.4.1** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -361,7 +370,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.4.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.4.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
