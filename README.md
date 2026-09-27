@@ -13,6 +13,26 @@ traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+## The easy path: route with Jev and your own keys
+
+Use this package as the evidence layer and Jev as the typed decision layer. In this
+**System**, Jev asks `dashboard_resolve_model` for a model that satisfies your typed
+constraints; your application then sends the inference request directly to the selected
+provider with a key from your own environment. The MCP never proxies inference, sells hosted
+access, or supplies a shared/default credential.
+
+1. Install the MCP: `claude mcp add open-dashboard -- npx -y open-dashboard-mcp`.
+2. Put only the provider keys you choose in the MCP/client environment (for example,
+   `OPENROUTER_API_KEY`, `GROQ_API_KEY`, or `CEREBRAS_API_KEY`).
+3. Give Jev your task and typed constraints—capabilities, context, price ceiling, and allowed
+   providers—and let it select from `dashboard_resolve_model`.
+4. Call the selected provider from your application using that user's key. If a required key
+   is missing, treat the provider as unavailable; never fall back to a bundled credential.
+
+Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
+**QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
+**fal**, **Crazyrouter**, **AkashML**, and **io.net**.
+
 **18 read-only tools. `dashboard_catalogue` reads 15 providers' own catalogues live on every
 call: 11 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
 source and read time, and a missing price is reported as unknown, never zero.**

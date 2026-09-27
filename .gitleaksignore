@@ -1,0 +1,3 @@
+# Synthetic redaction-test token; deliberately key-shaped and never accepted by a provider.
+test/key-inventory.test.ts:generic-api-key:442
+8072d24ec64182d56c98d746b8b199274d5f9fc9:test/key-inventory.test.ts:generic-api-key:415
