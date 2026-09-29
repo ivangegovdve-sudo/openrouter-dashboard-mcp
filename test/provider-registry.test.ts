@@ -26,6 +26,7 @@ test("covers every provider this build normalises", () => {
       "fal",
       "groq",
       "ionet",
+      "kie",
       "nous",
       "novita",
       "openrouter",

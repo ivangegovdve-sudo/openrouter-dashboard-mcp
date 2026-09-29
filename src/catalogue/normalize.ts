@@ -367,3 +367,100 @@ export function normalizeChutes(
     provenance: { sourceUrl, observedAt, sourceIndex },
   };
 }
+
+/** KIE bills in credits; its pricing page states the standard rate as 1 credit = $0.005. */
+export const KIE_USD_PER_CREDIT = "0.005";
+
+const KIE_KIND: Record<string, MediaKind> = { image: "image", video: "video", music: "audio", chat: "text" };
+
+/**
+ * Exact KIE unit labels this server converts, and the media kind each is valid
+ * for. KIE's labels are hand-typed ("per vedio", "per milion tokens", blank);
+ * a label outside this table is kept natively and never guessed at.
+ */
+const KIE_UNITS: Record<string, { unit: PriceUnit; kinds: MediaKind[]; divisor?: string }> = {
+  "per image": { unit: "image", kinds: ["image"] },
+  "per megapixel": { unit: "megapixel", kinds: ["image"] },
+  "per second": { unit: "video_second", kinds: ["video"] },
+  "per video": { unit: "video", kinds: ["video"] },
+  "per request": { unit: "request", kinds: ["image", "video", "audio", "text"] },
+  "per million tokens": { unit: "token_in", kinds: ["text"], divisor: "1000000" },
+  "per 1m tokens": { unit: "token_in", kinds: ["text"], divisor: "1000000" },
+};
+
+/**
+ * KIE has no model id field: the full description ("Google veo 3.1, Extend, Fast")
+ * is the only per-configuration identity. It is canonicalised for whitespace only
+ * (trimmed, runs collapsed, no space before a comma) and never shortened, so two
+ * configurations of one model stay two offerings.
+ */
+export function canonicalKieOfferingId(description: string): string {
+  return description.trim().replace(/\s+/g, " ").replace(/\s+,/g, ",");
+}
+
+export function normalizeKie(
+  row: NativeRecord,
+  sourceUrl: string,
+  observedAt: string,
+  sourceIndex: number,
+): CatalogueModel {
+  const original = scalar(row.modelDescription);
+  const id = original === undefined ? undefined : canonicalKieOfferingId(original);
+  if (!id) throw new Error("MODEL_ID_MISSING");
+  const type = scalar(row.interfaceType);
+  const kind = (type && KIE_KIND[type]) || "unknown";
+  const credits = scalar(row.creditPrice)?.trim();
+  const usd = scalar(row.usdPrice)?.trim();
+  const unitLabel = (scalar(row.creditUnit) ?? "").trim().toLowerCase();
+  const pricePoints: PricePoint[] = [];
+  let note = "native_billing_unit_not_comparable";
+  try {
+    const mapped = KIE_UNITS[unitLabel];
+    // A token price is only a direction-specific price when the row names it.
+    const leg = /,\s*input$/i.test(id) ? "token_in" : /,\s*output$/i.test(id) ? "token_out"
+      : /,\s*cached input$/i.test(id) ? "token_cached" : /,\s*cache writes?$/i.test(id) ? "token_cache_create" : undefined;
+    const unit = mapped?.divisor ? leg : mapped?.unit;
+    if (credits === undefined || usd === undefined) note = "price_absent_from_collected_source";
+    else if (!mapped || !mapped.kinds.includes(kind)) note = "native_billing_unit_not_comparable";
+    else if (!unit) note = "token_direction_not_stated";
+    else if (exactDecimalRatio(credits, KIE_USD_PER_CREDIT).value !== exactDecimalRatio(usd).value) {
+      // The listed USD figure must be the credit price at the stated rate;
+      // when KIE's two columns disagree, neither is presented as the price.
+      note = "credit_and_usd_price_disagree";
+    } else {
+      pricePoints.push(normalizePricePoint({
+        id: `kie:${id}:${unit}`,
+        value: usd,
+        unit,
+        ...(mapped.divisor ? { divisor: mapped.divisor } : {}),
+        sourceUrl,
+        readAt: observedAt,
+        provenance: "published",
+        measurementOrigin: "catalogue",
+        observed: null,
+      }));
+    }
+  } catch {
+    pricePoints.length = 0;
+    note = "invalid_native_decimal";
+  }
+  return {
+    provider: "kie",
+    id,
+    displayName: original!,
+    mediaKind: kind,
+    nativeType: type ?? null,
+    ...pricing({
+      creditPrice: row.creditPrice ?? null,
+      creditUnit: row.creditUnit ?? null,
+      usdPrice: row.usdPrice ?? null,
+      usdPerCredit: KIE_USD_PER_CREDIT,
+      // Every field KIE sent, verbatim, for provenance. falPrice and
+      // discountRate are KIE's own comparison claims: they are not fal's
+      // pricing and are never read as a fal price anywhere in this server.
+      kieRow: row,
+      kieClaimsNotVerified: ["falPrice", "discountRate", "provider"],
+    }, pricePoints, note),
+    provenance: { sourceUrl, observedAt, sourceIndex },
+  };
+}
