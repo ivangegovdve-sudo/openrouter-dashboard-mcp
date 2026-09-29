@@ -76,6 +76,7 @@ const quotes: Record<string, { text: string; attribution: string; sourceUrl: str
   fal: { text: "The generative media platform powering the world’s top AI apps.", attribution: "fal", sourceUrl: "https://fal.ai/docs/documentation" },
   crazyrouter: { text: "Same OpenAI-style workflow. More models. Lower pricing. Easier experimentation.", attribution: "Crazyrouter", sourceUrl: "https://crazyrouter.com/tools/" },
   akashml: { text: "competitive pricing starting from $0.15/M tokens", attribution: "AkashML homepage pricing claim, contradicted by its own /models rates", sourceUrl: "https://akashml.com/" },
+  kie: { text: "Access the best AI models for AI chat, video, image, and music in one API.", attribution: "Kie.ai homepage description", sourceUrl: "https://kie.ai/" },
   ionet: { text: "Free inference platform powered by io.net's decentralized GPU network.", attribution: "io.net IO Intelligence page description", sourceUrl: "https://io.net/intelligence" },
 };
 
@@ -106,7 +107,7 @@ export function providerEvidence(id: string): ProviderEvidence {
   const quote = Object.hasOwn(quotes, id) ? quotes[id] : undefined;
   if (!quote) return { caveatResearch: { status: "not_researched" }, pitchResearch: { status: "not_researched" } };
   const caveats = numericCaveats[id];
-  const evidenceObservedAt = id === "nous" ? "2026-09-11" : id === "akashml" || id === "ionet" ? "2026-09-26" : observedAt;
+  const evidenceObservedAt = id === "nous" ? "2026-09-11" : id === "akashml" || id === "ionet" ? "2026-09-26" : id === "kie" ? "2026-09-29" : observedAt;
   return providerEvidenceSchema.parse({
     pitch: { ...quote, observedAt: evidenceObservedAt },
     pitchResearch: {

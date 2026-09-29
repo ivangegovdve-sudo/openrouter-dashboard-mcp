@@ -31,10 +31,10 @@ access, or supplies a shared/default credential.
 
 Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
 **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
-**fal**, **Crazyrouter**, **AkashML**, and **io.net**.
+**fal**, **KIE**, **Crazyrouter**, **AkashML**, and **io.net**.
 
-**18 read-only tools. `dashboard_catalogue` reads 15 providers' own catalogues live on every
-call: 11 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
+**18 read-only tools. `dashboard_catalogue` reads 16 providers' own catalogues live on every
+call: 12 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
 source and read time, and a missing price is reported as unknown, never zero.**
 
 > **`max_tokens` is a correctness parameter, not a safety cap.** On AkashML, io.net and Sail,
@@ -147,6 +147,13 @@ million), two retired. Before this, 1.2.1 was correctly reporting `PRICES ARE ST
   no key needed. 31 of the 37 are marked as needing an access tier above the free one, so a
   listed price is not proof a free key can call the model; `min_access_tier` is kept on every
   row. A paid key measured 2026-09-26 reached all 37.
+- **KIE** (kie.ai) resells image, video, music and chat models and publishes one public price
+  table, read without a key: 509 rows on 2026-09-29, one per priced variant (resolution,
+  duration, input or output leg). KIE bills in credits at a stated $0.005 each. A row becomes a
+  USD price only when KIE's listed USD equals that conversion and its unit label is exact.
+  On 2026-09-29, 56 of the 509 failed one of those (mistyped units such as "per vedio", blank
+  units, the two columns disagreeing) and are kept with their native values and a reason. Bonus credits on
+  larger top-ups can make the effective rate lower than the listed one.
 - **`responseShape` on catalogue rows.** A reasoning model writes its thinking to
   `message.reasoning_content` and its answer to `message.content`. With a small
   `max_tokens` the whole budget can go to thinking: HTTP 200, every token billed, and
@@ -268,7 +275,7 @@ Requires Node.js 20 or newer. No API key is needed to start. Keys only widen wha
 
 There are two data paths, and they differ in freshness.
 
-- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table). All 15 providers are read this way. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
+- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table). All 16 providers are read this way. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
 - **The other tools read a public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result: model economics, status, free models, what changed, usage leaders and trending repositories. Their freshness is the archive's, and each answer says how old it is.
 
 The optional key inventory has its own opt-in credential path. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
@@ -315,14 +322,14 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net**. Version **1.4.1** registers **15 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **16 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
 **What you actually get:**
 
-- **One catalogue across fifteen named providers** — OpenRouter, Groq, Cerebras, Sail,
-  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal,
+- **One catalogue across sixteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+  Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE,
   Crazyrouter, AkashML and io.net.
 - **Which field a model answers in.** Catalogue rows carry `responseShape`, so a selector can
   see that a reasoning model has been observed returning an empty `content` before it
@@ -390,7 +397,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.4.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -406,6 +413,7 @@ Generated from the package registry: **15 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="chutes">Chutes</span> | [Catalogue](https://llm.chutes.ai/v1/models) · [Documentation](https://chutes.ai/app/api) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="wavespeed">WaveSpeedAI</span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="fal">fal</span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="kie">KIE</span><br>Multi-provider aggregator | [Catalogue](https://api.kie.ai/client/v1/model-pricing/page) · [Documentation](https://kie.ai/pricing) | All collected models | Not published in this connector | Some collected models | Not published in this connector | Some collected models | Not established |
 | <span data-provider-id="crazyrouter">Crazyrouter</span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
 | <span data-provider-id="akashml">AkashML</span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="ionet">io.net</span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
@@ -485,6 +493,12 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 > “The generative media platform powering the world’s top AI apps.” — [fal](https://fal.ai/docs/documentation), observed 2026-09-08.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://fal.ai/docs/documentation); checked 2026-09-08.
+
+**KIE**
+
+> “Access the best AI models for AI chat, video, image, and music in one API.” — [Kie.ai homepage description](https://kie.ai/), observed 2026-09-29.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://kie.ai/); checked 2026-09-29.
 
 **Crazyrouter**
 

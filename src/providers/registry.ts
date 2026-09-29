@@ -53,6 +53,7 @@ export const providerIdSchema = z.enum([
   "crazyrouter",
   "akashml",
   "ionet",
+  "kie",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -72,6 +73,7 @@ export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note
   crazyrouter: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   akashml: { state: "UNKNOWN", note: "AkashML's chat response usage object carries token counts and no cost field (measured 2026-09-25); per-call charges appear only in its web console, which this integration does not read." },
   ionet: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
+  kie: { state: "UNKNOWN", note: "KIE bills in credits; this integration reads only its public price table, not per-task credit charges." },
 };
 
 export const publicationSchema = z.enum([
@@ -420,6 +422,24 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "fal is a media generation platform. With FAL_API_KEY, the collector reads its full key-visible catalogue and bounded authenticated pricing batches; account-specific rates can apply. Without a key it reads the public catalogue and summary pricing table. Every acquired identity is retained. Only explicit supported output units become USD/image or USD/video-second; compute time, unobserved batches and unsupported prices remain unavailable with distinct reasons. Catalogue coverage and price coverage are reported separately. Account spend is not read by this integration.",
+  },
+  kie: {
+    id: "kie",
+    ...providerEvidence("kie"),
+    displayName: "KIE",
+    providerKind: "aggregator",
+    catalogueUrl: "https://api.kie.ai/client/v1/model-pricing/page",
+    citationUrl: "https://kie.ai/pricing",
+    publishes: {
+      // Measured 2026-09-29: 509 priced rows (image 110, video 269, music 31,
+      // chat 99), no context length, modality only as a coarse interface type.
+      pricing: "always", contextLength: "never", outputModalities: "partial",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "partial",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "KIE resells image, video, music and chat models and publishes one public price table, read without a key. Each row is one priced variant (resolution, duration, input/output leg) and is kept as its own identity. KIE bills in credits at a stated $0.005 per credit; USD prices are used only where KIE's listed USD equals that conversion and the unit label is exact. Bonus credits on larger top-ups can make the effective rate lower. Its 'provider' column is a model-family label and is not always right, so it is kept natively and not trusted. Account spend is not read by this integration.",
   },
   crazyrouter: {
     id: "crazyrouter",

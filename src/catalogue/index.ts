@@ -1,5 +1,5 @@
 import { mediaCatalogueSchema, type CatalogueModel, type CatalogueProvider, type MediaCatalogue, type MediaCatalogueProviderId } from "./schemas.js";
-import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeFalAuthenticated, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
+import { normalizeChutes, normalizeDeepInfra, normalizeFal, normalizeFalAuthenticated, normalizeKie, normalizeWaveSpeed, parseFalPricingPage, record, scalar, type NativeRecord } from "./normalize.js";
 import { parseNativeJson } from "./json.js";
 import { resolveProviderPriceCoverage } from "./price-coverage.js";
 export * from "./schemas.js";
@@ -11,12 +11,13 @@ export * from "./price-coverage.js";
 export * from "./rendered-page.js";
 export * from "./rendered-price.js";
 
-export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes"];
+export const MEDIA_CATALOGUE_PROVIDER_IDS: MediaCatalogueProviderId[] = ["deepinfra", "wavespeed", "fal", "chutes", "kie"];
 export const MEDIA_CATALOGUE_SOURCES: Record<MediaCatalogueProviderId, string> = {
   deepinfra: "https://api.deepinfra.com/models/list",
   wavespeed: "https://wavespeed.ai/api/models",
   fal: "https://api.fal.ai/v1/models",
   chutes: "https://api.chutes.ai/chutes/",
+  kie: "https://api.kie.ai/client/v1/model-pricing/page",
 };
 export const DEFAULT_WAVESPEED_ENRICH_IDS = [
   "wavespeed-ai/wan-2.2/t2v-720p",
@@ -46,11 +47,11 @@ function safeError(error: unknown): string {
   // Never reflect remote response bodies, URLs, credentials, or exception messages.
   return error instanceof CatalogueFetchError ? error.message : "SOURCE_FETCH_OR_SHAPE_FAILED";
 }
-async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: number, authorization?: string): Promise<string> {
+async function readSource(fetchImpl: typeof fetch, url: string, timeoutMs: number, authorization?: string, jsonBody?: string): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetchImpl(url, { method: "GET", headers: { Accept: "application/json,text/html", "User-Agent": "open-dashboard-mcp catalogue/0.9", ...(authorization ? { Authorization: authorization } : {}) }, signal: controller.signal, redirect: "error" });
+    const response = await fetchImpl(url, { method: jsonBody === undefined ? "GET" : "POST", headers: { Accept: "application/json,text/html", "User-Agent": "open-dashboard-mcp catalogue/0.9", ...(authorization ? { Authorization: authorization } : {}), ...(jsonBody === undefined ? {} : { "Content-Type": "application/json" }) }, ...(jsonBody === undefined ? {} : { body: jsonBody }), signal: controller.signal, redirect: "error" });
     if (!response.ok) throw new CatalogueFetchError(`HTTP_${response.status}`);
     if (Number(response.headers.get("content-length")) > 12 * 1024 * 1024) throw new CatalogueFetchError("RESPONSE_SIZE_LIMIT");
     if (!response.body) throw new CatalogueFetchError("EMPTY_RESPONSE_BODY");
@@ -75,12 +76,12 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
   const fetchImpl = options.fetchImpl ?? fetch, timeout = Math.min(Math.max(options.timeoutMs ?? 10000, 1), 30000), maxPages = Math.min(Math.max(options.maxPages ?? 32, 1), 64);
   const deadline = Date.now() + 60000;
   const falApiKey = provider === "fal" ? (options.falApiKey ?? process.env.FAL_API_KEY)?.trim() : undefined;
-  const request = async (url: string) => {
+  const request = async (url: string, jsonBody?: string) => {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new CatalogueFetchError("PROVIDER_TIME_BUDGET");
     const target = new URL(url);
     const authorization = falApiKey && target.origin === "https://api.fal.ai" && ["/v1/models", "/v1/models/pricing"].includes(target.pathname) ? `Key ${falApiKey}` : undefined;
-    const text = await readSource(fetchImpl, url, Math.min(timeout, remaining), authorization);
+    const text = await readSource(fetchImpl, url, Math.min(timeout, remaining), authorization, jsonBody);
     // Authenticated metadata is still untrusted: reject a reflected credential
     // before parsing or retaining any successful response fields.
     if (authorization && falApiKey && text.includes(falApiKey)) throw new CatalogueFetchError("SOURCE_CREDENTIAL_REFLECTION");
@@ -96,8 +97,13 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
       if (provider === "wavespeed") { url.searchParams.set("page", String(page + 1)); url.searchParams.set("page_size", "200"); }
       if (provider === "fal") { url.searchParams.set("limit", "1000"); if (cursor) url.searchParams.set("cursor", cursor); }
       if (provider === "chutes") { url.searchParams.set("include_public", "true"); url.searchParams.set("limit", "1000"); url.searchParams.set("page", String(page)); }
-      const payload = parseNativeJson(await request(url.href)), obj = record(payload);
-      const pageRows = provider === "deepinfra" ? payload : provider === "fal" ? obj.models : obj.items;
+      // KIE's public pricing table is a paged POST capped at 100 rows a page; its
+      // envelope carries its own status code, which must be 200 to be data.
+      const kieBody = provider === "kie" ? JSON.stringify({ pageNum: page + 1, pageSize: 100, modelDescription: "", interfaceType: "" }) : undefined;
+      const raw = parseNativeJson(await request(url.href, kieBody));
+      if (provider === "kie" && scalar(record(raw).code) !== "200") throw new CatalogueFetchError("SOURCE_ENVELOPE_NOT_OK");
+      const payload = provider === "kie" ? record(raw).data : raw, obj = record(payload);
+      const pageRows = provider === "deepinfra" ? payload : provider === "fal" ? obj.models : provider === "kie" ? obj.records : obj.items;
       if (!Array.isArray(pageRows)) throw new CatalogueFetchError("CATALOGUE_SHAPE_CHANGED");
       if (pageRows.some(row => !row || typeof row !== "object" || Array.isArray(row))) throw new CatalogueFetchError("MODEL_ROW_SHAPE_CHANGED");
       const reportedTotal = count(obj.total);
@@ -132,7 +138,7 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
   for (let index = 0; index < rows.length; index++) {
     try {
       const row = rows[index]!, url = rowUrls[index]!;
-      const model = provider === "deepinfra" ? normalizeDeepInfra(row, url, observedAt, index) : provider === "wavespeed" ? normalizeWaveSpeed(row, url, observedAt, index) : provider === "fal" ? normalizeFal(row, url, observedAt, index) : normalizeChutes(row, url, observedAt, index);
+      const model = provider === "deepinfra" ? normalizeDeepInfra(row, url, observedAt, index) : provider === "wavespeed" ? normalizeWaveSpeed(row, url, observedAt, index) : provider === "fal" ? normalizeFal(row, url, observedAt, index) : provider === "kie" ? normalizeKie(row, url, observedAt, index) : normalizeChutes(row, url, observedAt, index);
       if (identities.has(model.id)) { complete = false; error = "DUPLICATE_IDENTITY_DURING_PAGINATION"; }
       identities.add(model.id); models.push(model);
     } catch { exclusions.push(`row ${index}: missing stable native model identity`); complete = false; error = "INVALID_MODEL_IDENTITY"; }
@@ -289,6 +295,7 @@ async function collectProvider(provider: MediaCatalogueProviderId, options: Coll
     requestParameters.detailBudget = 24; requestParameters.enrichedIds = observed; requestParameters.detailFailures = failures;
     requestParameters.detailPriceObservations = detailPriceObservations;
   }
+  if (provider === "kie") requestParameters.priceCoverageRule = "Every row of KIE's public pricing table retained, one row per priced variant. USD is used only where the unit label is exact and supported for the row's kind and the listed USD equals credits x $0.005; token prices only where the row names its direction. Unrecognised or mistyped unit labels and credit/USD disagreements stay native with a reason. KIE's bonus credits can lower the effective rate; no account discount is applied.";
   if (provider === "chutes") requestParameters.priceCoverageRule = "Public deployments retained by chute_id, including custom deployments; explicit USD per-million token legs converted per token. Compute rental rates retained natively and never labelled output prices. Null template means modality unknown.";
   const priceRows = models.reduce((sum, model) => sum + model.pricePoints.length, 0);
   const priceCoverage = resolveProviderPriceCoverage({
