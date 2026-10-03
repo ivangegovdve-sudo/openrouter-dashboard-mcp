@@ -73,11 +73,6 @@ permissions:
   checks: read
   statuses: read
 
-env:
-  # Measured shared runner toolcache path; the service PATH does not contain
-  # Python, and this tree is readable by the runner service account.
-  PYTHON_EXE: 'D:\actions-runner-morning-news-anchor\_work\_tool\Python\3.11.9\x64\python.exe'
-
 concurrency:
   group: merge-on-approval-${{ github.event.pull_request.number }}
   cancel-in-progress: false
@@ -99,17 +94,19 @@ jobs:
     if: >-
       github.event.review.state == 'approved' &&
       github.event.pull_request.draft == false
-    # Repository-local runner; all labels are measured from GitHub's runner API.
-    runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
+    # Any unified Windows fleet runner can execute this gate; it has no local-model step.
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - uses: actions/checkout@v4
       - name: Verify runner Python for the merge gate
         shell: pwsh
         run: |
-          if (-not (Test-Path -LiteralPath $env:PYTHON_EXE)) {
-            throw "Measured runner Python was not found: $env:PYTHON_EXE"
-          }
-          & $env:PYTHON_EXE --version
+          $python = Get-Command python -ErrorAction SilentlyContinue
+          if ($null -eq $python) { $python = Get-Command py -ErrorAction SilentlyContinue }
+          if ($null -eq $python) { throw "Python was not found on the runner PATH" }
+          $pythonPath = $python.Source
+          "PYTHON_EXE=$pythonPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $pythonPath --version
 
       - name: Ensure GitHub CLI for the merge gate
         shell: pwsh

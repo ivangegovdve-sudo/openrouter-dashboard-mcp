@@ -19,8 +19,8 @@ jobs:
     # bounded but realistic envelope for npm install, the clean build, the
     # 364-test suite, and package validation.
     timeout-minutes: 10
-    # Repository-local runner; all labels are measured from GitHub's runner API.
-    runs-on: [self-hosted, Windows, X64, local-gpu, jan, qwen3-coder]
+    # Any unified Windows fleet runner can execute this job; it has no local-model step.
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Check out repository
         shell: pwsh
