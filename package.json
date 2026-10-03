@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
   "version": "1.5.0",
-  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices. GitHub trending; Jev-compatible router.",
+  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Higgsfield, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices. GitHub trending; Jev-compatible router.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -34,7 +34,8 @@
     "fal",
     "kie",
     "crazyrouter",
-    "io-net"
+    "io-net",
+    "higgsfield"
   ],
   "license": "MIT",
   "author": "Ivan Gegov",
