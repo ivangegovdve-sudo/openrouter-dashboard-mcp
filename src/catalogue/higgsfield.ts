@@ -62,37 +62,37 @@ function higgsfieldModel(
   const name = scalar(feature.name);
   const detail = scalar(feature.detail)?.trim();
   const kind = categorySlug === undefined ? undefined : HIGGSFIELD_CATEGORIES[categorySlug];
-  if (!categorySlug || !name || !detail || !kind) return null;
-  const match = DETAIL_RE.exec(detail);
-  if (!match) return null;
-  const approximate = Boolean(match[1]);
-  const durationSeconds = match[3] === undefined ? null : Number(match[3]);
+  if (!categorySlug || !name) throw new Error("HIGGSFIELD_FEATURE_IDENTITY_MISSING");
+  if (["credits-usage", "access-features"].includes(categorySlug) || ["Concurrent Jobs", "Max Generations Amount"].includes(name)) return null;
+  const match = detail && kind ? DETAIL_RE.exec(detail) : null;
+  const approximate = Boolean(match?.[1]);
+  const durationSeconds = match?.[3] === undefined ? null : Number(match[3]);
   const id = `${categorySlug}/${slug(name)}`;
-  const point: PricePoint = pricePoint({
+  const point: PricePoint | null = match && kind ? pricePoint({
     id: `higgsfield:${id}`,
     amount: match[2]!,
     unit: kind.unit,
-    condition: null,
+    condition: { kind: "generation", durationSeconds: match[3] ?? null, approximate },
     sourceUrl,
     readAt: observedAt,
     provenance: "parsed_from_prose",
     measurementOrigin: "catalogue",
     observed: null,
-    sourceText: detail,
-  });
+    sourceText: detail!,
+  }) : null;
   return catalogueModelSchema.parse({
     provider: "higgsfield",
     id,
     displayName: name,
-    mediaKind: kind.mediaKind,
+    mediaKind: kind?.mediaKind ?? "unknown",
     nativeType: "higgsfield-web-plan-credit-rate",
-    outputModalities: [kind.mediaKind],
-    pricePoints: [point],
-    pricingState: "published",
-    pricingNote: "Higgsfield publishes a web-plan credit rate. Credits are not converted to USD or EUR, and the web plans are not evidence of MCP or CLI inference availability.",
+    outputModalities: kind ? [kind.mediaKind] : [],
+    pricePoints: point ? [point] : [],
+    pricingState: point ? "published" : "unknown",
+    pricingNote: point ? "Higgsfield publishes a web-plan credit rate. Credits are not converted to USD or EUR, and the web plans are not evidence of MCP or CLI inference availability." : "The source identity is retained, but its generation price could not be parsed. It is unknown, never free.",
     nativePricing: {
       type: "web_plan_credits",
-      detail,
+      detail: detail ?? null,
       approximate,
       ...(durationSeconds === null ? {} : { durationSeconds }),
       planAccess: planValues(feature.values),
@@ -114,6 +114,7 @@ export function parseHiggsfieldCompare(payload: unknown, observedAt: string): Hi
   const identities = new Set<string>();
   let listed = 0;
   let withoutGenerationPrice = 0;
+  const excludedRows: Record<string, unknown>[] = [];
   for (const rawCategory of body.categories) {
     const category = record(rawCategory);
     if (!Array.isArray(category.features)) throw new Error("HIGGSFIELD_CATEGORY_SHAPE_CHANGED");
@@ -122,6 +123,8 @@ export function parseHiggsfieldCompare(payload: unknown, observedAt: string): Hi
       const model = higgsfieldModel(category, record(rawFeature), HIGGSFIELD_COMPARE_URL, observedAt, listed - 1);
       if (!model) {
         withoutGenerationPrice++;
+        const feature = record(rawFeature);
+        excludedRows.push({ category: scalar(category.slug) ?? null, name: scalar(feature.name) ?? null, detail: scalar(feature.detail) ?? null, values: planValues(feature.values) });
         continue;
       }
       if (identities.has(model.id)) throw new Error("HIGGSFIELD_DUPLICATE_MODEL_ID");
@@ -133,7 +136,7 @@ export function parseHiggsfieldCompare(payload: unknown, observedAt: string): Hi
   if (plans.length === 0) throw new Error("HIGGSFIELD_PLAN_POPULATION_MISSING");
   const provider = catalogueProviderSchema.parse({
     provider: "higgsfield",
-    status: "available",
+    status: models.some(model => model.pricingState === "unknown") ? "partial" : "available",
     sourceUrl: HIGGSFIELD_COMPARE_URL,
     observedAt,
     population: {
@@ -142,7 +145,7 @@ export function parseHiggsfieldCompare(payload: unknown, observedAt: string): Hi
       retained: models.length,
       excluded: withoutGenerationPrice,
       exclusionRules: ["access, concurrency and credit-balance rows are retained in provider metadata but are not model generation prices"],
-      completeness: "full",
+      completeness: models.some(model => model.pricingState === "unknown") ? "partial" : "full",
     },
     requestParameters: {
       sourceApiUrl: HIGGSFIELD_COMPARE_URL,
@@ -150,10 +153,11 @@ export function parseHiggsfieldCompare(payload: unknown, observedAt: string): Hi
       planSetKey: scalarOrNull(body.plan_set_key),
       billingPeriod: "monthly",
       countryCode: scalarOrNull(body.country_code),
-      pricingAcquisitionStatus: models.length > 0 ? "available" : "PRICES_UNPUBLISHED",
+      pricingAcquisitionStatus: models.some(model => model.pricingState === "unknown") ? "HIGGSFIELD_PRICE_SHAPE_CHANGED" : models.length > 0 ? "available" : "PRICES_UNPUBLISHED",
       pricingUnits: "native_web_plan_credits",
       observedAmountField: null,
       plans,
+      excludedRows,
       priceCoverageRule: "Only explicit model-generation detail strings become rows. Credits stay native; no currency conversion or price-paid inference is made.",
     },
   });

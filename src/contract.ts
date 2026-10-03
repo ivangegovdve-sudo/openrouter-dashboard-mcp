@@ -80,12 +80,19 @@ const priceScopeConditionSchema = z
   })
   .strict();
 
+const generationConditionSchema = z.object({
+  kind: z.literal("generation"),
+  durationSeconds: canonicalDecimalSchema.nullable(),
+  approximate: z.boolean(),
+}).strict();
+
 export const priceConditionSchema = z.union([
   latencyWindowConditionSchema,
   timeBandConditionSchema,
   tierConditionSchema,
   rateClassConditionSchema,
   priceScopeConditionSchema,
+  generationConditionSchema,
 ]);
 export type PriceCondition = z.infer<typeof priceConditionSchema> | null;
 

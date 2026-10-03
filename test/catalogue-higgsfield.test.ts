@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { collectHiggsfieldCatalogue, HIGGSFIELD_COMPARE_URL, parseHiggsfieldCompare } from "../src/catalogue/higgsfield.js";
 import { normalizePricePoint } from "../src/catalogue/price-set.js";
+import { comparePriceSets } from "../src/catalogue/compare.js";
 import { pricePointSchema } from "../src/contract.js";
 
 const observedAt = "2026-09-22T12:00:00.000Z";
@@ -51,6 +52,28 @@ test("Higgsfield plan metadata does not emit currency-denominated price fields",
     assert.equal(Object.hasOwn(plan, "monthlyPrice"), false);
     assert.equal(Object.hasOwn(plan, "currency"), false);
   }
+});
+
+test("Higgsfield preserves duration and approximate-rate conditions", () => {
+  const first = parseHiggsfieldCompare(payload, observedAt).models[0]!.pricePoints;
+  const changed = structuredClone(payload);
+  changed.categories[0]!.features[0]!.detail = "~22 credits/10s";
+  const second = parseHiggsfieldCompare(changed, observedAt).models[0]!.pricePoints;
+  assert.deepEqual(first[0]!.condition, { kind: "generation", durationSeconds: "5", approximate: true });
+  assert.equal(comparePriceSets(first, second, { unit: "credit_video", assumption: "same generation duration" }).status, "refused");
+});
+
+test("Higgsfield retains unread generation rates and excluded access rows", () => {
+  const changed = structuredClone(payload);
+  changed.categories[1]!.features[0]!.detail = "2 credits/image (HD)";
+  const result = parseHiggsfieldCompare(changed, observedAt);
+  assert.equal(result.provider.status, "partial");
+  assert.equal(result.provider.population.completeness, "partial");
+  assert.equal(result.provider.population.retained, 2);
+  assert.equal(result.models[1]!.pricingState, "unknown");
+  assert.deepEqual(result.models[1]!.pricePoints, []);
+  assert.equal(result.provider.requestParameters.pricingAcquisitionStatus, "HIGGSFIELD_PRICE_SHAPE_CHANGED");
+  assert.equal((result.provider.requestParameters.excludedRows as unknown[]).length, 1);
 });
 
 test("every Higgsfield price row must carry a non-default measurement origin", async () => {
