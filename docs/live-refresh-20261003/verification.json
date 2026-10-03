@@ -1,0 +1,62 @@
+{
+  "mcp": {
+    "pass": 411,
+    "fail": 0
+  },
+  "next": {
+    "pass": 1157,
+    "skip": 2,
+    "fail": 0,
+    "typecheck": "pass",
+    "lint": "pass",
+    "productionBuild": "pass",
+    "productionDependencyVulnerabilities": 0
+  },
+  "staticDashboard": {
+    "pass": 135,
+    "fail": 0
+  },
+  "forestSourceContracts": {
+    "pass": 227,
+    "fail": 1,
+    "preExistingFailure": "AI-kit static fallback test expects 108 records; baseline HTML has 113"
+  },
+  "forestFoundation": {
+    "pass": 6,
+    "fail": 0
+  },
+  "staticBuild": "pass",
+  "staticRegistry": "pass",
+  "headless": {
+    "staticPages": 7,
+    "rootViews": 7,
+    "nextPages": 8,
+    "allHttp200": true,
+    "pageExceptions": 0,
+    "leakedPolicyLabels": 0,
+    "priceProvidersRequeried": 16,
+    "priceProviderMatches": 14,
+    "unpricedProviders": [
+      "sail",
+      "fal"
+    ]
+  },
+  "probe": {
+    "locations": 3,
+    "identitiesPerLocation": 5492,
+    "pricedPerLocation": 2601,
+    "rechecksPerLocation": 41,
+    "matchedRechecks": 123,
+    "spendUsd": 0
+  },
+  "review": {
+    "family": "Gemini",
+    "model": "google/gemini-3.5-flash",
+    "status": "approved after findings resolution",
+    "reportedSpendUsd": 0.293067
+  },
+  "productionDeployment": "not performed",
+  "npmPublication": "not performed",
+  "jevEndpoint": "unidentified / unconfigured",
+  "continuousRegionalCollectors": "manual deployment prerequisite"
+}

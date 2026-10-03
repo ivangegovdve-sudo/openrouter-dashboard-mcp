@@ -1,0 +1,86 @@
+[
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/",
+    "title": "openDashboard — Put the pitch to the test",
+    "studio": "",
+    "prices": [
+      "$0.0162",
+      "$0.0162",
+      "$0.0162",
+      "$0.03",
+      "$0.04",
+      "$0.0398"
+    ],
+    "unknowns": 3,
+    "errors": []
+  },
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/mcp/",
+    "title": "Connect your agent — Open Dashboard",
+    "studio": null,
+    "prices": [
+      "$0.10",
+      "$4.40"
+    ],
+    "unknowns": 5,
+    "errors": []
+  },
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/github/",
+    "title": "Explore the ecosystem · Open Dashboard",
+    "studio": null,
+    "unknowns": 0,
+    "errors": []
+  },
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/#explore",
+    "title": "openDashboard — Put the pitch to the test",
+    "studio": "",
+    "prices": [
+      "$0.0162",
+      "$0.0162",
+      "$0.0162",
+      "$0.03",
+      "$0.04",
+      "$0.0398"
+    ],
+    "unknowns": 3,
+    "errors": []
+  },
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/?view=apps#explore",
+    "title": "openDashboard — Put the pitch to the test",
+    "studio": "",
+    "prices": [
+      "$0.0162",
+      "$0.0162",
+      "$0.0162",
+      "$0.03",
+      "$0.04",
+      "$0.0398"
+    ],
+    "unknowns": 3,
+    "errors": []
+  },
+  {
+    "url": "https://www.sdforest.site/web/open-dashboard/?unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b&view=models#connections",
+    "title": "openDashboard — Put the pitch to the test",
+    "studio": "",
+    "prices": [
+      "$0.0162",
+      "$0.0162",
+      "$0.0162",
+      "$0.03",
+      "$0.04",
+      "$0.0398",
+      "$0",
+      "$0.01",
+      "$1",
+      "$100",
+      "$1",
+      "$0"
+    ],
+    "unknowns": 13,
+    "errors": []
+  }
+]

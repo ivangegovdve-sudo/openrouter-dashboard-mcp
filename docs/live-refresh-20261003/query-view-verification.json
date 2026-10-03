@@ -1,0 +1,51 @@
+[
+  {
+    "view": "overview",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=overview&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "models",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b&view=models#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "apps",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=apps&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "history",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=history&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "benchmarks",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=benchmarks&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "changes",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=changes&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "view": "state",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=state&unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b#explore",
+    "studio": "",
+    "policyLeaked": false,
+    "errors": []
+  }
+]

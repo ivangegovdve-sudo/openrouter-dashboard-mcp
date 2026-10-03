@@ -5,12 +5,25 @@ import { catalogueModelSchema } from "../src/catalogue/schemas.js";
 
 const observedAt = "2026-09-22T10:00:00Z";
 
+test("DashScope model names and pagination retain every reported identity and published price", async () => {
+  const urls: string[] = [];
+  const row = (model: string) => ({ model, prices: [{ range_name: "Default", prices: [{ type: "input_token", price: "2", price_unit: "Per 1M tokens" }] }] });
+  const result = await collectNativePriceCatalogue({ providers: ["qwencloud"], apiKeys: { qwencloud: "test-qwen-key" }, fetchImpl: async input => {
+    const url = String(input); urls.push(url);
+    return Response.json({ output: { total: 3, page_size: 2, models: url.includes("page_no=2") ? [row("third")] : [row("first"), row("second")] } });
+  } });
+  assert.equal(urls.length, 2); assert.match(urls[1]!, /page_no=2/);
+  assert.deepEqual(result.models.map(model => model.id), ["first", "second", "third"]);
+  assert.ok(result.models.every(model => model.pricePoints[0]?.amount === "0.000002"));
+  assert.equal(result.providers[0]?.population.retained, 3);
+});
+
 function responseFor(url: string): unknown {
   if (url === NATIVE_PRICE_SOURCES.qwencloud) {
     return {
       output: {
         models: [{
-          model_id: "qwen/test",
+          model: "qwen/test",
           model_type: "llm",
           prices: [{
             range_name: "Default",
