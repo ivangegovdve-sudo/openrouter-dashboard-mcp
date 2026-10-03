@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "1.6.0",
-  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices; catalogue arithmetic is not generation cost. GitHub trending.",
+  "version": "1.5.0",
+  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices. GitHub trending; Jev-compatible router.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -16,7 +16,25 @@
     "github-trending",
     "trending",
     "akashml",
-    "io.net"
+    "io.net",
+    "model-router",
+    "jev",
+    "systemone",
+    "typesafe-ai",
+    "llm-routing",
+    "model-catalogue",
+    "sail",
+    "nous",
+    "qwencloud",
+    "deepinfra",
+    "novita",
+    "sambanova",
+    "chutes",
+    "wavespeedai",
+    "fal",
+    "kie",
+    "crazyrouter",
+    "io-net"
   ],
   "license": "MIT",
   "author": "Ivan Gegov",
@@ -67,5 +85,12 @@
     "./contract-vocabulary.json": "./build/contract-vocabulary.json",
     "./package.json": "./package.json",
     "./public-catalogue": "./build/public-catalogue.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivangegovdve-sudo/openrouter-dashboard-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ivangegovdve-sudo/openrouter-dashboard-mcp/issues"
   }
 }

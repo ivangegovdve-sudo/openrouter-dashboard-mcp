@@ -3,6 +3,9 @@ import { createDashboardClient } from "./dashboard/client.js";
 import { PROVIDER_IDS } from "./providers/registry.js";
 import { z } from "zod";
 import { catalogueModelSchema, catalogueProviderSchema } from "./catalogue/schemas.js";
+import type { RenderedPageFetcher } from "./catalogue/rendered-page.js";
+export { fetchRenderedPageWithPlaywright } from "./catalogue/rendered-page.js";
+export type { RenderedPageFetcher, RenderedPageSnapshot } from "./catalogue/rendered-page.js";
 
 export { PROVIDER_IDS };
 export const publicCatalogueSchema = z.object({
@@ -13,7 +16,7 @@ export const publicCatalogueSchema = z.object({
 });
 
 /** Live provider catalogue reads only. No inference, selection rules, or account data. */
-export async function readPublicCatalogue(providers: string[] = [...PROVIDER_IDS], options: { fetchImpl?: typeof fetch } = {}) {
+export async function readPublicCatalogue(providers: string[] = [...PROVIDER_IDS], options: { fetchImpl?: typeof fetch; renderedPageFetcher?: RenderedPageFetcher } = {}) {
   if (!providers.length || providers.some(id => !PROVIDER_IDS.includes(id as typeof PROVIDER_IDS[number]))) {
     throw new Error("INVALID_PROVIDER");
   }
