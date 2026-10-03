@@ -87,6 +87,7 @@ export const EXPECTED_TOOL_NAMES = [
   "dashboard_model_status",
   "dashboard_price_comparison",
   "dashboard_resolve_model",
+  "dashboard_resolve_seat",
   "dashboard_source_health",
   "dashboard_speed",
   "dashboard_usage_leaders",
