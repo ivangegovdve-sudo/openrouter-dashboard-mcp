@@ -59,13 +59,16 @@ function browserLaunchAttempts(): Array<{ channel?: "chrome" | "msedge"; executa
  * Render a provider page in a real browser, wait for a settled DOM, then
  * return only the visible table-cell text. This is never a raw HTML fetch.
  */
-export const fetchRenderedPageWithPlaywright: RenderedPageFetcher = async ({ url, timeoutMs }) => {
+export const fetchRenderedPageWithPlaywright = async (
+  { url, timeoutMs }: Parameters<RenderedPageFetcher>[0],
+  serverlessLaunch?: { executablePath: string; args: string[] },
+): Promise<RenderedPageSnapshot> => {
   const target = new URL(url);
   if (target.protocol !== "https:") throw new Error("RENDERED_PAGE_URL_REJECTED");
   const boundedTimeout = Math.min(Math.max(timeoutMs, 1), 30_000);
   let lastError: unknown;
 
-  for (const launchOptions of browserLaunchAttempts()) {
+  for (const launchOptions of serverlessLaunch ? [serverlessLaunch] : browserLaunchAttempts()) {
     let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
     try {
       browser = await chromium.launch({ headless: true, ...launchOptions });
