@@ -216,7 +216,7 @@ Claude Code starts the server when it needs it and connects over MCP.
 
 ### Installing only the tools you want
 
-All eighteen tools are enabled by default. To install a subset, set
+All nineteen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
@@ -322,7 +322,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **16 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.6.0** registers **16 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -356,7 +356,7 @@ writes anything anywhere.
 
 <!-- tools:begin generated-do-not-edit -->
 
-**18 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**19 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
@@ -374,6 +374,7 @@ writes anything anywhere.
 | `dashboard_model_status` | Dashboard model status |
 | `dashboard_price_comparison` | Shared-model aggregator price comparison |
 | `dashboard_resolve_model` | Dashboard resolve model |
+| `dashboard_resolve_seat` | Resolve the provider seat for a role |
 | `dashboard_source_health` | Dashboard source health |
 | `dashboard_speed` | Provider speed claims and probe protocol |
 | `dashboard_usage_leaders` | Dashboard public ecosystem usage leaders |
@@ -397,7 +398,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.6.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
