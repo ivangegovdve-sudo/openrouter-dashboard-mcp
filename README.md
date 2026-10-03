@@ -341,7 +341,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **16 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **17 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -417,7 +417,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -434,6 +434,7 @@ Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="wavespeed"><strong>WaveSpeedAI</strong></span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="fal"><strong>fal</strong></span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="kie"><strong>KIE</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.kie.ai/client/v1/model-pricing/page) · [Documentation](https://kie.ai/pricing) | All collected models | Not published in this connector | Some collected models | Not published in this connector | Some collected models | Not established |
+| <span data-provider-id="higgsfield"><strong>Higgsfield</strong></span><br>Media generation platform | [Catalogue](https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare?plan_set_key=ps_a3&billing_period=monthly&with_localization=true) · [Documentation](https://higgsfield.ai/pricing) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="crazyrouter"><strong>Crazyrouter</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
 | <span data-provider-id="akashml"><strong>AkashML</strong></span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="ionet"><strong>io.net</strong></span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
@@ -519,6 +520,12 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 > “Access the best AI models for AI chat, video, image, and music in one API.” — [Kie.ai homepage description](https://kie.ai/), observed 2026-09-29.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://kie.ai/); checked 2026-09-29.
+
+**Higgsfield**
+
+> “Pricing plans for Higgsfield's image, video and audio tools.” — [Higgsfield public pricing page](https://higgsfield.ai/pricing), observed 2026-09-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://higgsfield.ai/pricing); checked 2026-09-08.
 
 **Crazyrouter**
 
@@ -833,7 +840,7 @@ A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. A
 
 **Units** (13): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `credit_image`, `credit_video`, `credit_audio`, `request`, `gpu_hour`.
 
-**Condition kinds** (five): `latency_window`, `time_band`, `tier`, `rate_class`, `price_scope`. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. `price_scope` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.
+**Condition kinds** (six): `latency_window`, `time_band`, `tier`, `rate_class`, `price_scope`, `generation`. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. `price_scope` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.
 
 **Provenance**: `published`, `derived`, `parsed_from_prose`, `unknown`. A `derived` point names `derivedFrom`; a `parsed_from_prose` point retains the `sourceText` it was read out of. `unknown` is a real answer and is never rounded to a number.
 

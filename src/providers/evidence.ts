@@ -78,6 +78,7 @@ const quotes: Record<string, { text: string; attribution: string; sourceUrl: str
   akashml: { text: "competitive pricing starting from $0.15/M tokens", attribution: "AkashML homepage pricing claim, contradicted by its own /models rates", sourceUrl: "https://akashml.com/" },
   kie: { text: "Access the best AI models for AI chat, video, image, and music in one API.", attribution: "Kie.ai homepage description", sourceUrl: "https://kie.ai/" },
   ionet: { text: "Free inference platform powered by io.net's decentralized GPU network.", attribution: "io.net IO Intelligence page description", sourceUrl: "https://io.net/intelligence" },
+  higgsfield: { text: "Pricing plans for Higgsfield's image, video and audio tools.", attribution: "Higgsfield public pricing page", sourceUrl: "https://higgsfield.ai/pricing" },
 };
 
 const numericCaveats: Record<string, ProviderCaveat[]> = {

@@ -11,7 +11,7 @@ export { PROVIDER_IDS };
 export const publicCatalogueSchema = z.object({
   schemaVersion: z.literal("1.0"), fetchedAt: z.string().datetime(),
   models: z.array(catalogueModelSchema).max(20000).transform(rows => rows.map(({ nativePricing, ...publicRow }) => publicRow)),
-  providers: z.array(catalogueProviderSchema.omit({ requestParameters: true }).strip()).max(16),
+  providers: z.array(catalogueProviderSchema.omit({ requestParameters: true }).strip()).max(PROVIDER_IDS.length),
   inferenceCalls: z.literal(0), inferenceSpendUsd: z.literal("0"),
 });
 
