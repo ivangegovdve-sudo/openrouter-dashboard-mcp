@@ -54,6 +54,7 @@ export const providerIdSchema = z.enum([
   "akashml",
   "ionet",
   "kie",
+  "higgsfield",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -74,6 +75,7 @@ export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note
   akashml: { state: "UNKNOWN", note: "AkashML's chat response usage object carries token counts and no cost field (measured 2026-09-25); per-call charges appear only in its web console, which this integration does not read." },
   ionet: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   kie: { state: "UNKNOWN", note: "KIE bills in credits; this integration reads only its public price table, not per-task credit charges." },
+  higgsfield: { state: "UNKNOWN", note: "Higgsfield publishes web-plan credit rates; this integration does not observe a settled price paid per generation." },
 };
 
 export const publicationSchema = z.enum([
@@ -440,6 +442,22 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "KIE resells image, video, music and chat models and publishes one public price table, read without a key. Each row is one priced variant (resolution, duration, input/output leg) and is kept as its own identity. KIE bills in credits at a stated $0.005 per credit; USD prices are used only where KIE's listed USD equals that conversion and the unit label is exact. Bonus credits on larger top-ups can make the effective rate lower. Its 'provider' column is a model-family label and is not always right, so it is kept natively and not trusted. Account spend is not read by this integration.",
+  },
+  higgsfield: {
+    id: "higgsfield",
+    ...providerEvidence("higgsfield"),
+    displayName: "Higgsfield",
+    providerKind: "media",
+    catalogueUrl: "https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare?plan_set_key=ps_a3&billing_period=monthly&with_localization=true",
+    citationUrl: "https://higgsfield.ai/pricing",
+    publishes: {
+      pricing: "partial", contextLength: "never", outputModalities: "partial",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "never",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "Higgsfield's public comparison source publishes native web-plan credit rates for video, image and lipsync features. Credits are retained in their native units; no USD/EUR conversion or price-paid claim is made, and web-plan access does not establish MCP or CLI inference availability.",
   },
   crazyrouter: {
     id: "crazyrouter",

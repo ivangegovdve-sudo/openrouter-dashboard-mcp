@@ -111,7 +111,7 @@ export async function runCatalogue(input: CatalogueInput, dependencies: Catalogu
 export function registerCatalogue(server: McpServer, dependencies: CatalogueDependencies): void {
   server.registerTool("dashboard_catalogue", {
     title: "Provider model catalogue and comparable media prices",
-    description: "List model identities including price_not_available rows, provider pitches and structured caveats. Image prices are USD/image; video prices USD/second, with native values, exact conversions and configuration conditions. Each source reports its population, exclusions and acquisition limits. Other prices retain their native billing axis. Paginate with offset/limit; filter providers, mediaKind or modelIds. modelIds also requests WaveSpeed price detail (20 IDs maximum). This never generates media or makes a paid inference call.",
+    description: "List model identities including price_not_available rows, provider pitches and structured caveats. Comparable image prices are USD/image and video prices USD/second where the source establishes those units; native-only rates such as Higgsfield web-plan credits remain in their native billing axis. Each source reports its population, exclusions and acquisition limits. Paginate with offset/limit; filter providers, mediaKind or modelIds. modelIds also requests WaveSpeed price detail (20 IDs maximum). This never generates media or makes a paid inference call.",
     inputSchema: catalogueInputSchema, outputSchema: catalogueOutputSchema, annotations: READ_ONLY_TOOL_ANNOTATIONS,
   }, async input => toolResult(await runCatalogue(input, dependencies)));
 }
