@@ -13,6 +13,18 @@ traffic: the selector decides, and your own client makes the call.
 
 Read-only, free, no account. Choose only the tools and providers you need.
 
+<!-- router:begin generated-do-not-edit -->
+
+## Model Router: Jev-compatible seat selection
+
+The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
+
+In open-dashboard-mcp 1.6.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+
+The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
+
+<!-- router:end -->
+
 ## The easy path: route with Jev and your own keys
 
 Use this package as the evidence layer and Jev as the typed decision layer. In this
@@ -322,7 +334,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.5.1** registers **16 providers** and exposes eighteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.6.0** registers **16 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -356,7 +368,7 @@ writes anything anywhere.
 
 <!-- tools:begin generated-do-not-edit -->
 
-**18 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
+**19 read-only tools**, read from the server's actual MCP `tools/list` registration graph without calling any tool.
 
 | Tool | Purpose |
 |---|---|
@@ -374,6 +386,7 @@ writes anything anywhere.
 | `dashboard_model_status` | Dashboard model status |
 | `dashboard_price_comparison` | Shared-model aggregator price comparison |
 | `dashboard_resolve_model` | Dashboard resolve model |
+| `dashboard_resolve_seat` | Resolve the provider seat for a role |
 | `dashboard_source_health` | Dashboard source health |
 | `dashboard_speed` | Provider speed claims and probe protocol |
 | `dashboard_usage_leaders` | Dashboard public ecosystem usage leaders |
@@ -397,7 +410,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.5.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.6.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
