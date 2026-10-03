@@ -24,6 +24,7 @@ import { registerCatalogue } from "./tools/catalogue.js";
 import type { RenderedPageFetcher } from "./catalogue/rendered-page.js";
 import { registerPriceComparison } from "./tools/price-comparison.js";
 import { registerContract } from "./tools/contract.js";
+import { registerResolveSeat } from "./tools/resolve-seat.js";
 import { registerSpeed } from "./tools/speed.js";
 import { registerGenerationCosts } from "./tools/generation-costs.js";
 import {
@@ -83,6 +84,7 @@ export function createServer(
   if (enabled("dashboard_catalogue")) registerCatalogue(server, { client, ...(selectedProviders ? { allowedProviders: selectedProviders } : {}), ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}), ...(options.renderedPageFetcher ? { renderedPageFetcher: options.renderedPageFetcher } : {}), useNativePriceSources: options.useNativePriceSources ?? true });
   if (enabled("dashboard_price_comparison") && (selectedProviders === undefined || (selectedProviders.includes("openrouter") && selectedProviders.includes("crazyrouter")))) registerPriceComparison(server, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}) });
   if (enabled("dashboard_contract")) registerContract(server);
+  if (enabled("dashboard_resolve_seat")) registerResolveSeat(server);
   if (enabled("dashboard_speed")) registerSpeed(server);
   if (enabled("dashboard_generation_costs")) registerGenerationCosts(server, { client });
   if (enabled("dashboard_capability_state")) registerCapabilityState(server, {

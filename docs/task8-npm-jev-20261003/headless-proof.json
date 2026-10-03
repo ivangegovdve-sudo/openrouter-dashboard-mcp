@@ -1,0 +1,92 @@
+{
+  "checkedAt": "2026-10-03T14:28:43.796Z",
+  "headless": true,
+  "routerMarketingUnchanged": true,
+  "routerMarketingSha256": "c2d5f19c44f3371f79e401e9dd120e05d4af189157f821b09294821f6f8452be",
+  "checks": [
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/",
+      "width": 1440,
+      "visible": true,
+      "top": 557.09375,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/mcp/",
+      "width": 1440,
+      "visible": true,
+      "top": 271.71875,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/",
+      "width": 1440,
+      "visible": true,
+      "top": 301.796875,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/connect",
+      "width": 1440,
+      "visible": true,
+      "top": 301.796875,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/",
+      "width": 390,
+      "visible": true,
+      "top": 440.40625,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/mcp/",
+      "width": 390,
+      "visible": true,
+      "top": 368.375,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/",
+      "width": 390,
+      "visible": true,
+      "top": 546.59375,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/connect",
+      "width": 390,
+      "visible": true,
+      "top": 418.796875,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/",
+      "width": 320,
+      "visible": true,
+      "top": 413.21875,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4174/web/open-dashboard/mcp/",
+      "width": 320,
+      "visible": true,
+      "top": 422.0625,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/",
+      "width": 320,
+      "visible": true,
+      "top": 570.59375,
+      "noHorizontalOverflow": true
+    },
+    {
+      "url": "http://127.0.0.1:4210/connect",
+      "width": 320,
+      "visible": true,
+      "top": 456.59375,
+      "noHorizontalOverflow": true
+    }
+  ]
+}
