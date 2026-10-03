@@ -4,9 +4,9 @@ Ask an agent "which provider is cheapest for this model right now?" and get an a
 source and a timestamp on every number — or a plain "unknown" where nobody publishes one.
 
 open-dashboard-mcp is the evidence layer for a model selector, such as a typed decision layer
-like System One. It gives an agent live model IDs and published prices across OpenRouter,
-Sail, Nous Research, Groq, Cerebras, QwenCloud, DeepInfra, Novita, SambaNova, Chutes,
-Crazyrouter, fal, WaveSpeedAI, AkashML and io.net, plus daily trending GitHub repos. The
+like System One. It gives an agent live model IDs and published prices across **OpenRouter**,
+**Sail**, **Nous Research**, **Groq**, **Cerebras**, **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**,
+**Crazyrouter**, **fal**, **WaveSpeedAI**, **KIE**, **AkashML** and **io.net**, plus daily **trending** GitHub repos. The
 catalogue covers text, image, video, and audio, and each figure carries its source and check
 date so a published rate is not mistaken for measured request cost. It never sends inference
 traffic: the selector decides, and your own client makes the call.
@@ -19,11 +19,18 @@ Read-only, free, no account. Choose only the tools and providers you need.
 
 The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
 
-In open-dashboard-mcp 1.6.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+In open-dashboard-mcp 1.5.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
 
 The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
 
 <!-- router:end -->
+
+## **GitHub trending**
+
+`dashboard_github_trending` reads the dashboard's daily repository momentum evidence.
+It reports the observation window and freshness so agents can distinguish a current
+trend from an older snapshot. Use `dashboard_github_movers` for changes between
+observations; neither tool invokes a model or spends on inference.
 
 ## The easy path: route with Jev and your own keys
 
@@ -334,7 +341,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.6.0** registers **16 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **16 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -410,26 +417,26 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.6.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **16 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
-| <span data-provider-id="openrouter">OpenRouter</span><br>Multi-provider aggregator | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
-| <span data-provider-id="groq">Groq</span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="cerebras">Cerebras</span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="sail">Sail</span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
-| <span data-provider-id="nous">Nous Research</span><br>Model provider | [Catalogue](https://nousresearch.com/) · [Documentation](https://nousresearch.com/) | Some collected models | Not established | Not established | Not established | Not established | Not established |
-| <span data-provider-id="qwencloud">QwenCloud</span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="deepinfra">DeepInfra</span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
-| <span data-provider-id="novita">Novita</span> | [Catalogue](https://api.novita.ai/v3/openai/models) · [Documentation](https://novita.ai/docs/api-reference/model-apis-llm-list-models) | Some collected models | All collected models | All collected models | Not published in this connector | Some collected models | No billing API |
-| <span data-provider-id="sambanova">SambaNova</span> | [Catalogue](https://api.sambanova.ai/v1/models) · [Documentation](https://docs.sambanova.ai/cloud/api-reference/endpoints/models) | All collected models | All collected models | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="chutes">Chutes</span> | [Catalogue](https://llm.chutes.ai/v1/models) · [Documentation](https://chutes.ai/app/api) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="wavespeed">WaveSpeedAI</span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
-| <span data-provider-id="fal">fal</span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
-| <span data-provider-id="kie">KIE</span><br>Multi-provider aggregator | [Catalogue](https://api.kie.ai/client/v1/model-pricing/page) · [Documentation](https://kie.ai/pricing) | All collected models | Not published in this connector | Some collected models | Not published in this connector | Some collected models | Not established |
-| <span data-provider-id="crazyrouter">Crazyrouter</span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
-| <span data-provider-id="akashml">AkashML</span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
-| <span data-provider-id="ionet">io.net</span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="openrouter"><strong>OpenRouter</strong></span><br>Multi-provider aggregator | [Catalogue](https://openrouter.ai/api/v1/models) · [Documentation](https://openrouter.ai/docs/api/api-reference/models/get-models) | Some collected models | All collected models | All collected models | All collected models | Some collected models | Billing API |
+| <span data-provider-id="groq"><strong>Groq</strong></span> | [Catalogue](https://api.groq.com/openai/v1/models) · [Documentation](https://console.groq.com/docs/api-reference#models-list) | Some collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="cerebras"><strong>Cerebras</strong></span> | [Catalogue](https://api.cerebras.ai/v1/models) · [Documentation](https://inference-docs.cerebras.ai/api-reference/models) | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="sail"><strong>Sail</strong></span> | [Catalogue](https://api.sailresearch.com/v1/models) · [Documentation](https://docs.sailresearch.com/pricing.md) | Some collected models | Some collected models | Not published in this connector | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="nous"><strong>Nous Research</strong></span><br>Model provider | [Catalogue](https://nousresearch.com/) · [Documentation](https://nousresearch.com/) | Some collected models | Not established | Not established | Not established | Not established | Not established |
+| <span data-provider-id="qwencloud"><strong>QwenCloud</strong></span> | [Catalogue](https://dashscope-intl.aliyuncs.com/api/v1/models) · [Documentation](https://dashscope-intl.aliyuncs.com/api/v1/models) | Some collected models | Some collected models | Some collected models | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="deepinfra"><strong>DeepInfra</strong></span> | [Catalogue](https://api.deepinfra.com/models/list) · [Documentation](https://deepinfra.com/models) | All collected models | Some collected models | Not published in this connector | Some collected models | Not published in this connector | No billing API |
+| <span data-provider-id="novita"><strong>Novita</strong></span> | [Catalogue](https://api.novita.ai/v3/openai/models) · [Documentation](https://novita.ai/docs/api-reference/model-apis-llm-list-models) | Some collected models | All collected models | All collected models | Not published in this connector | Some collected models | No billing API |
+| <span data-provider-id="sambanova"><strong>SambaNova</strong></span> | [Catalogue](https://api.sambanova.ai/v1/models) · [Documentation](https://docs.sambanova.ai/cloud/api-reference/endpoints/models) | All collected models | All collected models | Not published in this connector | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="chutes"><strong>Chutes</strong></span> | [Catalogue](https://llm.chutes.ai/v1/models) · [Documentation](https://chutes.ai/app/api) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="wavespeed"><strong>WaveSpeedAI</strong></span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="fal"><strong>fal</strong></span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="kie"><strong>KIE</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.kie.ai/client/v1/model-pricing/page) · [Documentation](https://kie.ai/pricing) | All collected models | Not published in this connector | Some collected models | Not published in this connector | Some collected models | Not established |
+| <span data-provider-id="crazyrouter"><strong>Crazyrouter</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
+| <span data-provider-id="akashml"><strong>AkashML</strong></span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
+| <span data-provider-id="ionet"><strong>io.net</strong></span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
 
 ### Provider pitches and structured caveats
 
