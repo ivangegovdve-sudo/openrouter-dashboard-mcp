@@ -1,0 +1,2354 @@
+[
+  {
+    "location": "bulgaria-desktop",
+    "hostname": "DESKTOP-AF1NPD3",
+    "fetchedAt": "2026-10-03T13:48:52.197Z",
+    "models": 5492,
+    "priced": 2601,
+    "verification": 41,
+    "allMatch": true,
+    "inferenceSpendUsd": "0",
+    "captureSha256": "4d09c31969358cf27eafabd5f7fdd97084508d480daeca0d5b8b4cda631a4129",
+    "providers": [
+      {
+        "provider": "openrouter",
+        "status": "available",
+        "error": null,
+        "models": 466,
+        "priced": 459,
+        "sourceUrl": "https://openrouter.ai/api/v1/models",
+        "observedAt": "2026-10-03T12:55:39.960Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "openrouter",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T12:55:39.960Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T12:55:39.960Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T12:55:39.960Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T12:55:39.960Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://openrouter.ai/api/v1/models",
+            "observedAt": "2026-10-03T12:55:39.960Z",
+            "sourceIndex": 147
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "groq",
+        "status": "available",
+        "error": null,
+        "models": 11,
+        "priced": 8,
+        "sourceUrl": "https://api.groq.com/openai/v1/models",
+        "observedAt": "2026-10-03T12:55:40.112Z",
+        "sample": {
+          "id": "canopylabs/orpheus-arabic-saudi",
+          "provider": "groq",
+          "displayName": "Canopy Labs Orpheus Arabic Saudi",
+          "pricePoints": [
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:prompt",
+              "amount": "0.00004",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T12:55:40.112Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:input_cache_read",
+              "amount": "0.00002",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T12:55:40.112Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:request",
+              "amount": "0",
+              "unit": "request",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T12:55:40.112Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.groq.com/openai/v1/models",
+            "observedAt": "2026-10-03T12:55:40.112Z",
+            "sourceIndex": 6
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "cerebras",
+        "status": "available",
+        "error": null,
+        "models": 2,
+        "priced": 2,
+        "sourceUrl": "https://www.cerebras.ai/pricing",
+        "observedAt": "2026-10-03T12:55:42.988Z",
+        "sample": {
+          "id": "gpt-oss-120b",
+          "provider": "cerebras",
+          "displayName": "GPT OSS 120B",
+          "pricePoints": [
+            {
+              "id": "cerebras:gpt-oss-120b:input",
+              "amount": "0.00000035",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T12:55:42.988Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "cerebras:gpt-oss-120b:output",
+              "amount": "0.00000075",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T12:55:42.988Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://www.cerebras.ai/pricing",
+            "observedAt": "2026-10-03T12:55:42.988Z",
+            "sourceIndex": 0
+          },
+          "modelPriceState": "priced"
+        },
+        "verified": 2
+      },
+      {
+        "provider": "sail",
+        "status": "partial",
+        "error": "PRICING_STALE",
+        "models": 12,
+        "priced": 0,
+        "sourceUrl": "https://api.sailresearch.com/v1/models",
+        "observedAt": "2026-10-03T12:55:46.117Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "provider": "sail",
+          "displayName": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.sailresearch.com/v1/models",
+            "observedAt": "2026-10-03T12:55:46.117Z",
+            "sourceIndex": 4
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "nous",
+        "status": "available",
+        "error": null,
+        "models": 425,
+        "priced": 425,
+        "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+        "observedAt": "2026-10-03T12:55:47.380Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "nous",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "nous:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T12:55:47.380Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T12:55:47.380Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T12:55:47.380Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T12:55:47.380Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+            "observedAt": "2026-10-03T12:55:47.380Z",
+            "sourceIndex": 122
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "deepinfra",
+        "status": "available",
+        "error": null,
+        "models": 386,
+        "priced": 336,
+        "sourceUrl": "https://api.deepinfra.com/models/list",
+        "observedAt": "2026-10-03T12:55:48.820Z",
+        "sample": {
+          "id": "allenai/Olmo-3.1-32B-Instruct",
+          "provider": "deepinfra",
+          "displayName": "allenai/Olmo-3.1-32B-Instruct",
+          "pricePoints": [
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_in",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T12:55:48.820Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_out",
+              "amount": "0.0000006",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T12:55:48.820Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.deepinfra.com/models/list",
+            "observedAt": "2026-10-03T12:55:48.820Z",
+            "sourceIndex": 192
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "novita",
+        "status": "available",
+        "error": null,
+        "models": 121,
+        "priced": 117,
+        "sourceUrl": "https://api.novita.ai/v3/openai/models",
+        "observedAt": "2026-10-03T12:55:51.688Z",
+        "sample": {
+          "id": "apodex/apodex-1.1-mini",
+          "provider": "novita",
+          "displayName": "Apodex 1.1 Mini",
+          "pricePoints": [
+            {
+              "id": "novita:apodex/apodex-1.1-mini:prompt",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T12:55:51.688Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "novita:apodex/apodex-1.1-mini:completion",
+              "amount": "0",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T12:55:51.688Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.novita.ai/v3/openai/models",
+            "observedAt": "2026-10-03T12:55:51.688Z",
+            "sourceIndex": 24
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "sambanova",
+        "status": "available",
+        "error": null,
+        "models": 6,
+        "priced": 6,
+        "sourceUrl": "https://api.sambanova.ai/v1/models",
+        "observedAt": "2026-10-03T12:55:52.554Z",
+        "sample": {
+          "id": "DeepSeek-V3.1",
+          "provider": "sambanova",
+          "displayName": "DeepSeek-V3.1",
+          "pricePoints": [
+            {
+              "id": "sambanova:DeepSeek-V3.1:prompt",
+              "amount": "0.000003",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T12:55:52.554Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "sambanova:DeepSeek-V3.1:completion",
+              "amount": "0.0000045",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T12:55:52.554Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.sambanova.ai/v1/models",
+            "observedAt": "2026-10-03T12:55:52.554Z",
+            "sourceIndex": 0
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "chutes",
+        "status": "available",
+        "error": null,
+        "models": 491,
+        "priced": 476,
+        "sourceUrl": "https://api.chutes.ai/chutes/",
+        "observedAt": "2026-10-03T12:55:53.616Z",
+        "sample": {
+          "id": "0026710d-5456-5bbb-87e8-3ed446204a5d",
+          "provider": "chutes",
+          "displayName": "axon1/affine_m10_5DUHsMHf69JE9L7UuNcU8d4K1hJCnNvUu5xKCte2EH3UPW3J",
+          "pricePoints": [
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_in",
+              "amount": "0.0000000489",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T12:55:53.616Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_out",
+              "amount": "0.0000001957",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T12:55:53.616Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+            "observedAt": "2026-10-03T12:55:53.616Z",
+            "sourceIndex": 399
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "wavespeed",
+        "status": "available",
+        "error": null,
+        "models": 1054,
+        "priced": 4,
+        "sourceUrl": "https://wavespeed.ai/api/models",
+        "observedAt": "2026-10-03T12:55:59.576Z",
+        "sample": {
+          "id": "wavespeed-ai/wan-2.2/i2v-720p",
+          "provider": "wavespeed",
+          "displayName": "wavespeed-ai/wan-2.2/i2v-720p",
+          "pricePoints": [
+            {
+              "id": "wavespeed:wavespeed-ai/wan-2.2/i2v-720p:video_second",
+              "amount": "0.06",
+              "unit": "video_second",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+                "readAt": "2026-10-03T12:55:59.576Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+            "observedAt": "2026-10-03T12:55:59.576Z",
+            "sourceIndex": 551
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "fal",
+        "status": "partial",
+        "error": null,
+        "models": 1503,
+        "priced": 0,
+        "sourceUrl": "https://api.fal.ai/v1/models",
+        "observedAt": "2026-10-03T12:56:05.644Z",
+        "sample": {
+          "id": "alibaba/happy-horse/image-to-video",
+          "provider": "fal",
+          "displayName": "Happy Horse",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.fal.ai/v1/models?limit=1000",
+            "observedAt": "2026-10-03T12:56:05.644Z",
+            "sourceIndex": 369
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "kie",
+        "status": "available",
+        "error": null,
+        "models": 524,
+        "priced": 468,
+        "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+        "observedAt": "2026-10-03T12:56:07.517Z",
+        "sample": {
+          "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "provider": "kie",
+          "displayName": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "pricePoints": [
+            {
+              "id": "kie:Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K:image",
+              "amount": "0.07",
+              "unit": "image",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.kie.ai/client/v1/model-pricing/page",
+                "readAt": "2026-10-03T12:56:07.517Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+            "observedAt": "2026-10-03T12:56:07.517Z",
+            "sourceIndex": 350
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "crazyrouter",
+        "status": "available",
+        "error": null,
+        "models": 175,
+        "priced": 98,
+        "sourceUrl": "https://crazyrouter.com/api/pricing",
+        "observedAt": "2026-10-03T12:56:09.865Z",
+        "sample": {
+          "id": "claude-fable-5",
+          "provider": "crazyrouter",
+          "displayName": "claude-fable-5",
+          "pricePoints": [
+            {
+              "id": "crazyrouter:claude-fable-5:input",
+              "amount": "0.0000065",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T12:56:09.865Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            },
+            {
+              "id": "crazyrouter:claude-fable-5:output",
+              "amount": "0.0000325",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T12:56:09.865Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://crazyrouter.com/api/pricing",
+            "observedAt": "2026-10-03T12:56:09.865Z",
+            "sourceIndex": 166
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "akashml",
+        "status": "available",
+        "error": null,
+        "models": 7,
+        "priced": 7,
+        "sourceUrl": "https://api.akashml.com/v1/models",
+        "observedAt": "2026-10-03T12:56:10.924Z",
+        "sample": {
+          "id": "meta-llama/Llama-3.3-70B-Instruct",
+          "provider": "akashml",
+          "displayName": "Llama 3.3 70B Instruct",
+          "pricePoints": [
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T12:56:10.924Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:output",
+              "amount": "0.00000052",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T12:56:10.924Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input_cache_read",
+              "amount": "0.0000001",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T12:56:10.924Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.akashml.com/v1/models",
+            "observedAt": "2026-10-03T12:56:10.924Z",
+            "sourceIndex": 3
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "ionet",
+        "status": "available",
+        "error": null,
+        "models": 39,
+        "priced": 39,
+        "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+        "observedAt": "2026-10-03T12:56:11.430Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-R1-0528",
+          "provider": "ionet",
+          "displayName": "DeepSeek: R1 0528",
+          "pricePoints": [
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:input_token_price",
+              "amount": "0.00000056775",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T12:56:11.430Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:output_token_price",
+              "amount": "0.000002279",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T12:56:11.430Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:cache_read_token_price",
+              "amount": "0.000000283875",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T12:56:11.430Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+            "observedAt": "2026-10-03T12:56:11.430Z",
+            "sourceIndex": 28
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "qwencloud",
+        "status": "available",
+        "error": null,
+        "models": 270,
+        "priced": 156,
+        "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+        "observedAt": "2026-10-03T13:48:48.215Z",
+        "sample": {
+          "id": "decision-model-preview",
+          "provider": "qwencloud",
+          "displayName": "Decision-Model-Preview",
+          "pricePoints": [
+            {
+              "id": "qwencloud:decision-model-preview:input_token",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+                "readAt": "2026-10-03T13:48:48.215Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+            "observedAt": "2026-10-03T13:48:48.215Z",
+            "sourceIndex": 1
+          }
+        },
+        "verified": 3
+      }
+    ]
+  },
+  {
+    "location": "kvm2-europe",
+    "hostname": "srv1722904",
+    "fetchedAt": "2026-10-03T13:49:07.085Z",
+    "models": 5492,
+    "priced": 2601,
+    "verification": 41,
+    "allMatch": true,
+    "inferenceSpendUsd": "0",
+    "captureSha256": "1cc6408bf0c041d32a4fbb31f58b9b55cd7bc837a8e15d74768fedbd7f2da793",
+    "providers": [
+      {
+        "provider": "openrouter",
+        "status": "available",
+        "error": null,
+        "models": 466,
+        "priced": 459,
+        "sourceUrl": "https://openrouter.ai/api/v1/models",
+        "observedAt": "2026-10-03T13:00:34.538Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "openrouter",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:34.538Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:34.538Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:34.538Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:34.538Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://openrouter.ai/api/v1/models",
+            "observedAt": "2026-10-03T13:00:34.538Z",
+            "sourceIndex": 147
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "groq",
+        "status": "available",
+        "error": null,
+        "models": 11,
+        "priced": 8,
+        "sourceUrl": "https://api.groq.com/openai/v1/models",
+        "observedAt": "2026-10-03T13:00:34.887Z",
+        "sample": {
+          "id": "canopylabs/orpheus-arabic-saudi",
+          "provider": "groq",
+          "displayName": "Canopy Labs Orpheus Arabic Saudi",
+          "pricePoints": [
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:prompt",
+              "amount": "0.00004",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:34.887Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:input_cache_read",
+              "amount": "0.00002",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:34.887Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:request",
+              "amount": "0",
+              "unit": "request",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:34.887Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.groq.com/openai/v1/models",
+            "observedAt": "2026-10-03T13:00:34.887Z",
+            "sourceIndex": 4
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "cerebras",
+        "status": "available",
+        "error": null,
+        "models": 2,
+        "priced": 2,
+        "sourceUrl": "https://www.cerebras.ai/pricing",
+        "observedAt": "2026-10-03T13:12:29.892Z",
+        "sample": {
+          "id": "gpt-oss-120b",
+          "provider": "cerebras",
+          "displayName": "GPT OSS 120B",
+          "pricePoints": [
+            {
+              "id": "cerebras:gpt-oss-120b:input",
+              "amount": "0.00000035",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T13:12:29.892Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "cerebras:gpt-oss-120b:output",
+              "amount": "0.00000075",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T13:12:29.892Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://www.cerebras.ai/pricing",
+            "observedAt": "2026-10-03T13:12:29.892Z",
+            "sourceIndex": 0
+          },
+          "modelPriceState": "priced"
+        },
+        "verified": 2
+      },
+      {
+        "provider": "sail",
+        "status": "partial",
+        "error": "PRICING_STALE",
+        "models": 12,
+        "priced": 0,
+        "sourceUrl": "https://api.sailresearch.com/v1/models",
+        "observedAt": "2026-10-03T13:00:35.302Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "provider": "sail",
+          "displayName": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.sailresearch.com/v1/models",
+            "observedAt": "2026-10-03T13:00:35.302Z",
+            "sourceIndex": 4
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "nous",
+        "status": "available",
+        "error": null,
+        "models": 425,
+        "priced": 425,
+        "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+        "observedAt": "2026-10-03T13:00:36.417Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "nous",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "nous:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:36.417Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:36.417Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:36.417Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:36.417Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+            "observedAt": "2026-10-03T13:00:36.417Z",
+            "sourceIndex": 122
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "deepinfra",
+        "status": "available",
+        "error": null,
+        "models": 386,
+        "priced": 336,
+        "sourceUrl": "https://api.deepinfra.com/models/list",
+        "observedAt": "2026-10-03T13:00:38.025Z",
+        "sample": {
+          "id": "allenai/Olmo-3.1-32B-Instruct",
+          "provider": "deepinfra",
+          "displayName": "allenai/Olmo-3.1-32B-Instruct",
+          "pricePoints": [
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_in",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T13:00:38.025Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_out",
+              "amount": "0.0000006",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T13:00:38.025Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.deepinfra.com/models/list",
+            "observedAt": "2026-10-03T13:00:38.025Z",
+            "sourceIndex": 137
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "novita",
+        "status": "available",
+        "error": null,
+        "models": 121,
+        "priced": 117,
+        "sourceUrl": "https://api.novita.ai/v3/openai/models",
+        "observedAt": "2026-10-03T13:00:39.264Z",
+        "sample": {
+          "id": "apodex/apodex-1.1-mini",
+          "provider": "novita",
+          "displayName": "Apodex 1.1 Mini",
+          "pricePoints": [
+            {
+              "id": "novita:apodex/apodex-1.1-mini:prompt",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T13:00:39.264Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "novita:apodex/apodex-1.1-mini:completion",
+              "amount": "0",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T13:00:39.264Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.novita.ai/v3/openai/models",
+            "observedAt": "2026-10-03T13:00:39.264Z",
+            "sourceIndex": 24
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "sambanova",
+        "status": "available",
+        "error": null,
+        "models": 6,
+        "priced": 6,
+        "sourceUrl": "https://api.sambanova.ai/v1/models",
+        "observedAt": "2026-10-03T13:00:39.680Z",
+        "sample": {
+          "id": "DeepSeek-V3.1",
+          "provider": "sambanova",
+          "displayName": "DeepSeek-V3.1",
+          "pricePoints": [
+            {
+              "id": "sambanova:DeepSeek-V3.1:prompt",
+              "amount": "0.000003",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T13:00:39.680Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "sambanova:DeepSeek-V3.1:completion",
+              "amount": "0.0000045",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T13:00:39.680Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.sambanova.ai/v1/models",
+            "observedAt": "2026-10-03T13:00:39.680Z",
+            "sourceIndex": 0
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "chutes",
+        "status": "available",
+        "error": null,
+        "models": 491,
+        "priced": 476,
+        "sourceUrl": "https://api.chutes.ai/chutes/",
+        "observedAt": "2026-10-03T13:00:40.609Z",
+        "sample": {
+          "id": "0026710d-5456-5bbb-87e8-3ed446204a5d",
+          "provider": "chutes",
+          "displayName": "axon1/affine_m10_5DUHsMHf69JE9L7UuNcU8d4K1hJCnNvUu5xKCte2EH3UPW3J",
+          "pricePoints": [
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_in",
+              "amount": "0.0000000489",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T13:00:40.609Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_out",
+              "amount": "0.0000001957",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T13:00:40.609Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+            "observedAt": "2026-10-03T13:00:40.609Z",
+            "sourceIndex": 399
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "wavespeed",
+        "status": "available",
+        "error": null,
+        "models": 1054,
+        "priced": 4,
+        "sourceUrl": "https://wavespeed.ai/api/models",
+        "observedAt": "2026-10-03T13:00:44.072Z",
+        "sample": {
+          "id": "wavespeed-ai/wan-2.2/i2v-720p",
+          "provider": "wavespeed",
+          "displayName": "wavespeed-ai/wan-2.2/i2v-720p",
+          "pricePoints": [
+            {
+              "id": "wavespeed:wavespeed-ai/wan-2.2/i2v-720p:video_second",
+              "amount": "0.06",
+              "unit": "video_second",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+                "readAt": "2026-10-03T13:00:44.072Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+            "observedAt": "2026-10-03T13:00:44.072Z",
+            "sourceIndex": 551
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "fal",
+        "status": "partial",
+        "error": null,
+        "models": 1503,
+        "priced": 0,
+        "sourceUrl": "https://api.fal.ai/v1/models",
+        "observedAt": "2026-10-03T13:00:53.334Z",
+        "sample": {
+          "id": "alibaba/happy-horse/image-to-video",
+          "provider": "fal",
+          "displayName": "Happy Horse",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.fal.ai/v1/models?limit=1000",
+            "observedAt": "2026-10-03T13:00:53.334Z",
+            "sourceIndex": 369
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "kie",
+        "status": "available",
+        "error": null,
+        "models": 524,
+        "priced": 468,
+        "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+        "observedAt": "2026-10-03T13:00:55.125Z",
+        "sample": {
+          "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "provider": "kie",
+          "displayName": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "pricePoints": [
+            {
+              "id": "kie:Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K:image",
+              "amount": "0.07",
+              "unit": "image",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.kie.ai/client/v1/model-pricing/page",
+                "readAt": "2026-10-03T13:00:55.125Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+            "observedAt": "2026-10-03T13:00:55.125Z",
+            "sourceIndex": 350
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "crazyrouter",
+        "status": "available",
+        "error": null,
+        "models": 175,
+        "priced": 98,
+        "sourceUrl": "https://crazyrouter.com/api/pricing",
+        "observedAt": "2026-10-03T13:00:58.172Z",
+        "sample": {
+          "id": "claude-fable-5",
+          "provider": "crazyrouter",
+          "displayName": "claude-fable-5",
+          "pricePoints": [
+            {
+              "id": "crazyrouter:claude-fable-5:input",
+              "amount": "0.0000065",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T13:00:58.172Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            },
+            {
+              "id": "crazyrouter:claude-fable-5:output",
+              "amount": "0.0000325",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T13:00:58.172Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://crazyrouter.com/api/pricing",
+            "observedAt": "2026-10-03T13:00:58.172Z",
+            "sourceIndex": 80
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "akashml",
+        "status": "available",
+        "error": null,
+        "models": 7,
+        "priced": 7,
+        "sourceUrl": "https://api.akashml.com/v1/models",
+        "observedAt": "2026-10-03T13:00:59.884Z",
+        "sample": {
+          "id": "meta-llama/Llama-3.3-70B-Instruct",
+          "provider": "akashml",
+          "displayName": "Llama 3.3 70B Instruct",
+          "pricePoints": [
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:00:59.884Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:output",
+              "amount": "0.00000052",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:00:59.884Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input_cache_read",
+              "amount": "0.0000001",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:00:59.884Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.akashml.com/v1/models",
+            "observedAt": "2026-10-03T13:00:59.884Z",
+            "sourceIndex": 3
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "ionet",
+        "status": "available",
+        "error": null,
+        "models": 39,
+        "priced": 39,
+        "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+        "observedAt": "2026-10-03T13:01:00.285Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-R1-0528",
+          "provider": "ionet",
+          "displayName": "DeepSeek: R1 0528",
+          "pricePoints": [
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:input_token_price",
+              "amount": "0.00000056775",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.285Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:output_token_price",
+              "amount": "0.000002279",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.285Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:cache_read_token_price",
+              "amount": "0.000000283875",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.285Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+            "observedAt": "2026-10-03T13:01:00.285Z",
+            "sourceIndex": 28
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "qwencloud",
+        "status": "available",
+        "error": null,
+        "models": 270,
+        "priced": 156,
+        "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+        "observedAt": "2026-10-03T13:49:03.215Z",
+        "sample": {
+          "id": "decision-model-preview",
+          "provider": "qwencloud",
+          "displayName": "Decision-Model-Preview",
+          "pricePoints": [
+            {
+              "id": "qwencloud:decision-model-preview:input_token",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+                "readAt": "2026-10-03T13:49:03.215Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+            "observedAt": "2026-10-03T13:49:03.215Z",
+            "sourceIndex": 1
+          }
+        },
+        "verified": 3
+      }
+    ]
+  },
+  {
+    "location": "oracle-us",
+    "hostname": "forest-a1-v3",
+    "fetchedAt": "2026-10-03T13:49:32.655Z",
+    "models": 5492,
+    "priced": 2601,
+    "verification": 41,
+    "allMatch": true,
+    "inferenceSpendUsd": "0",
+    "captureSha256": "1a79c42dad693df1d0162beeff3d991d06c5411d265cbdd182dd42544459f6bf",
+    "providers": [
+      {
+        "provider": "openrouter",
+        "status": "available",
+        "error": null,
+        "models": 466,
+        "priced": 459,
+        "sourceUrl": "https://openrouter.ai/api/v1/models",
+        "observedAt": "2026-10-03T13:00:47.412Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "openrouter",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:47.412Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:47.412Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:47.412Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "openrouter:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://openrouter.ai/api/v1/models",
+                "readAt": "2026-10-03T13:00:47.412Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://openrouter.ai/api/v1/models",
+            "observedAt": "2026-10-03T13:00:47.412Z",
+            "sourceIndex": 147
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "groq",
+        "status": "available",
+        "error": null,
+        "models": 11,
+        "priced": 8,
+        "sourceUrl": "https://api.groq.com/openai/v1/models",
+        "observedAt": "2026-10-03T13:00:47.762Z",
+        "sample": {
+          "id": "canopylabs/orpheus-arabic-saudi",
+          "provider": "groq",
+          "displayName": "Canopy Labs Orpheus Arabic Saudi",
+          "pricePoints": [
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:prompt",
+              "amount": "0.00004",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:47.762Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:input_cache_read",
+              "amount": "0.00002",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:47.762Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "groq:canopylabs/orpheus-arabic-saudi:request",
+              "amount": "0",
+              "unit": "request",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.groq.com/openai/v1/models",
+                "readAt": "2026-10-03T13:00:47.762Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.groq.com/openai/v1/models",
+            "observedAt": "2026-10-03T13:00:47.762Z",
+            "sourceIndex": 9
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "cerebras",
+        "status": "available",
+        "error": null,
+        "models": 2,
+        "priced": 2,
+        "sourceUrl": "https://www.cerebras.ai/pricing",
+        "observedAt": "2026-10-03T13:12:48.048Z",
+        "sample": {
+          "id": "gpt-oss-120b",
+          "provider": "cerebras",
+          "displayName": "GPT OSS 120B",
+          "pricePoints": [
+            {
+              "id": "cerebras:gpt-oss-120b:input",
+              "amount": "0.00000035",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T13:12:48.048Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "cerebras:gpt-oss-120b:output",
+              "amount": "0.00000075",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://www.cerebras.ai/pricing",
+                "readAt": "2026-10-03T13:12:48.048Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://www.cerebras.ai/pricing",
+            "observedAt": "2026-10-03T13:12:48.048Z",
+            "sourceIndex": 0
+          },
+          "modelPriceState": "priced"
+        },
+        "verified": 2
+      },
+      {
+        "provider": "sail",
+        "status": "partial",
+        "error": "PRICING_STALE",
+        "models": 12,
+        "priced": 0,
+        "sourceUrl": "https://api.sailresearch.com/v1/models",
+        "observedAt": "2026-10-03T13:00:47.931Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "provider": "sail",
+          "displayName": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.sailresearch.com/v1/models",
+            "observedAt": "2026-10-03T13:00:47.931Z",
+            "sourceIndex": 4
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "nous",
+        "status": "available",
+        "error": null,
+        "models": 425,
+        "priced": 425,
+        "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+        "observedAt": "2026-10-03T13:00:48.773Z",
+        "sample": {
+          "id": "~anthropic/claude-fable-latest",
+          "provider": "nous",
+          "displayName": "Anthropic: Claude Fable Latest",
+          "pricePoints": [
+            {
+              "id": "nous:~anthropic/claude-fable-latest:prompt",
+              "amount": "0.00001",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:48.773Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:completion",
+              "amount": "0.00005",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:48.773Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_read",
+              "amount": "0.00000025",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:48.773Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "nous:~anthropic/claude-fable-latest:input_cache_write",
+              "amount": "0.0000125",
+              "unit": "token_cache_create",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://inference-api.nousresearch.com/v1/models",
+                "readAt": "2026-10-03T13:00:48.773Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://inference-api.nousresearch.com/v1/models",
+            "observedAt": "2026-10-03T13:00:48.773Z",
+            "sourceIndex": 122
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "deepinfra",
+        "status": "available",
+        "error": null,
+        "models": 386,
+        "priced": 336,
+        "sourceUrl": "https://api.deepinfra.com/models/list",
+        "observedAt": "2026-10-03T13:00:50.249Z",
+        "sample": {
+          "id": "allenai/Olmo-3.1-32B-Instruct",
+          "provider": "deepinfra",
+          "displayName": "allenai/Olmo-3.1-32B-Instruct",
+          "pricePoints": [
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_in",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T13:00:50.249Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "deepinfra:allenai/Olmo-3.1-32B-Instruct:token_out",
+              "amount": "0.0000006",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.deepinfra.com/models/list",
+                "readAt": "2026-10-03T13:00:50.249Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.deepinfra.com/models/list",
+            "observedAt": "2026-10-03T13:00:50.249Z",
+            "sourceIndex": 376
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "novita",
+        "status": "available",
+        "error": null,
+        "models": 121,
+        "priced": 117,
+        "sourceUrl": "https://api.novita.ai/v3/openai/models",
+        "observedAt": "2026-10-03T13:00:50.855Z",
+        "sample": {
+          "id": "apodex/apodex-1.1-mini",
+          "provider": "novita",
+          "displayName": "Apodex 1.1 Mini",
+          "pricePoints": [
+            {
+              "id": "novita:apodex/apodex-1.1-mini:prompt",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T13:00:50.855Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "novita:apodex/apodex-1.1-mini:completion",
+              "amount": "0",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.novita.ai/v3/openai/models",
+                "readAt": "2026-10-03T13:00:50.855Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.novita.ai/v3/openai/models",
+            "observedAt": "2026-10-03T13:00:50.855Z",
+            "sourceIndex": 24
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "sambanova",
+        "status": "available",
+        "error": null,
+        "models": 6,
+        "priced": 6,
+        "sourceUrl": "https://api.sambanova.ai/v1/models",
+        "observedAt": "2026-10-03T13:00:51.795Z",
+        "sample": {
+          "id": "DeepSeek-V3.1",
+          "provider": "sambanova",
+          "displayName": "DeepSeek-V3.1",
+          "pricePoints": [
+            {
+              "id": "sambanova:DeepSeek-V3.1:prompt",
+              "amount": "0.000003",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T13:00:51.795Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "sambanova:DeepSeek-V3.1:completion",
+              "amount": "0.0000045",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.sambanova.ai/v1/models",
+                "readAt": "2026-10-03T13:00:51.795Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.sambanova.ai/v1/models",
+            "observedAt": "2026-10-03T13:00:51.795Z",
+            "sourceIndex": 0
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "chutes",
+        "status": "available",
+        "error": null,
+        "models": 491,
+        "priced": 476,
+        "sourceUrl": "https://api.chutes.ai/chutes/",
+        "observedAt": "2026-10-03T13:00:52.039Z",
+        "sample": {
+          "id": "0026710d-5456-5bbb-87e8-3ed446204a5d",
+          "provider": "chutes",
+          "displayName": "axon1/affine_m10_5DUHsMHf69JE9L7UuNcU8d4K1hJCnNvUu5xKCte2EH3UPW3J",
+          "pricePoints": [
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_in",
+              "amount": "0.0000000489",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T13:00:52.039Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "chutes:0026710d-5456-5bbb-87e8-3ed446204a5d:token_out",
+              "amount": "0.0000001957",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+                "readAt": "2026-10-03T13:00:52.039Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.chutes.ai/chutes/?include_public=true&limit=1000&page=0",
+            "observedAt": "2026-10-03T13:00:52.039Z",
+            "sourceIndex": 417
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "wavespeed",
+        "status": "available",
+        "error": null,
+        "models": 1054,
+        "priced": 4,
+        "sourceUrl": "https://wavespeed.ai/api/models",
+        "observedAt": "2026-10-03T13:00:55.550Z",
+        "sample": {
+          "id": "wavespeed-ai/wan-2.2/i2v-720p",
+          "provider": "wavespeed",
+          "displayName": "wavespeed-ai/wan-2.2/i2v-720p",
+          "pricePoints": [
+            {
+              "id": "wavespeed:wavespeed-ai/wan-2.2/i2v-720p:video_second",
+              "amount": "0.06",
+              "unit": "video_second",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+                "readAt": "2026-10-03T13:00:55.550Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.wavespeed.ai/center/default/api/v1/model_product/detail/wavespeed-ai/wan-2.2/i2v-720p",
+            "observedAt": "2026-10-03T13:00:55.550Z",
+            "sourceIndex": 551
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "fal",
+        "status": "partial",
+        "error": null,
+        "models": 1503,
+        "priced": 0,
+        "sourceUrl": "https://api.fal.ai/v1/models",
+        "observedAt": "2026-10-03T13:00:56.621Z",
+        "sample": {
+          "id": "alibaba/happy-horse/image-to-video",
+          "provider": "fal",
+          "displayName": "Happy Horse",
+          "pricePoints": [],
+          "provenance": {
+            "sourceUrl": "https://api.fal.ai/v1/models?limit=1000",
+            "observedAt": "2026-10-03T13:00:56.621Z",
+            "sourceIndex": 369
+          }
+        },
+        "verified": 0
+      },
+      {
+        "provider": "kie",
+        "status": "available",
+        "error": null,
+        "models": 524,
+        "priced": 468,
+        "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+        "observedAt": "2026-10-03T13:00:58.170Z",
+        "sample": {
+          "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "provider": "kie",
+          "displayName": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+          "pricePoints": [
+            {
+              "id": "kie:Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K:image",
+              "amount": "0.07",
+              "unit": "image",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.kie.ai/client/v1/model-pricing/page",
+                "readAt": "2026-10-03T13:00:58.170Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.kie.ai/client/v1/model-pricing/page",
+            "observedAt": "2026-10-03T13:00:58.170Z",
+            "sourceIndex": 350
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "crazyrouter",
+        "status": "available",
+        "error": null,
+        "models": 175,
+        "priced": 98,
+        "sourceUrl": "https://crazyrouter.com/api/pricing",
+        "observedAt": "2026-10-03T13:00:58.853Z",
+        "sample": {
+          "id": "claude-fable-5",
+          "provider": "crazyrouter",
+          "displayName": "claude-fable-5",
+          "pricePoints": [
+            {
+              "id": "crazyrouter:claude-fable-5:input",
+              "amount": "0.0000065",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T13:00:58.853Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            },
+            {
+              "id": "crazyrouter:claude-fable-5:output",
+              "amount": "0.0000325",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://crazyrouter.com/api/pricing",
+                "readAt": "2026-10-03T13:00:58.853Z"
+              },
+              "provenance": "derived",
+              "derivedFrom": "https://crazyrouter.com/api/pricing",
+              "sourceText": "Crazyrouter model discount badge: 0.65"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://crazyrouter.com/api/pricing",
+            "observedAt": "2026-10-03T13:00:58.853Z",
+            "sourceIndex": 80
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "akashml",
+        "status": "available",
+        "error": null,
+        "models": 7,
+        "priced": 7,
+        "sourceUrl": "https://api.akashml.com/v1/models",
+        "observedAt": "2026-10-03T13:01:00.214Z",
+        "sample": {
+          "id": "meta-llama/Llama-3.3-70B-Instruct",
+          "provider": "akashml",
+          "displayName": "Llama 3.3 70B Instruct",
+          "pricePoints": [
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input",
+              "amount": "0.0000002",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:01:00.214Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:output",
+              "amount": "0.00000052",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:01:00.214Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "akashml:meta-llama/Llama-3.3-70B-Instruct:input_cache_read",
+              "amount": "0.0000001",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.akashml.com/v1/models",
+                "readAt": "2026-10-03T13:01:00.214Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.akashml.com/v1/models",
+            "observedAt": "2026-10-03T13:01:00.214Z",
+            "sourceIndex": 3
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "ionet",
+        "status": "available",
+        "error": null,
+        "models": 39,
+        "priced": 39,
+        "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+        "observedAt": "2026-10-03T13:01:00.342Z",
+        "sample": {
+          "id": "deepseek-ai/DeepSeek-R1-0528",
+          "provider": "ionet",
+          "displayName": "DeepSeek: R1 0528",
+          "pricePoints": [
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:input_token_price",
+              "amount": "0.00000056775",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.342Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:output_token_price",
+              "amount": "0.000002279",
+              "unit": "token_out",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.342Z"
+              },
+              "provenance": "published"
+            },
+            {
+              "id": "ionet:deepseek-ai/DeepSeek-R1-0528:cache_read_token_price",
+              "amount": "0.000000283875",
+              "unit": "token_cached",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://api.intelligence.io.solutions/api/v1/models",
+                "readAt": "2026-10-03T13:01:00.342Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://api.intelligence.io.solutions/api/v1/models",
+            "observedAt": "2026-10-03T13:01:00.342Z",
+            "sourceIndex": 28
+          }
+        },
+        "verified": 3
+      },
+      {
+        "provider": "qwencloud",
+        "status": "available",
+        "error": null,
+        "models": 270,
+        "priced": 156,
+        "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+        "observedAt": "2026-10-03T13:49:27.846Z",
+        "sample": {
+          "id": "decision-model-preview",
+          "provider": "qwencloud",
+          "displayName": "Decision-Model-Preview",
+          "pricePoints": [
+            {
+              "id": "qwencloud:decision-model-preview:input_token",
+              "amount": "0",
+              "unit": "token_in",
+              "observed": null,
+              "measurement_origin": "catalogue",
+              "condition": null,
+              "source": {
+                "url": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+                "readAt": "2026-10-03T13:49:27.846Z"
+              },
+              "provenance": "published"
+            }
+          ],
+          "provenance": {
+            "sourceUrl": "https://dashscope-intl.aliyuncs.com/api/v1/models",
+            "observedAt": "2026-10-03T13:49:27.846Z",
+            "sourceIndex": 1
+          }
+        },
+        "verified": 3
+      }
+    ]
+  }
+]

@@ -1,0 +1,129 @@
+[
+  {
+    "path": "",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b&view=models",
+    "studio": "",
+    "sidebar": 1,
+    "title": "openDashboard — Put the pitch to the test",
+    "prices": [
+      "$0.07",
+      "$0.12",
+      "$0.07",
+      "$0",
+      "$0.001",
+      "$0.1",
+      "$10",
+      "$1",
+      "$0",
+      "$0.037",
+      "$0",
+      "$0.037"
+    ],
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "mcp/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/mcp/",
+    "studio": "",
+    "sidebar": 1,
+    "title": "Connect your agent — Open Dashboard",
+    "prices": [
+      "$0.00000005",
+      "$0.0000004",
+      "$0.000000005",
+      "$0.0000000325",
+      "$0.00000026"
+    ],
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "github/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/github/?repo=1073224795",
+    "studio": "",
+    "sidebar": 1,
+    "title": "Explore the ecosystem · Open Dashboard",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "catalogues/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b&view=models#explore",
+    "studio": "",
+    "sidebar": 1,
+    "title": "openDashboard — Put the pitch to the test",
+    "prices": [
+      "$0.07",
+      "$0.12",
+      "$0.07",
+      "$0",
+      "$0.001",
+      "$0.1",
+      "$10",
+      "$1",
+      "$0",
+      "$0.037",
+      "$0",
+      "$0.037"
+    ],
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "openrouter/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?view=apps#explore",
+    "studio": "",
+    "sidebar": 1,
+    "title": "openDashboard — Put the pitch to the test",
+    "prices": [
+      "$0.07",
+      "$0.12",
+      "$0.07"
+    ],
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "matrix/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/?unit=catalogue&selected=openrouter%3Aopenai%2Fgpt-oss-120b&view=models#connections",
+    "studio": "",
+    "sidebar": 1,
+    "title": "openDashboard — Put the pitch to the test",
+    "prices": [
+      "$0.07",
+      "$0.12",
+      "$0.07",
+      "$0",
+      "$0.001",
+      "$0.1",
+      "$10",
+      "$1",
+      "$0",
+      "$0.037",
+      "$0",
+      "$0.037"
+    ],
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "path": "council/",
+    "url": "http://127.0.0.1:4174/web/open-dashboard/council/",
+    "studio": "",
+    "sidebar": 1,
+    "title": "Jev Council · openDashboard",
+    "policyLeaked": false,
+    "errors": []
+  },
+  {
+    "flow": "live-price-state",
+    "sample": "aion-labs/aion-2.0OpenRouter\t\n$0.0000008 / token_in\n$0.0000016 / token_out\n$0.0000002 / token_cached\n\tlisted\tOct 3, 2026\tProvider source ↗",
+    "policyLeaked": false
+  },
+  {
+    "flow": "mobile-menu",
+    "expanded": "true",
+    "horizontalOverflow": false
+  }
+]

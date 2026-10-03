@@ -1,0 +1,459 @@
+{
+  "routes": [
+    {
+      "path": "/",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/openrouter",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/github",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": [],
+      "fallbackText": "ECOSYSTEM EVIDENCE\n\nGitHub projects\n\nThe archive is disabled or unavailable. Repository statistics remain unknown until the source is configured.\n\nExplore the public ecosystem →"
+    },
+    {
+      "path": "/trending",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/models/discounted",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/catalogue",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/connect",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "path": "/council",
+      "status": 200,
+      "sharedNav": 1,
+      "title": "Open Dashboard",
+      "policyLeaked": false,
+      "errors": []
+    },
+    {
+      "flow": "mobile-connect",
+      "horizontalOverflow": false
+    }
+  ],
+  "verification": [
+    {
+      "provider": "openrouter",
+      "models": 466,
+      "status": "available",
+      "id": "~anthropic/claude-fable-latest",
+      "displayed": [
+        "0.00001/token_in",
+        "0.00005/token_out",
+        "0.00000025/token_cached",
+        "0.0000125/token_cache_create"
+      ],
+      "requeried": [
+        {
+          "amount": "0.00001",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.00005",
+          "unit": "token_out",
+          "condition": null
+        },
+        {
+          "amount": "0.00000025",
+          "unit": "token_cached",
+          "condition": null
+        },
+        {
+          "amount": "0.0000125",
+          "unit": "token_cache_create",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:58:56.597Z"
+    },
+    {
+      "provider": "groq",
+      "models": 11,
+      "status": "available",
+      "id": "canopylabs/orpheus-arabic-saudi",
+      "displayed": [
+        "0.00004/token_in",
+        "0.00002/token_cached",
+        "0/request"
+      ],
+      "requeried": [
+        {
+          "amount": "0.00004",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.00002",
+          "unit": "token_cached",
+          "condition": null
+        },
+        {
+          "amount": "0",
+          "unit": "request",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:58:57.085Z"
+    },
+    {
+      "provider": "cerebras",
+      "models": 2,
+      "status": "available",
+      "id": "gpt-oss-120b",
+      "displayed": [
+        "0.00000035/token_in",
+        "0.00000075/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0.00000035",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.00000075",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:01.984Z"
+    },
+    {
+      "provider": "sail",
+      "models": 12,
+      "status": "partial",
+      "id": null,
+      "displayed": [],
+      "requeried": [],
+      "matches": null,
+      "observedAt": "2026-10-03T13:59:03.262Z"
+    },
+    {
+      "provider": "nous",
+      "models": 425,
+      "status": "available",
+      "id": "~anthropic/claude-fable-latest",
+      "displayed": [
+        "0.00001/token_in",
+        "0.00005/token_out",
+        "0.00000025/token_cached",
+        "0.0000125/token_cache_create"
+      ],
+      "requeried": [
+        {
+          "amount": "0.00001",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.00005",
+          "unit": "token_out",
+          "condition": null
+        },
+        {
+          "amount": "0.00000025",
+          "unit": "token_cached",
+          "condition": null
+        },
+        {
+          "amount": "0.0000125",
+          "unit": "token_cache_create",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:03.903Z"
+    },
+    {
+      "provider": "qwencloud",
+      "models": 270,
+      "status": "available",
+      "id": "decision-model-preview",
+      "displayed": [
+        "0/token_in"
+      ],
+      "requeried": [
+        {
+          "amount": "0",
+          "unit": "token_in",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:11.376Z"
+    },
+    {
+      "provider": "deepinfra",
+      "models": 386,
+      "status": "available",
+      "id": "allenai/Olmo-3.1-32B-Instruct",
+      "displayed": [
+        "0.0000002/token_in",
+        "0.0000006/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0.0000002",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.0000006",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:12.730Z"
+    },
+    {
+      "provider": "novita",
+      "models": 121,
+      "status": "available",
+      "id": "apodex/apodex-1.1-mini",
+      "displayed": [
+        "0/token_in",
+        "0/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:13.485Z"
+    },
+    {
+      "provider": "sambanova",
+      "models": 6,
+      "status": "available",
+      "id": "DeepSeek-V3.1",
+      "displayed": [
+        "0.000003/token_in",
+        "0.0000045/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0.000003",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.0000045",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:14.071Z"
+    },
+    {
+      "provider": "chutes",
+      "models": 491,
+      "status": "available",
+      "id": "0026710d-5456-5bbb-87e8-3ed446204a5d",
+      "displayed": [
+        "0.0000000489/token_in",
+        "0.0000001957/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0.0000000489",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.0000001957",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:18.907Z"
+    },
+    {
+      "provider": "wavespeed",
+      "models": 1054,
+      "status": "available",
+      "id": "wavespeed-ai/wan-2.2/i2v-720p",
+      "displayed": [
+        "0.06/video_second"
+      ],
+      "requeried": [
+        {
+          "amount": "0.06",
+          "unit": "video_second",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:23.827Z"
+    },
+    {
+      "provider": "fal",
+      "models": 1503,
+      "status": "partial",
+      "id": null,
+      "displayed": [],
+      "requeried": [],
+      "matches": null,
+      "observedAt": "2026-10-03T13:59:27.295Z"
+    },
+    {
+      "provider": "kie",
+      "models": 524,
+      "status": "available",
+      "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+      "displayed": [
+        "0.07/image"
+      ],
+      "requeried": [
+        {
+          "amount": "0.07",
+          "unit": "image",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:29.591Z"
+    },
+    {
+      "provider": "crazyrouter",
+      "models": 175,
+      "status": "available",
+      "id": "claude-fable-5",
+      "displayed": [
+        "0.0000065/token_in",
+        "0.0000325/token_out"
+      ],
+      "requeried": [
+        {
+          "amount": "0.0000065",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.0000325",
+          "unit": "token_out",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:30.299Z"
+    },
+    {
+      "provider": "akashml",
+      "models": 7,
+      "status": "available",
+      "id": "meta-llama/Llama-3.3-70B-Instruct",
+      "displayed": [
+        "0.0000002/token_in",
+        "0.00000052/token_out",
+        "0.0000001/token_cached"
+      ],
+      "requeried": [
+        {
+          "amount": "0.0000002",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.00000052",
+          "unit": "token_out",
+          "condition": null
+        },
+        {
+          "amount": "0.0000001",
+          "unit": "token_cached",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:30.731Z"
+    },
+    {
+      "provider": "ionet",
+      "models": 39,
+      "status": "available",
+      "id": "deepseek-ai/DeepSeek-R1-0528",
+      "displayed": [
+        "0.00000056775/token_in",
+        "0.000002279/token_out",
+        "0.000000283875/token_cached"
+      ],
+      "requeried": [
+        {
+          "amount": "0.00000056775",
+          "unit": "token_in",
+          "condition": null
+        },
+        {
+          "amount": "0.000002279",
+          "unit": "token_out",
+          "condition": null
+        },
+        {
+          "amount": "0.000000283875",
+          "unit": "token_cached",
+          "condition": null
+        }
+      ],
+      "matches": true,
+      "observedAt": "2026-10-03T13:59:31.324Z"
+    },
+    {
+      "location": "oracle-us",
+      "unknownWithoutCollector": true
+    }
+  ]
+}

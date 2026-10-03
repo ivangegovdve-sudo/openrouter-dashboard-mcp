@@ -1,0 +1,14 @@
+{
+  "family": "Gemini",
+  "model": "google/gemini-3.5-flash",
+  "probeSpendUsd": 0,
+  "reportedReviewChargesUsd": [
+    0.08346,
+    0.098628,
+    0.095004,
+    0.015975
+  ],
+  "totalReportedReviewCostUsd": 0.293067,
+  "perRequestCeilingUsd": 0.5,
+  "claudeInferenceCalls": 0
+}

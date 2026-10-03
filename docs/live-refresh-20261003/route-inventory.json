@@ -1,0 +1,141 @@
+{
+  "staticPages": [
+    "/",
+    "/mcp/",
+    "/github/",
+    "/catalogues/",
+    "/openrouter/",
+    "/matrix/",
+    "/council/"
+  ],
+  "rootViews": [
+    "overview",
+    "models",
+    "apps",
+    "history",
+    "benchmarks",
+    "changes",
+    "state"
+  ],
+  "nextPages": [
+    "/",
+    "/openrouter",
+    "/github",
+    "/trending",
+    "/models/discounted",
+    "/catalogue",
+    "/connect",
+    "/council"
+  ],
+  "nextApi": [
+    "/api/cron/github-nightly",
+    "/api/cron/openrouter-nightly",
+    "/api/dashboard/github",
+    "/api/dashboard/meta",
+    "/api/dashboard/openrouter",
+    "/api/feed/stream",
+    "/api/live/catalogue",
+    "/api/live/council-status",
+    "/api/live/regional-catalogue",
+    "/api/projection/v1",
+    "/api/public/v2/app-model-matrix",
+    "/api/public/v2/apps",
+    "/api/public/v2/apps/[id]",
+    "/api/public/v2/apps/[id]/history",
+    "/api/public/v2/apps/[id]/models",
+    "/api/public/v2/benchmarks",
+    "/api/public/v2/deprecations",
+    "/api/public/v2/free-frontiers",
+    "/api/public/v2/free-models",
+    "/api/public/v2/github/rankings",
+    "/api/public/v2/github/repositories",
+    "/api/public/v2/github/repositories/[id]/enrichment",
+    "/api/public/v2/github/repositories/[id]/history",
+    "/api/public/v2/github/trending",
+    "/api/public/v2/history",
+    "/api/public/v2/live-models",
+    "/api/public/v2/manifest",
+    "/api/public/v2/measured-cost-methodology",
+    "/api/public/v2/measured-costs",
+    "/api/public/v2/models",
+    "/api/public/v2/models/[id]",
+    "/api/public/v2/models/[id]/history",
+    "/api/public/v2/models/[id]/providers",
+    "/api/public/v2/price-changes",
+    "/api/public/v2/providers",
+    "/api/public/v2/source-status",
+    "/api/public/v2/tasks"
+  ],
+  "vercelDashboardRedirects": [
+    {
+      "source": "/web/open-overview",
+      "destination": "/web/open-dashboard/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/",
+      "destination": "/web/open-dashboard/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview.js",
+      "destination": "/web/open-dashboard/open-dashboard.js",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview.css",
+      "destination": "/web/open-dashboard/open-dashboard.css",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview-api.js",
+      "destination": "/web/open-dashboard/open-dashboard-api.js",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview-charts.js",
+      "destination": "/web/open-dashboard/open-dashboard-charts.js",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview-schema.js",
+      "destination": "/web/open-dashboard/open-dashboard-schema.js",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/open-overview-three.js",
+      "destination": "/web/open-dashboard/open-dashboard-three.js",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/mcp/",
+      "destination": "/web/open-dashboard/mcp/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/openrouter/",
+      "destination": "/web/open-dashboard/openrouter/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/github/",
+      "destination": "/web/open-dashboard/github/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/catalogues/",
+      "destination": "/web/open-dashboard/catalogues/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/:path*/",
+      "destination": "/web/open-dashboard/:path*/",
+      "permanent": true
+    },
+    {
+      "source": "/web/open-overview/:path*",
+      "destination": "/web/open-dashboard/:path*",
+      "permanent": true
+    }
+  ]
+}

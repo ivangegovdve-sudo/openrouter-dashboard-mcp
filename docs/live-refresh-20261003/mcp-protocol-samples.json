@@ -1,0 +1,196 @@
+[
+  {
+    "provider": "openrouter",
+    "status": "ok",
+    "models": [
+      {
+        "id": "aion-labs/aion-2.0",
+        "prices": [
+          {
+            "amount": "0.0000008",
+            "unit": "token_in",
+            "source": {
+              "url": "https://openrouter.ai/api/v1/models",
+              "readAt": "2026-10-03T13:40:11.412Z"
+            }
+          },
+          {
+            "amount": "0.0000016",
+            "unit": "token_out",
+            "source": {
+              "url": "https://openrouter.ai/api/v1/models",
+              "readAt": "2026-10-03T13:40:11.412Z"
+            }
+          },
+          {
+            "amount": "0.0000002",
+            "unit": "token_cached",
+            "source": {
+              "url": "https://openrouter.ai/api/v1/models",
+              "readAt": "2026-10-03T13:40:11.412Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "openai/gpt-oss-120b",
+        "prices": [
+          {
+            "amount": "0.000000037",
+            "unit": "token_in",
+            "source": {
+              "url": "https://openrouter.ai/api/v1/models",
+              "readAt": "2026-10-03T13:40:11.412Z"
+            }
+          },
+          {
+            "amount": "0.00000017",
+            "unit": "token_out",
+            "source": {
+              "url": "https://openrouter.ai/api/v1/models",
+              "readAt": "2026-10-03T13:40:11.412Z"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "provider": "kie",
+    "status": "ok",
+    "models": [
+      {
+        "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-1K",
+        "prices": [
+          {
+            "amount": "0.07",
+            "unit": "image",
+            "source": {
+              "url": "https://api.kie.ai/client/v1/model-pricing/page",
+              "readAt": "2026-10-03T13:40:11.515Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "Black Forest Labs Flux 2 Flex, image to image, 1.0s-2K",
+        "prices": [
+          {
+            "amount": "0.12",
+            "unit": "image",
+            "source": {
+              "url": "https://api.kie.ai/client/v1/model-pricing/page",
+              "readAt": "2026-10-03T13:40:11.515Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "Black Forest Labs Flux 2 Flex, text to image, 1.0s-1K",
+        "prices": [
+          {
+            "amount": "0.07",
+            "unit": "image",
+            "source": {
+              "url": "https://api.kie.ai/client/v1/model-pricing/page",
+              "readAt": "2026-10-03T13:40:11.515Z"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "provider": "ionet",
+    "status": "ok",
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-R1-0528",
+        "prices": [
+          {
+            "amount": "0.00000056775",
+            "unit": "token_in",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.000002279",
+            "unit": "token_out",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.000000283875",
+            "unit": "token_cached",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V3.2",
+        "prices": [
+          {
+            "amount": "0.0000014341",
+            "unit": "token_in",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.0000025143",
+            "unit": "token_out",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.00000071705",
+            "unit": "token_cached",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Flash",
+        "prices": [
+          {
+            "amount": "0.00000013496",
+            "unit": "token_in",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.0000005776",
+            "unit": "token_out",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          },
+          {
+            "amount": "0.00000006748",
+            "unit": "token_cached",
+            "source": {
+              "url": "https://api.intelligence.io.solutions/api/v1/models",
+              "readAt": "2026-10-03T13:40:13.428Z"
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

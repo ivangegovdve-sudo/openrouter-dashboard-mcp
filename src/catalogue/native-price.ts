@@ -205,7 +205,7 @@ function qwenUnit(type: string, priceUnit: string): { unit: PriceUnit; divisor?:
 }
 
 function qwenModel(row: NativeRecord, sourceUrl: string, observedAt: string, sourceIndex: number): CatalogueModel | null {
-  const id = modelId(row);
+  const id = modelId(row) ?? scalar(row.model);
   if (!id) return null;
   const points: PricePoint[] = [];
   const ranges = Array.isArray(row.prices) ? row.prices : [];
@@ -602,6 +602,26 @@ export async function collectNativePriceCatalogue(options: NativePriceOptions = 
     try {
       const payload = await fetchJson(fetchImpl, sourceUrl, timeoutMs, key);
       const rows = rowsFor(provider, payload);
+      // DashScope defaults to twenty rows and identifies them with `model`.
+      // Acquire every reported page; never label the default slice a full catalogue.
+      if (provider === "qwencloud") {
+        const output = record(payload.output);
+        const total = Number(output.total);
+        const pageSize = Number(output.page_size ?? rows.length);
+        const deadline = Date.now() + 60000;
+        if (Number.isFinite(total) && total > rows.length) {
+          if (!Number.isInteger(pageSize) || pageSize < 1 || Math.ceil(total / pageSize) > 32) throw new SourceError("SOURCE_SHAPE_CHANGED");
+          for (let page = 2; rows.length < total; page++) {
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) throw new SourceError("SOURCE_TIMEOUT");
+            const url = new URL(sourceUrl); url.searchParams.set("page_no", String(page)); url.searchParams.set("page_size", String(pageSize));
+            const next = rowsFor(provider, await fetchJson(fetchImpl, url.toString(), Math.min(timeoutMs, remaining), key));
+            const seen = new Set(rows.map(row => modelId(row) ?? scalar(row.model)));
+            if (!next.length || page > 32 || next.some(row => seen.has(modelId(row) ?? scalar(row.model)))) throw new SourceError("SOURCE_SHAPE_CHANGED");
+            rows.push(...next);
+          }
+        }
+      }
       if (!rows.length) throw new SourceError("SOURCE_SHAPE_CHANGED");
       const sailPricing = provider === "sail" ? await fetchSailPricing(fetchImpl, timeoutMs, observedAt) : null;
       const sailContext: SailContext | null = provider === "sail" ? await fetchSailContextLabels(fetchImpl, timeoutMs, new Set(rows.map((row) => modelId(row)).filter((id): id is string => Boolean(id)))) : null;

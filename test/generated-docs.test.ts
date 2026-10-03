@@ -119,7 +119,7 @@ test("every subpath a consumer may reasonably import actually resolves", async (
     if (subpath === ".") continue; // the entry is exercised by every other suite
     const specifier = `${manifest.name}${subpath.slice(1)}`;
     await assert.doesNotReject(
-      () => import(specifier, { with: { type: "json" } }),
+      () => target.endsWith(".json") ? import(specifier, { with: { type: "json" } }) : import(specifier),
       `${specifier} does not resolve through the package's own exports map`,
     );
   }

@@ -34,7 +34,8 @@ export type CatalogueInput = z.infer<typeof catalogueInputSchema>;
 export type CatalogueOutput = z.infer<typeof catalogueOutputSchema>;
 export type CatalogueDependencies = { client: DashboardClient; fetchImpl?: typeof fetch; now?: () => Date; allowedProviders?: string[]; useNativePriceSources?: boolean; renderedPageFetcher?: RenderedPageFetcher };
 
-export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
+/** One source acquisition, without pagination or council/router configuration. */
+export async function acquireCatalogue(input: Pick<CatalogueInput, "providers" | "modelIds">, dependencies: CatalogueDependencies) {
   const allowed = dependencies.allowedProviders === undefined ? undefined : new Set(dependencies.allowedProviders);
   const ids = [...new Set((input.providers ?? dependencies.allowedProviders ?? PROVIDER_IDS).filter((id) => allowed === undefined || allowed.has(id)))];
   const direct = ids.filter(id => mediaCatalogueProviderIdSchema.safeParse(id).success) as z.infer<typeof mediaCatalogueProviderIdSchema>[];
@@ -85,6 +86,11 @@ export async function runCatalogue(input: CatalogueInput, dependencies: Catalogu
   const aggregator = ids.includes("crazyrouter") ? await collectCrazyrouterCatalogue({ ...(dependencies.fetchImpl ? { fetchImpl: dependencies.fetchImpl } : {}), ...(dependencies.now ? { now: dependencies.now } : {}) }) : undefined;
   const providers = [...results.flatMap(result => result.providers), ...(aggregator ? [aggregator.provider] : [])];
   const all = [...results.flatMap(result => result.models), ...(aggregator?.models ?? [])].sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
+  return { models: all, providers, providerMetadata: ids.map(describeProvider) };
+}
+
+export async function runCatalogue(input: CatalogueInput, dependencies: CatalogueDependencies): Promise<CatalogueOutput> {
+  const { models: all, providers, providerMetadata } = await acquireCatalogue(input, dependencies);
   const mediaMatched = all.filter(row => input.mediaKind === undefined || row.mediaKind === input.mediaKind || row.outputModalities?.includes(input.mediaKind));
   const matched = mediaMatched.filter(row => input.modelIds === undefined || input.modelIds.includes(row.id));
   const models = matched.slice(input.offset, input.offset + input.limit);
@@ -93,7 +99,7 @@ export async function runCatalogue(input: CatalogueInput, dependencies: Catalogu
   return catalogueOutputSchema.parse({
     status: !hasData ? "unavailable" : complete ? "ok" : "partial",
     summary: `${models.length} of ${matched.length} matching identities returned; ${all.length} acquired. Unpriced models remain in the catalogue. Native denominators and acquisition limits are reported per provider.`,
-    models, providers, providerMetadata: ids.map(describeProvider),
+    models, providers, providerMetadata,
     population: { acquired: all.length, matched: matched.length, returned: models.length,
       excludedByMediaKind: all.length - mediaMatched.length, excludedByModelId: mediaMatched.length - matched.length, omittedByPagination: matched.length - models.length,
       offset: input.offset, limit: input.limit, nextOffset: input.offset + input.limit < matched.length ? input.offset + input.limit : null,
