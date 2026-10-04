@@ -6,7 +6,7 @@ source and a timestamp on every number — or a plain "unknown" where nobody pub
 open-dashboard-mcp is the evidence layer for a model selector, such as a typed decision layer
 like System One. It gives an agent live model IDs and published prices across **OpenRouter**,
 **Sail**, **Nous Research**, **Groq**, **Cerebras**, **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**,
-**Crazyrouter**, **fal**, **WaveSpeedAI**, **KIE**, **AkashML** and **io.net**, plus daily **trending** GitHub repos. The
+**Crazyrouter**, **fal**, **WaveSpeedAI**, **KIE**, **Higgsfield**, **AkashML** and **io.net**, plus daily **trending** GitHub repos. The
 catalogue covers text, image, video, and audio, and each figure carries its source and check
 date so a published rate is not mistaken for measured request cost. It never sends inference
 traffic: the selector decides, and your own client makes the call.
@@ -19,7 +19,7 @@ Read-only, free, no account. Choose only the tools and providers you need.
 
 The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
 
-In open-dashboard-mcp 1.5.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+In open-dashboard-mcp 1.6.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
 
 The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
 
@@ -50,10 +50,10 @@ access, or supplies a shared/default credential.
 
 Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
 **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
-**fal**, **KIE**, **Crazyrouter**, **AkashML**, and **io.net**.
+**fal**, **KIE**, **Higgsfield**, **Crazyrouter**, **AkashML**, and **io.net**.
 
-**18 read-only tools. `dashboard_catalogue` reads 16 providers' own catalogues live on every
-call: 12 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
+**19 read-only tools. `dashboard_catalogue` reads 17 providers' own catalogues live on every
+call: 13 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
 source and read time, and a missing price is reported as unknown, never zero.**
 
 > **`max_tokens` is a correctness parameter, not a safety cap.** On AkashML, io.net and Sail,
@@ -235,7 +235,7 @@ Claude Code starts the server when it needs it and connects over MCP.
 
 ### Installing only the tools you want
 
-All eighteen tools are enabled by default. To install a subset, set
+All nineteen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
@@ -294,10 +294,12 @@ Requires Node.js 20 or newer. No API key is needed to start. Keys only widen wha
 
 There are two data paths, and they differ in freshness.
 
-- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table). All 16 providers are read this way. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
+- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table, and Higgsfield's web-plan comparison). All 17 providers are read this way. Higgsfield credits remain native web-plan credits and are never converted to a currency or represented as API pricing. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
 - **The other tools read a public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result: model economics, status, free models, what changed, usage leaders and trending repositories. Their freshness is the archive's, and each answer says how old it is.
 
 The optional key inventory has its own opt-in credential path. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+
+The packaged [1.6.0 three-host live observation report](docs/release-1.6.0-host-observations.md) records the current Higgsfield web-plan and native-credit refresh, provider states, host latencies, and explicitly bounded capability-state snapshots.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -341,7 +343,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **17 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net**. Version **1.6.0** registers **17 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -407,7 +409,7 @@ Every tool is read-only, non-destructive, and open-world. Results preserve exact
 
 `dashboard_capability_state` is the machine-readable state object for a selection agent. It returns one row per available live model slug, provider coverage, and the same two decisions over that one table: the literal cheapest paid model and the cheapest functional model. Every decision field has its own `checked_at`, `observed_at`, `expires_at`, and `age_seconds`; expired values are cleared and labelled `expired`, never reused as current values. The row carries `billing_class`, `context_window`, `catalogue_price`, measured `generation_cost` (including input/output token counts), `routed_provider`, three-state `reachability`, input/output modalities, `supports_tool_calling`, explicit `model_family` and `base_weights_lineage`, and the cached functionality ledger (`resolves`, `structured_output_ok`, `p50_latency`, `p95_latency`, `last_functionally_tested`, plus the external semantic-quality hook). Unknown is a value, not an omission.
 
-The two policies are deliberately different: `queries.public_council` is eligible on current paid classification plus authoritative per-generation cost only, while `queries.private_council` additionally requires live reachability, tool-calling support, the re-testable mechanical functionality gates, the 60-second p95 bound, and a separate semantic judgment. Catalogue price is never substituted for generation cost. Vendor identity is never used as model-family or base-weight lineage. By default the live-model cursor is exhausted; `max_rows` is an explicit degraded read, and `pagination.capped`, `scope.completeness`, `considered_rows`, `candidate_rows`, and `elimination_breakdown` expose the denominator and every measured gate. Family collision is explicitly reported as not evaluated until the caller supplies the already-seated council roster. See [`docs/jev-routing-example.json`](docs/jev-routing-example.json) for a full-scan Jev projection: with the currently deployed source it deterministically returns `block` after the complete live set is considered because `/api/public/v2/generation-costs` and the three dated ledgers are not published, so `billing_class`, `generation_cost`, and the private-only fields remain explicit UNKNOWN.
+The two policies are deliberately different: `queries.public_council` is eligible on current paid classification plus authoritative per-generation cost only, while `queries.private_council` additionally requires live reachability, tool-calling support, the re-testable mechanical functionality gates, the 60-second p95 bound, and a separate semantic judgment. Catalogue price is never substituted for generation cost. Vendor identity is never used as model-family or base-weight lineage. To keep stdio payloads bounded, `dashboard_capability_state` defaults to a transport-safe **500-row** snapshot and `max_rows` can only lower that bound. `pagination.capped`, `next_cursor`, `scope.completeness`, `considered_rows`, `candidate_rows`, and `elimination_breakdown` expose the denominator and every measured gate. Family collision is explicitly reported as not evaluated until the caller supplies the already-seated council roster. See [`docs/jev-routing-example.json`](docs/jev-routing-example.json) for a bounded Jev projection: with the currently deployed source it deterministically returns `block` over its observed slice because `/api/public/v2/generation-costs` and the three dated ledgers are not published, so `billing_class`, `generation_cost`, and the private-only fields remain explicit UNKNOWN.
 
 The response also carries the locked `basket-v1` weekly measurement manifest. It names the eight model/provider rows, the exact workload, three vantage points, the published-price lower-bound cost estimate, and the signed-result snapshot fields. The current plan uses `n=8`: p50 and `max of 8` are publishable, while p95 is explicitly withheld until a larger sample exists. No Vercel job is allowed to claim a Bulgarian, European KVM, or US Oracle vantage point, and no missing snapshot is silently pooled.
 
@@ -417,7 +419,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.6.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|

@@ -2,7 +2,7 @@ import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 
 import { startFixtureDashboard } from "./fixture-dashboard.js";
 import { createServer } from "../src/server.js";
-import { capabilityStateOutputSchema } from "../src/tools/capability-state.js";
+import { CAPABILITY_STATE_MAX_ROWS, capabilityStateOutputSchema } from "../src/tools/capability-state.js";
 
 type SmokeScenario = "blocked" | "measured";
 
@@ -14,8 +14,8 @@ function inputFromArgs(): { scenario: SmokeScenario; maxRows: number; freshnessT
     throw new Error("Usage: npm run smoke:capability-state -- [max_rows] | measured [max_rows]");
   }
   const maxRows = Number(value);
-  if (!Number.isSafeInteger(maxRows) || maxRows < 1) {
-    throw new Error("max_rows must be a positive safe integer");
+  if (!Number.isSafeInteger(maxRows) || maxRows < 1 || maxRows > CAPABILITY_STATE_MAX_ROWS) {
+    throw new Error(`max_rows must be a positive safe integer no greater than ${CAPABILITY_STATE_MAX_ROWS}`);
   }
   return scenario === "measured"
     ? { scenario, maxRows, freshnessTtlSeconds: 31_536_000, generationCostTtlSeconds: 31_536_000 }
