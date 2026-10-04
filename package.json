@@ -1,6 +1,6 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Higgsfield, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices. GitHub trending; Jev-compatible router.",
   "keywords": [
     "mcp",
@@ -50,6 +50,8 @@
     "README.md",
     "LICENSE",
     "docs/jev-routing-example.json",
+    "docs/release-1.6.0-host-observations.md",
+    "docs/release-1.6.0-host-observations.json",
     "scripts/serve-catalogue.mjs",
     "scripts/probe-location.mjs"
   ],

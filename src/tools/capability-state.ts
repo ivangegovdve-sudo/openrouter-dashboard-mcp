@@ -35,13 +35,15 @@ export const MODEL_LINEAGE_ENDPOINT = "/api/public/v2/model-lineage";
 export const MODEL_CAPABILITY_ENDPOINT = "/api/public/v2/model-capabilities";
 
 export const CAPABILITY_STATE_PAGE_SIZE = 500;
-// A default state read follows the live-model cursor until it is exhausted.
-// A page limit would turn a first-page sample into a catalogue-wide claim.
+// max_rows bounds the state payload. Keep the page limit unbounded so scans can
+// pass unmatched rows until they reach that bound or exhaust the catalogue.
 export const CAPABILITY_STATE_PAGE_LIMIT: number | null = null;
 export const CAPABILITY_STATE_DEFAULT_TTL_SECONDS = 7 * 24 * 60 * 60;
 /** Measured charges drift faster than catalogue/functionality evidence. */
 export const GENERATION_COST_DEFAULT_TTL_SECONDS = 24 * 60 * 60;
-export const CAPABILITY_STATE_MAX_ROWS = 2_000;
+// The stdio transport carries both JSON text and structuredContent. Keep the
+// complete tool response bounded for regular stdio clients.
+export const CAPABILITY_STATE_MAX_ROWS = 500;
 export const FUNCTIONALITY_LATENCY_BOUND_MS = "60000";
 
 const observationStateSchema = z.enum(["known", "unknown", "expired"]);
@@ -414,9 +416,9 @@ export const capabilityStateOutputSchema = z.discriminatedUnion("status", [
 export const capabilityStateInputSchema = z
   .object({
     providers: z.array(z.string().min(1)).max(50).optional(),
-    // Omitted means full cursor exhaustion. A bound is an explicit degraded
-    // read and is reported as capped so it cannot masquerade as the catalogue.
-    max_rows: z.number().int().min(1).max(CAPABILITY_STATE_MAX_ROWS).optional(),
+    // The bounded default keeps the duplicated stdio response transport-safe.
+    // A cap is reported so this snapshot cannot masquerade as a full catalogue.
+    max_rows: z.number().int().min(1).max(CAPABILITY_STATE_MAX_ROWS).default(CAPABILITY_STATE_MAX_ROWS),
     freshness_ttl_seconds: z.number().int().positive().max(31_536_000).default(CAPABILITY_STATE_DEFAULT_TTL_SECONDS),
     generation_cost_ttl_seconds: z.number().int().positive().max(31_536_000).default(GENERATION_COST_DEFAULT_TTL_SECONDS),
   })
@@ -1353,7 +1355,7 @@ export async function runCapabilityState(
         warnings: [],
       };
     }
-    const scan = await scanLiveModels(dependencies.client, input.max_rows ?? null, allowed);
+    const scan = await scanLiveModels(dependencies.client, input.max_rows, allowed);
     const now = (dependencies.now ?? (() => new Date()))().toISOString();
     const warnings: string[] = [];
     let costObservations: GenerationCostObservation[] | undefined;
