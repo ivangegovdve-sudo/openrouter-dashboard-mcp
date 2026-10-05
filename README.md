@@ -1,17 +1,27 @@
 # Open Dashboard MCP
 
-Ask an agent "which provider is cheapest for this model right now?" and get an answer with a
-source and a timestamp on every number — or a plain "unknown" where nobody publishes one.
+## 5,000+ model IDs, with prices that fail safe
 
-open-dashboard-mcp is the evidence layer for a model selector, such as a typed decision layer
-like System One. It gives an agent live model IDs and published prices across **OpenRouter**,
-**Sail**, **Nous Research**, **Groq**, **Cerebras**, **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**,
-**Crazyrouter**, **fal**, **WaveSpeedAI**, **KIE**, **AkashML** and **io.net**, plus daily **trending** GitHub repos. The
-catalogue covers text, image, video, and audio, and each figure carries its source and check
-date so a published rate is not mistaken for measured request cost. It never sends inference
-traffic: the selector decides, and your own client makes the call.
+[**Open the live dashboard**](https://www.sdforest.site/web/open-dashboard/) ·
+[**View `open-dashboard-mcp` on npm**](https://www.npmjs.com/package/open-dashboard-mcp)
 
-Read-only, free, no account. Choose only the tools and providers you need.
+`open-dashboard-mcp` v1.6.0 indexes **5,326 model entries** through **16 npm adapters** and
+exposes **19 read-only MCP tools**. It reads prices across 16 provider sources. Fifteen are
+live today; **fal is partial** and **Sail is stale**. The evidence is measured daily from three
+hosts: **Local/Bulgaria**, **KVM2/Europe**, and **Oracle/US**.
+
+Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
+**QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
+**fal**, **Crazyrouter**, **AkashML**, **io.net**, and **KIE**.
+
+A missing price stays **UNKNOWN**; it never becomes zero. Cost selection therefore fails safe
+instead of quietly treating absent evidence as free. Every figure retains its source and check
+time so a published rate is not mistaken for measured request cost.
+
+This is a structured **facts layer** for model routers, based on the OpenRouter Jev pattern.
+The separate [Model Router](https://github.com/ivangegovdve-sudo/model-router) project makes
+routing decisions; the dashboard only reads and serves evidence. It never sends inference
+calls. Dashboard tools are free and require no account or API keys.
 
 <!-- router:begin generated-do-not-edit -->
 
@@ -19,7 +29,7 @@ Read-only, free, no account. Choose only the tools and providers you need.
 
 The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
 
-In open-dashboard-mcp 1.5.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+In open-dashboard-mcp 1.6.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
 
 The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
 
@@ -32,29 +42,26 @@ It reports the observation window and freshness so agents can distinguish a curr
 trend from an older snapshot. Use `dashboard_github_movers` for changes between
 observations; neither tool invokes a model or spends on inference.
 
-## The easy path: route with Jev and your own keys
+## The easy path: evidence first, routing separate
 
-Use this package as the evidence layer and Jev as the typed decision layer. In this
-**System**, Jev asks `dashboard_resolve_model` for a model that satisfies your typed
-constraints; your application then sends the inference request directly to the selected
-provider with a key from your own environment. The MCP never proxies inference, sells hosted
-access, or supplies a shared/default credential.
+Use this package as the structured facts layer and Jev as the typed decision pattern. The
+separate Model Router asks `dashboard_resolve_model` for evidence that satisfies typed
+constraints; your application then decides whether to call the selected provider. The MCP
+never proxies inference, sells hosted access, or supplies a shared/default credential.
 
 1. Install the MCP: `claude mcp add open-dashboard -- npx -y open-dashboard-mcp`.
-2. Put only the provider keys you choose in the MCP/client environment (for example,
-   `OPENROUTER_API_KEY`, `GROQ_API_KEY`, or `CEREBRAS_API_KEY`).
-3. Give Jev your task and typed constraints—capabilities, context, price ceiling, and allowed
+2. Give the router your task and typed constraints—capabilities, context, price ceiling, and allowed
    providers—and let it select from `dashboard_resolve_model`.
-4. Call the selected provider from your application using that user's key. If a required key
-   is missing, treat the provider as unavailable; never fall back to a bundled credential.
+3. If you choose to run inference, call the selected provider from your own application. That
+   call is outside the dashboard and uses your application's provider credentials.
 
 Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
 **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
-**fal**, **KIE**, **Crazyrouter**, **AkashML**, and **io.net**.
+**fal**, **Crazyrouter**, **AkashML**, **io.net**, and **KIE**.
 
-**18 read-only tools. `dashboard_catalogue` reads 16 providers' own catalogues live on every
-call: 12 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
-source and read time, and a missing price is reported as unknown, never zero.**
+**19 read-only tools. The live dashboard reads price evidence across 16 provider sources; 15
+are live today, with fal partial and Sail stale. Every price carries its source and read time,
+and a missing price is `UNKNOWN`, never zero.**
 
 > **`max_tokens` is a correctness parameter, not a safety cap.** On AkashML, io.net and Sail,
 > most models reason before they answer. With too small a budget the call returns HTTP 200,
@@ -235,7 +242,7 @@ Claude Code starts the server when it needs it and connects over MCP.
 
 ### Installing only the tools you want
 
-All eighteen tools are enabled by default. To install a subset, set
+All nineteen tools are enabled by default. To install a subset, set
 `OPEN_DASHBOARD_TOOLS` to a comma-separated allowlist in the server's environment.
 Deselected tools are **absent from `tools/list` entirely** — not present and failing —
 so a client never sees a tool it cannot use:
@@ -294,7 +301,9 @@ Requires Node.js 20 or newer. No API key is needed to start. Keys only widen wha
 
 There are two data paths, and they differ in freshness.
 
-- **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table). All 16 providers are read this way. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
+- **The live dashboard reads price evidence across 16 provider sources** and publishes source
+  status with it. Fifteen sources are live today; fal is partial and Sail is stale. Dashboard
+  tools read this public evidence without an account or API keys.
 - **The other tools read a public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result: model economics, status, free models, what changed, usage leaders and trending repositories. Their freshness is the archive's, and each answer says how old it is.
 
 The optional key inventory has its own opt-in credential path. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
@@ -341,7 +350,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net**. Version **1.5.0** registers **17 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Crazyrouter, AkashML, io.net, KIE**. The current npm release is **v1.6.0**, with **16 adapters** and nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -362,10 +371,10 @@ Read-only MCP access to public model and GitHub evidence, covering **OpenRouter,
   provider returns an authoritative field. OpenRouter observations retain `usage.cost`;
   Nous Research and Sail remain `BLOCKED` when no such field exists, and short samples
   remain `INSUFFICIENT EVIDENCE` rather than becoming a single-looking estimate.
-- **Unknown stays unknown.** A price nobody publishes is not zero, and a rate this package
-  cannot source is not printed as a number.
-- **No credentials needed to start.** It reads public endpoints by default; keys only
-  widen what it can see.
+- **UNKNOWN stays UNKNOWN.** A missing price never defaults to zero, so cost selection fails
+  safe instead of treating absent evidence as free.
+- **No credentials needed.** Dashboard tools read public evidence without an account or
+  API keys.
 
 **What it is not:** not an inference proxy and not a billing dashboard. It supplies the
 evidence a router or selector decides on; it never forwards inference traffic, and it never
@@ -417,7 +426,9 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.5.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Provider reference for the **16 adapters** represented by the live dashboard and
+**open-dashboard-mcp v1.6.0**. Publication declarations describe the named connector; they
+are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -434,7 +445,6 @@ Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="wavespeed"><strong>WaveSpeedAI</strong></span><br>Media generation platform | [Catalogue](https://wavespeed.ai/api/models) · [Documentation](https://wavespeed.ai/) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="fal"><strong>fal</strong></span><br>Media generation platform | [Catalogue](https://api.fal.ai/v1/models) · [Documentation](https://fal.ai/docs/documentation) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="kie"><strong>KIE</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.kie.ai/client/v1/model-pricing/page) · [Documentation](https://kie.ai/pricing) | All collected models | Not published in this connector | Some collected models | Not published in this connector | Some collected models | Not established |
-| <span data-provider-id="higgsfield"><strong>Higgsfield</strong></span><br>Media generation platform | [Catalogue](https://fnf-api-gw.higgsfield.ai/fnf/subscriptions/v2/compare?plan_set_key=ps_a3&billing_period=monthly&with_localization=true) · [Documentation](https://higgsfield.ai/pricing) | Some collected models | Not published in this connector | Some collected models | Not published in this connector | Not published in this connector | Not established |
 | <span data-provider-id="crazyrouter"><strong>Crazyrouter</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
 | <span data-provider-id="akashml"><strong>AkashML</strong></span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="ionet"><strong>io.net</strong></span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
@@ -520,12 +530,6 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 > “Access the best AI models for AI chat, video, image, and music in one API.” — [Kie.ai homepage description](https://kie.ai/), observed 2026-09-29.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://kie.ai/); checked 2026-09-29.
-
-**Higgsfield**
-
-> “Pricing plans for Higgsfield's image, video and audio tools.” — [Higgsfield public pricing page](https://higgsfield.ai/pricing), observed 2026-09-08.
-
-Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://higgsfield.ai/pricing); checked 2026-09-08.
 
 **Crazyrouter**
 
