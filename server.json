@@ -1,0 +1,13 @@
+{
+  "name": "io.github.ivangegovdve-sudo/open-dashboard-mcp",
+  "description": "Unified model ID and price oracle (16+ sources) specifically structured for System One routers (Jev, Laya, Clef).",
+  "version": "1.6.0",
+  "homepage": "https://github.com/ivangegovdve-sudo/openrouter-dashboard-mcp",
+  "mcp_sdk": "typescript",
+  "runtime": "node",
+  "transport": "stdio",
+  "install": {
+    "npm": "open-dashboard-mcp"
+  },
+  "tags": ["pricing", "model-routing", "system-one", "jev", "clef", "akashml", "io.net"]
+}
