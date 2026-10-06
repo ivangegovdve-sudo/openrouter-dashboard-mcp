@@ -5,8 +5,8 @@ on:
     types: [opened, reopened, synchronize, edited, ready_for_review]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: read
   actions: read
   checks: read
   statuses: read
@@ -17,9 +17,28 @@ concurrency:
 
 jobs:
   solve:
-    uses: ivangegovdve-sudo/hermes_agents/.github/workflows/pr-event-solver-reusable.yml@main
-    with:
-      repo: ${{ github.repository }}
-      pr: ${{ github.event.pull_request.number }}
-      event: ${{ github.event.action }}
-    secrets: inherit
+    runs-on: [self-hosted, Windows, X64, local-gpu]
+    timeout-minutes: 5
+    env:
+      ENGINE_URL: http://127.0.0.1:8787
+      EVENT_REPO: ${{ github.repository }}
+      EVENT_PR: ${{ github.event.pull_request.number }}
+      EVENT_ACTION: ${{ github.event.action }}
+    steps:
+      - name: Enqueue PR event in Glass
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $body = @{
+            repo = $env:EVENT_REPO
+            pr = [int]$env:EVENT_PR
+            event = $env:EVENT_ACTION
+          } | ConvertTo-Json -Compress
+          $response = Invoke-RestMethod -Method Post `
+            -Uri "$env:ENGINE_URL/v1/events/github" `
+            -ContentType 'application/json' `
+            -Body $body
+          if ($response.started -ne $true) {
+            throw "Glass did not accept the GitHub PR event: $($response | ConvertTo-Json -Compress)"
+          }
+          $response | ConvertTo-Json -Compress
