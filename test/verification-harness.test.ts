@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { connect } from "node:net";
+import { StringDecoder } from "node:string_decoder";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
+import { getDefaultEnvironment } from "@modelcontextprotocol/client/stdio";
 import { z } from "zod";
 
 import { createDashboardClient } from "../src/dashboard/client.js";
@@ -11,6 +15,8 @@ import { runFreeModels } from "../src/tools/free-models.js";
 import { runGitHubTrending } from "../src/tools/github-trending.js";
 import { runModelStatus } from "../src/tools/model-status.js";
 import { runResolveModel } from "../src/tools/resolve-model.js";
+import { contractOutputSchema } from "../src/tools/contract.js";
+import { sourceHealthOutputSchema } from "../src/tools/source-health.js";
 
 async function loadFixtureHarness(): Promise<
   typeof import("../scripts/fixture-dashboard.js")
@@ -974,3 +980,450 @@ for (const purityCase of [
     );
   });
 }
+
+const MCP_ENTRY_PATH = fileURLToPath(
+  new URL("../src/index.ts", import.meta.url),
+);
+const LEGACY_PROTOCOL_VERSION = "2025-11-25";
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
+const MCP_REQUEST_TIMEOUT_MS = 8_000;
+const MCP_CLOSE_TIMEOUT_MS = 8_000;
+const MCP_STDIO_OUTPUT_LIMIT_BYTES = 2 * 1024 * 1024;
+const EXPECTED_DASHBOARD_TOOL_NAMES = [
+  "dashboard_benchmarks",
+  "dashboard_capability_state",
+  "dashboard_catalogue",
+  "dashboard_contract",
+  "dashboard_free_models",
+  "dashboard_generation_costs",
+  "dashboard_github_movers",
+  "dashboard_github_trending",
+  "dashboard_key_inventory",
+  "dashboard_matrix",
+  "dashboard_model_economics",
+  "dashboard_model_status",
+  "dashboard_price_comparison",
+  "dashboard_resolve_model",
+  "dashboard_resolve_seat",
+  "dashboard_source_health",
+  "dashboard_speed",
+  "dashboard_usage_leaders",
+  "dashboard_whats_changed",
+] as const;
+
+type JsonRpcRecord = Record<string, unknown>;
+type ProtocolEra = "legacy" | "modern";
+
+type StdioProtocolSession = {
+  request(method: string, params: JsonRpcRecord): Promise<JsonRpcRecord>;
+  notify(method: string, params?: JsonRpcRecord): Promise<void>;
+  close(): Promise<void>;
+};
+
+type ProtocolScenario = {
+  tools: unknown[];
+  contract: unknown;
+};
+
+function asJsonRpcRecord(value: unknown, label: string): JsonRpcRecord {
+  assert.ok(value !== null && typeof value === "object" && !Array.isArray(value), label);
+  return value as JsonRpcRecord;
+}
+
+function withProtocolDeadline<T>(
+  label: string,
+  operation: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`${label} exceeded ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+    timeout.unref?.();
+    operation.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
+function writeJsonRpcMessage(
+  child: ChildProcessWithoutNullStreams,
+  message: JsonRpcRecord,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    child.stdin.write(`${JSON.stringify(message)}\n`, "utf8", (error) => {
+      if (error !== null && error !== undefined) reject(error);
+      else resolve();
+    });
+  });
+}
+
+async function startStdioProtocolSession(baseUrl: string): Promise<StdioProtocolSession> {
+  const child = spawn(process.execPath, ["--import", "tsx", MCP_ENTRY_PATH], {
+    shell: false,
+    windowsHide: true,
+    stdio: ["pipe", "pipe", "pipe"],
+    env: {
+      ...getDefaultEnvironment(),
+      DASHBOARD_BASE_URL: baseUrl,
+    },
+  });
+  const stdoutDecoder = new StringDecoder("utf8");
+  const stderrDecoder = new StringDecoder("utf8");
+  const pendingResponses = new Map<
+    number,
+    { resolve(response: JsonRpcRecord): void; reject(error: Error): void }
+  >();
+  let nextRequestId = 1;
+  let stdoutText = "";
+  let stderrText = "";
+  let stdoutBytes = 0;
+  let stderrBytes = 0;
+  let failure: Error | undefined;
+  let closed = false;
+  let resolveClosed: ((status: { code: number | null; signal: string | null }) => void) | undefined;
+  const closePromise = new Promise<{ code: number | null; signal: string | null }>(
+    (resolve) => {
+      resolveClosed = resolve;
+    },
+  );
+
+  const rejectPending = (error: Error): void => {
+    for (const pending of pendingResponses.values()) pending.reject(error);
+    pendingResponses.clear();
+  };
+  const fail = (error: Error): void => {
+    if (failure !== undefined) return;
+    failure = error;
+    rejectPending(error);
+    if (!child.killed) child.kill();
+  };
+  const consumeLine = (line: string): void => {
+    if (line.length === 0) {
+      fail(new Error("MCP stdio emitted a blank stdout frame"));
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line) as unknown;
+    } catch {
+      fail(new Error("MCP stdio emitted a non-JSON stdout frame"));
+      return;
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      fail(new Error("MCP stdio frame must be an object"));
+      return;
+    }
+    const response = parsed as JsonRpcRecord;
+    if (response.jsonrpc !== "2.0" || "method" in response) {
+      fail(new Error("MCP stdio emitted a non-response stdout frame"));
+      return;
+    }
+    if (typeof response.id !== "number" || !Number.isSafeInteger(response.id)) {
+      fail(new Error("MCP stdio response has no safe numeric id"));
+      return;
+    }
+    if (("result" in response) === ("error" in response)) {
+      fail(new Error(`MCP stdio response ${response.id} is not exactly one result or error`));
+      return;
+    }
+    const pending = pendingResponses.get(response.id);
+    if (pending === undefined) {
+      fail(new Error(`MCP stdio emitted an unexpected response id ${response.id}`));
+      return;
+    }
+    pendingResponses.delete(response.id);
+    pending.resolve(response);
+  };
+  const consumeStdout = (text: string): void => {
+    stdoutText += text;
+    for (;;) {
+      const newline = stdoutText.indexOf("\n");
+      if (newline < 0) return;
+      const rawLine = stdoutText.slice(0, newline);
+      stdoutText = stdoutText.slice(newline + 1);
+      consumeLine(rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine);
+    }
+  };
+
+  child.stdout.on("data", (chunk: Buffer) => {
+    stdoutBytes += chunk.length;
+    if (stdoutBytes > MCP_STDIO_OUTPUT_LIMIT_BYTES) {
+      fail(new Error("MCP stdio stdout exceeded the test cap"));
+      return;
+    }
+    consumeStdout(stdoutDecoder.write(chunk));
+  });
+  child.stderr.on("data", (chunk: Buffer) => {
+    stderrBytes += chunk.length;
+    if (stderrBytes > MCP_STDIO_OUTPUT_LIMIT_BYTES) {
+      fail(new Error("MCP stdio stderr exceeded the test cap"));
+      return;
+    }
+    stderrText += stderrDecoder.write(chunk);
+  });
+  child.once("error", (error) => {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    fail(normalized);
+  });
+  child.stdin.on("error", (error) => fail(error));
+  child.once("close", (code, signal) => {
+    closed = true;
+    consumeStdout(stdoutDecoder.end());
+    stderrText += stderrDecoder.end();
+    if (stdoutText.length > 0 && failure === undefined) {
+      fail(new Error("MCP stdio left an unterminated stdout frame"));
+    }
+    rejectPending(failure ?? new Error("MCP stdio child closed before responding"));
+    resolveClosed?.({ code, signal });
+  });
+
+  const request = async (method: string, params: JsonRpcRecord): Promise<JsonRpcRecord> => {
+    const id = nextRequestId;
+    nextRequestId += 1;
+    const response = new Promise<JsonRpcRecord>((resolve, reject) => {
+      pendingResponses.set(id, { resolve, reject });
+    });
+    // Observe early child failures while the write is pending; await the original below.
+    void response.catch(() => {});
+    try {
+      await withProtocolDeadline(
+        `${method} write`,
+        writeJsonRpcMessage(child, { jsonrpc: "2.0", id, method, params }),
+        MCP_REQUEST_TIMEOUT_MS,
+      );
+      return await withProtocolDeadline(
+        `${method} response`,
+        response,
+        MCP_REQUEST_TIMEOUT_MS,
+      );
+    } catch (error) {
+      pendingResponses.delete(id);
+      throw error;
+    }
+  };
+  const notify = async (method: string, params?: JsonRpcRecord): Promise<void> => {
+    await withProtocolDeadline(
+      `${method} notification write`,
+      writeJsonRpcMessage(child, {
+        jsonrpc: "2.0",
+        method,
+        ...(params === undefined ? {} : { params }),
+      }),
+      MCP_REQUEST_TIMEOUT_MS,
+    );
+  };
+
+  return {
+    request,
+    notify,
+    async close(): Promise<void> {
+      let cleanupFailure: unknown;
+      let status: { code: number | null; signal: string | null };
+      try {
+        if (!closed && !child.stdin.destroyed) child.stdin.end();
+        status = await withProtocolDeadline(
+          "MCP stdio child exit",
+          closePromise,
+          MCP_CLOSE_TIMEOUT_MS,
+        );
+      } catch (error) {
+        cleanupFailure = error;
+        try {
+          if (!closed) child.kill("SIGTERM");
+          status = await withProtocolDeadline(
+            "MCP stdio child termination",
+            closePromise,
+            MCP_CLOSE_TIMEOUT_MS,
+          );
+        } catch {
+          if (!closed) child.kill("SIGKILL");
+          status = await withProtocolDeadline(
+            "MCP stdio child force-kill",
+            closePromise,
+            MCP_CLOSE_TIMEOUT_MS,
+          );
+        }
+      }
+      if (failure !== undefined) throw failure;
+      if (cleanupFailure !== undefined) throw cleanupFailure;
+      if (status.code !== 0 || status.signal !== null) {
+        throw new Error(
+          `MCP stdio child did not exit cleanly (${String(status.code)}, ${String(status.signal)}): ${stderrText}`,
+        );
+      }
+    },
+  };
+}
+
+function resultFromJsonRpcResponse(
+  response: JsonRpcRecord,
+  label: string,
+): JsonRpcRecord {
+  if (response.error !== undefined) {
+    assert.fail(`${label} returned a JSON-RPC error: ${JSON.stringify(response.error)}`);
+  }
+  return asJsonRpcRecord(response.result, `${label} result must be an object`);
+}
+
+function paramsForEra(
+  era: ProtocolEra,
+  params: JsonRpcRecord,
+): JsonRpcRecord {
+  if (era === "legacy") return params;
+  return {
+    ...params,
+    _meta: {
+      "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL_VERSION,
+      "io.modelcontextprotocol/clientCapabilities": {},
+    },
+  };
+}
+
+function assertEraResult(
+  era: ProtocolEra,
+  result: JsonRpcRecord,
+  label: string,
+): void {
+  if (era === "modern") {
+    assert.equal(result.resultType, "complete", `${label} must be a modern complete result`);
+  } else {
+    assert.equal("resultType" in result, false, `${label} must keep its legacy result shape`);
+  }
+}
+
+function toolDefinitionsFromResult(
+  result: JsonRpcRecord,
+  label: string,
+): unknown[] {
+  assert.ok(Array.isArray(result.tools), `${label} must include tools`);
+  const names = result.tools
+    .map((tool, index) => String(asJsonRpcRecord(tool, `${label} tool ${index}`).name))
+    .sort((left, right) => left.localeCompare(right));
+  assert.deepEqual(names, EXPECTED_DASHBOARD_TOOL_NAMES);
+  for (const [index, tool] of result.tools.entries()) {
+    const definition = asJsonRpcRecord(tool, `${label} tool ${index}`);
+    assert.ok(definition.inputSchema !== undefined, `${String(definition.name)} must have an input schema`);
+    assert.ok(definition.outputSchema !== undefined, `${String(definition.name)} must have an output schema`);
+  }
+  return result.tools;
+}
+
+function structuredToolOutput(result: JsonRpcRecord, label: string): unknown {
+  assert.equal(result.isError, undefined, `${label} must not be a tool error`);
+  assert.notEqual(result.structuredContent, undefined, `${label} must include structured content`);
+  assert.ok(Array.isArray(result.content), `${label} must include text content`);
+  const text = result.content.find((item) => {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) return false;
+    return (item as JsonRpcRecord).type === "text";
+  });
+  const textContent = asJsonRpcRecord(text, `${label} text content must be an object`);
+  assert.equal(typeof textContent.text, "string", `${label} text content must be JSON`);
+  assert.deepEqual(JSON.parse(textContent.text as string), result.structuredContent);
+  return result.structuredContent;
+}
+
+async function runProtocolScenario(
+  era: ProtocolEra,
+  baseUrl: string,
+): Promise<ProtocolScenario> {
+  const session = await startStdioProtocolSession(baseUrl);
+  let scenarioFailed = false;
+  try {
+    if (era === "legacy") {
+      const initialized = resultFromJsonRpcResponse(
+        await session.request("initialize", {
+          protocolVersion: LEGACY_PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: "protocol-verification", version: "1.0.0" },
+        }),
+        "legacy initialize",
+      );
+      assert.equal(initialized.protocolVersion, LEGACY_PROTOCOL_VERSION);
+      await session.notify("notifications/initialized");
+    }
+
+    const initialList = resultFromJsonRpcResponse(
+      await session.request("tools/list", paramsForEra(era, {})),
+      `${era} initial tools/list`,
+    );
+    assertEraResult(era, initialList, `${era} initial tools/list`);
+    const tools = toolDefinitionsFromResult(initialList, `${era} initial tools/list`);
+
+    const contractResult = resultFromJsonRpcResponse(
+      await session.request(
+        "tools/call",
+        paramsForEra(era, { name: "dashboard_contract", arguments: {} }),
+      ),
+      `${era} dashboard_contract`,
+    );
+    assertEraResult(era, contractResult, `${era} dashboard_contract`);
+    const contract = structuredToolOutput(contractResult, `${era} dashboard_contract`);
+    contractOutputSchema.parse(contract);
+
+    const sourceHealthResult = resultFromJsonRpcResponse(
+      await session.request(
+        "tools/call",
+        paramsForEra(era, { name: "dashboard_source_health", arguments: {} }),
+      ),
+      `${era} dashboard_source_health`,
+    );
+    assertEraResult(era, sourceHealthResult, `${era} dashboard_source_health`);
+    const sourceHealth = sourceHealthOutputSchema.parse(
+      structuredToolOutput(sourceHealthResult, `${era} dashboard_source_health`),
+    );
+    assert.notEqual(sourceHealth.status, "error", `${era} source health must use the fixture`);
+
+    const finalList = resultFromJsonRpcResponse(
+      await session.request("tools/list", paramsForEra(era, {})),
+      `${era} final tools/list`,
+    );
+    assertEraResult(era, finalList, `${era} final tools/list`);
+    assert.deepEqual(
+      toolDefinitionsFromResult(finalList, `${era} final tools/list`),
+      tools,
+      `${era} tool calls must not alter the advertised surface`,
+    );
+    return { tools, contract };
+  } catch (error) {
+    scenarioFailed = true;
+    throw error;
+  } finally {
+    try {
+      await session.close();
+    } catch (error) {
+      if (!scenarioFailed) throw error;
+    }
+  }
+}
+
+test("legacy stdio initialization exposes the complete dashboard tool surface", { timeout: 30_000 }, async () => {
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    await runProtocolScenario("legacy", fixture.baseUrl);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("MCP 2026-07-28 stateless stdio requests expose the legacy-equivalent tool surface", { timeout: 45_000 }, async () => {
+  const { startFixtureDashboard } = await loadFixtureHarness();
+  const fixture = await startFixtureDashboard({ mode: "fixture" });
+  try {
+    const legacy = await runProtocolScenario("legacy", fixture.baseUrl);
+    const modern = await runProtocolScenario("modern", fixture.baseUrl);
+    assert.deepEqual(modern.tools, legacy.tools);
+    assert.deepEqual(modern.contract, legacy.contract);
+  } finally {
+    await fixture.close();
+  }
+});
