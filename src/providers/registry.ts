@@ -538,7 +538,7 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     },
     spendVisibility: "unknown",
     comparabilityNote:
-      "This build carries one dated public Eleven v3 TTS price row ($0.10 per 1K characters) and a third-party UTMOS-predicted MOS observation. It is a read-only bundled snapshot, not an account or synthesis probe; absent voices, prices or quality scores remain unknown.",
+      "This build carries one dated public Eleven v3 TTS price row ($0.08 per 1K characters) and a third-party UTMOS-predicted MOS observation. It is a read-only bundled snapshot, not an account or synthesis probe; absent voices, prices or quality scores remain unknown.",
   },
   cartesia: {
     id: "cartesia",

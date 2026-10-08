@@ -13,7 +13,7 @@ test("the TTS catalogue exposes dated, read-only ElevenLabs and Cartesia evidenc
   const eleven = catalogue.models.find((model) => model.provider === "elevenlabs");
   const cartesia = catalogue.models.find((model) => model.provider === "cartesia");
   assert.equal(eleven?.pricePoints[0]?.unit, "character_1k");
-  assert.equal(eleven?.pricePoints[0]?.amount, "0.10");
+  assert.equal(eleven?.pricePoints[0]?.amount, "0.08");
   assert.equal((eleven?.nativePricing as { quality: { value: string } }).quality.value, "4.273");
   assert.equal(cartesia?.pricePoints[0]?.unit, "plan_month");
   assert.equal(cartesia?.pricePoints[0]?.amount, "49");

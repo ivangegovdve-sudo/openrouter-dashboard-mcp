@@ -38,9 +38,9 @@ const SNAPSHOTS: Record<TtsCatalogueProviderId, TtsSnapshot> = {
     id: "eleven-v3",
     displayName: "Eleven v3",
     price: {
-      amount: "0.10",
+      amount: "0.08",
       unit: "character_1k",
-      label: "$0.10 / 1K characters",
+      label: "$0.08 / 1K characters",
       scope: "Text to Speech v3 published API rate",
       sourceUrl: TTS_CATALOGUE_SOURCES.elevenlabs,
     },
