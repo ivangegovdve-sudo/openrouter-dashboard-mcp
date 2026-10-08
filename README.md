@@ -2,17 +2,19 @@
 
 ## 5,000+ model IDs, with prices that fail safe
 
-[**Open the live dashboard**](https://www.sdforest.site/web/open-dashboard/) ·
+[**Open the live dashboard**](https://opendashboard.sdforest.site/) ·
 [**View `open-dashboard-mcp` on npm**](https://www.npmjs.com/package/open-dashboard-mcp)
 
-`open-dashboard-mcp` v1.6.0 indexes **5,326 model entries** through **17 npm adapters** and
+`open-dashboard-mcp` v1.6.3 indexes **5,326 model entries** through **17 npm adapters** and
 exposes **19 read-only MCP tools**. It reads prices across 17 provider sources. Fifteen are
-live today; **fal is partial** and **Sail is stale**. The evidence is measured daily from three
-hosts: **Local/Bulgaria**, **KVM2/Europe**, and **Oracle/US**.
+live today; **fal is partial** and **Sail is stale**. Its read-only TTS catalogue also carries
+published ElevenLabs and Cartesia evidence without synthesis calls. The evidence is measured
+daily from three hosts: **Local/Bulgaria**, **KVM2/Europe**, and **Oracle/US**.
 
 Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
 **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
-**fal**, **KIE**, **Higgsfield**, **Crazyrouter**, **AkashML**, and **io.net**.
+**fal**, **KIE**, **Higgsfield**, **Crazyrouter**, **AkashML**, **io.net**, **ElevenLabs**,
+and **Cartesia**.
 
 A missing price stays **UNKNOWN**; it never becomes zero. Cost selection therefore fails safe
 instead of quietly treating absent evidence as free. Every figure retains its source and check
@@ -29,7 +31,7 @@ calls. Dashboard tools are free and require no account or API keys.
 
 The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
 
-In open-dashboard-mcp 1.6.2, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+In open-dashboard-mcp 1.6.3, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
 
 The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
 
@@ -57,7 +59,8 @@ never proxies inference, sells hosted access, or supplies a shared/default crede
 
 Providers: **OpenRouter**, **Groq**, **Cerebras**, **Sail**, **Nous Research**,
 **QwenCloud**, **DeepInfra**, **Novita**, **SambaNova**, **Chutes**, **WaveSpeedAI**,
-**fal**, **KIE**, **Higgsfield**, **Crazyrouter**, **AkashML**, and **io.net**.
+**fal**, **KIE**, **Higgsfield**, **Crazyrouter**, **AkashML**, **io.net**, **ElevenLabs**,
+and **Cartesia**.
 
 **19 read-only tools. `dashboard_catalogue` reads 17 providers' own catalogues live on every
 call: 13 need no key; AkashML, Groq, Sail and QwenCloud need their own. Every price carries its
@@ -304,9 +307,15 @@ There are two data paths, and they differ in freshness.
 - **`dashboard_catalogue` reads each provider's own source on every call**: its API, or its published pricing page where no API carries prices (Sail's digest-verified pricing document, Cerebras's rendered pricing table, and Higgsfield's web-plan comparison). All 17 providers are read this way. Higgsfield credits remain native web-plan credits and are never converted to a currency or represented as API pricing. AkashML, Groq, Sail and QwenCloud need their own keys (`AKASHML_API_KEY`, `GROQ_API_KEY`, `SAIL_API_KEY`, `QWENCLOUD_API_KEY`); without one, that provider reports `KEY_NOT_CONFIGURED` rather than falling back to an archive.
 - **The other tools read a public, zero-credential HTTP API** that collects provider catalogues and GitHub daily and republishes the result: model economics, status, free models, what changed, usage leaders and trending repositories. Their freshness is the archive's, and each answer says how old it is.
 
-The optional key inventory has its own opt-in credential path. By default the dashboard is `https://openrouter-github-dashboard.vercel.app`, a deployment run by this project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a service with an uptime guarantee**, and every user of this package reads from the same instance.
+The optional key inventory has its own opt-in credential path. The public studio is
+`https://opendashboard.sdforest.site/`. By default the package reads the compatible API
+deployment at `https://openrouter-github-dashboard.vercel.app`, a deployment run by this
+project's author on a hobby-tier host. It is public and needs no credentials, but it is **not a
+service with an uptime guarantee**, and every user of this package reads from the same instance.
 
-The packaged [1.6.0 three-host live observation report](docs/release-1.6.0-host-observations.md) records the current Higgsfield web-plan and native-credit refresh, provider states, host latencies, and explicitly bounded capability-state snapshots.
+The historical [1.6.0 three-host live observation report](docs/release-1.6.0-host-observations.md)
+records the Higgsfield web-plan and native-credit refresh, provider states, host latencies, and
+explicitly bounded capability-state snapshots.
 
 Point it at your own compatible deployment with `DASHBOARD_BASE_URL`:
 
@@ -334,7 +343,10 @@ npm run build
 node .\build\index.js
 ```
 
-The compiled executable remains `build/index.js`. By default it reads the public dashboard at `https://openrouter-github-dashboard.vercel.app` with zero credentials. To point the child at another compatible deployment, set only `DASHBOARD_BASE_URL` to an absolute HTTP(S) URL without URL credentials.
+The compiled executable remains `build/index.js`. By default it reads the public dashboard API at
+`https://openrouter-github-dashboard.vercel.app` with zero credentials. To point the child at
+another compatible deployment, set only `DASHBOARD_BASE_URL` to an absolute HTTP(S) URL without
+URL credentials.
 
 The server speaks MCP newline-delimited JSON over stdin/stdout. Stdout is protocol-only; application diagnostics belong on stderr.
 
@@ -350,7 +362,7 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net, ElevenLabs, Cartesia**. Version **1.6.2** registers **19 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net, ElevenLabs, Cartesia**. Version **1.6.3** registers **19 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
@@ -426,7 +438,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **19 providers** in **open-dashboard-mcp 1.6.2**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **19 providers** in **open-dashboard-mcp 1.6.3**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
