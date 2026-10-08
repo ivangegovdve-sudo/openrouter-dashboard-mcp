@@ -18,6 +18,8 @@ export const priceUnitSchema = z.enum([
   "credit_audio",
   "request",
   "gpu_hour",
+  "character_1k",
+  "plan_month",
 ]);
 export type PriceUnit = z.infer<typeof priceUnitSchema>;
 

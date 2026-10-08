@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  CAPABILITY_STATE_MAX_ROWS,
   buildCapabilityState,
+  capabilityStateInputSchema,
   capabilityStateOutputSchema,
   functionalityLedgerEntrySchema,
   modelCapabilityLedgerEntrySchema,
@@ -15,6 +17,15 @@ import { liveModelFixture, manifestFixture, publicCompleteness, publicProvenance
 const observedAt = "2026-09-20T08:00:00.000Z";
 const checkedAt = "2026-09-20T09:00:00.000Z";
 const liveModelsEndpoint = "/api/public/v2/live-models";
+
+test("capability state defaults to the transport-safe 500-row bound", () => {
+  assert.equal(CAPABILITY_STATE_MAX_ROWS, 500);
+  assert.equal(capabilityStateInputSchema.parse({}).max_rows, 500);
+  assert.throws(
+    () => capabilityStateInputSchema.parse({ max_rows: 501 }),
+    /too_big|less than or equal|500/i,
+  );
+});
 
 function row(overrides: Record<string, unknown> = {}) {
   return {
@@ -557,7 +568,7 @@ test("the registered state scans live rows and carries source evidence", async (
   assert.equal(parsed.pagination.capped, false);
 });
 
-test("the default scan exhausts the live-model cursor and reports explicit caps", async () => {
+test("the bounded default preserves full scans beneath its cap and reports explicit caps", async () => {
   const client = {
     async get(path: string, query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
       if (path === "/api/public/v2/manifest") return schema.parse(manifestFixture);
@@ -598,4 +609,26 @@ test("the default scan exhausts the live-model cursor and reports explicit caps"
   assert.equal(bounded.pagination.next_cursor, "next-page");
   assert.equal(bounded.scope.completeness, "partial_or_unknown");
   assert.match(bounded.warnings.join("\n"), /declared bound/);
+});
+
+test("the default scan stops at the transport-safe row bound", async () => {
+  let liveRequests = 0;
+  const firstPage = Array.from({ length: 500 }, (_unused, index) => row({ id: `row-${index}` }));
+  const client = {
+    async get(path: string, _query: URLSearchParams, schema: { parse: (value: unknown) => unknown }) {
+      if (path === "/api/public/v2/manifest") return schema.parse(manifestFixture);
+      assert.equal(path, liveModelsEndpoint);
+      liveRequests += 1;
+      return schema.parse(collection(firstPage, "next-page"));
+    },
+  } as never;
+
+  const result = await runCapabilityState({}, { client, now: () => new Date(checkedAt) });
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.equal(liveRequests, 1);
+  assert.equal(result.pagination.live_rows_returned, 500);
+  assert.equal(result.pagination.capped, true);
+  assert.equal(result.pagination.next_cursor, "next-page");
+  assert.equal(result.scope.completeness, "partial_or_unknown");
 });

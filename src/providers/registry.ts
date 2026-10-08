@@ -55,6 +55,8 @@ export const providerIdSchema = z.enum([
   "ionet",
   "kie",
   "higgsfield",
+  "elevenlabs",
+  "cartesia",
 ]);
 export type ProviderId = z.infer<typeof providerIdSchema>;
 
@@ -76,6 +78,8 @@ export const GENERATION_COST_POLICY: Record<ProviderId, { state: CostState; note
   ionet: { state: "UNKNOWN", note: "No authoritative per-generation cost field is collected by this integration." },
   kie: { state: "UNKNOWN", note: "KIE bills in credits; this integration reads only its public price table, not per-task credit charges." },
   higgsfield: { state: "UNKNOWN", note: "Higgsfield publishes web-plan credit rates; this integration does not observe a settled price paid per generation." },
+  elevenlabs: { state: "UNKNOWN", note: "ElevenLabs publishes TTS list prices; this integration does not observe a settled price paid per synthesis." },
+  cartesia: { state: "UNKNOWN", note: "Cartesia publishes TTS plan prices; this integration does not observe a settled price paid per synthesis." },
 };
 
 export const publicationSchema = z.enum([
@@ -519,6 +523,38 @@ export const PROVIDER_REGISTRY: Record<ProviderId, ProviderDescriptor> = {
     spendVisibility: "unknown",
     comparabilityNote:
       "io.net sells both GPU rental (IO Cloud) and per-token inference (IO Intelligence); only the inference catalogue is collected. Its public /models publishes per-token USD prices as JSON numbers, converted exactly from their decimal text. 31 of 37 models (measured 2026-09-26) require an access tier above the free one (min_access_tier is retained in nativePricing), so a listed price is not proof a free key can call the model. GPU hourly rates on io.net's own pages disagree with each other and are not collected. Measured with a key on 2026-09-26, all 37 listed models were reachable, and three reasoning models (GLM-5.3-Flash, DeepSeek-V4.1-Flash, Qwen3.8-27B) wrote message.reasoning_content beside content and refusal; at max_tokens 16 GLM-5.3-Flash returned an empty answer 3 of 3 times and DeepSeek-V4.1-Flash 2 of 3, while billing; Qwen3.8-27B answered or was truncated in this build's 3 calls, though an operator probe the same day saw it return empty, and the tokens a one-word answer needed ranged from 16 to 218 depending on model and call. Other io.net models are not observed. io.net sits behind Cloudflare: a request can get 403 'error code: 1010' on a valid key depending on client and User-Agent, which is reported as EDGE_BLOCKED, not a credential failure.",
+  },
+  elevenlabs: {
+    id: "elevenlabs",
+    ...providerEvidence("elevenlabs"),
+    displayName: "ElevenLabs",
+    providerKind: "media",
+    catalogueUrl: "https://elevenlabs.io/pricing/api",
+    citationUrl: "https://huggingface.co/datasets/Trelis/tricky-tts-public",
+    publishes: {
+      pricing: "always", contextLength: "never", outputModalities: "always",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "never",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "This build carries one dated public Eleven v3 TTS price row ($0.10 per 1K characters) and a third-party UTMOS-predicted MOS observation. It is a read-only bundled snapshot, not an account or synthesis probe; absent voices, prices or quality scores remain unknown.",
+  },
+  cartesia: {
+    id: "cartesia",
+    ...providerEvidence("cartesia"),
+    displayName: "Cartesia",
+    providerKind: "media",
+    catalogueUrl: "https://www.cartesia.ai/pricing",
+    citationUrl: "https://huggingface.co/datasets/Trelis/tricky-tts-public",
+    publishes: {
+      pricing: "always", contextLength: "never", outputModalities: "always",
+      reasoningEfforts: "never", activeFlag: "never", discounts: "never",
+      discountExpiry: "never", lifecycle: "never",
+    },
+    spendVisibility: "unknown",
+    comparabilityNote:
+      "This build carries one dated public Cartesia Startup plan row ($49 per month with 1.25M credits) and a Sonic-3 third-party UTMOS-predicted MOS observation; the quality row is not a Sonic-3.6 measurement. It is a read-only bundled snapshot, not an account or synthesis probe; absent voices, prices or quality scores remain unknown.",
   },
 };
 

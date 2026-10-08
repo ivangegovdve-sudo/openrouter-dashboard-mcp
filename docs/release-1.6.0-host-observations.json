@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "release": "open-dashboard-mcp@1.6.0",
+  "observed_on": "2026-10-04",
+  "base_commit_after_fetch_rebase": "584812c43f44c0cb0cef74da38dd6e648fd8d45c",
+  "npm_latest_baseline": {
+    "version": "1.5.0",
+    "providers": 16,
+    "higgsfield_adapter": "absent",
+    "capability_state_max_rows_2000": "TRANSPORT_ERROR on all three hosts",
+    "hosts": {
+      "bulgaria_desktop": { "public_elapsed_ms": 22264.7, "models": 5492, "priced_models": 2601, "media_elapsed_ms": 7108.2, "capability_transport_failure_ms": 2393.3, "higgsfield_http_ms": 167.6, "page_http_ms": 293.7 },
+      "kvm2": { "public_elapsed_ms": 20072.7, "models": 5492, "priced_models": 2601, "media_elapsed_ms": 9805.8, "capability_transport_failure_ms": 3426.8, "higgsfield_http_ms": 139.2, "page_http_ms": 33.5 },
+      "oracle": { "public_elapsed_ms": 22661.3, "models": 5001, "priced_models": 2125, "media_elapsed_ms": 4523.9, "capability_transport_failure_ms": 3037.5, "higgsfield_http_ms": 339.8, "page_http_ms": 389.0, "public_chutes_error": "SOURCE_TIMEOUT" }
+    },
+    "shared_source_notes": ["fal: partial", "sail: partial, PRICING_STALE"]
+  },
+  "candidate": {
+    "version": "1.6.0",
+    "provider_count": 17,
+    "tool_count": 19,
+    "capability_state_default_max_rows": 500,
+    "hosts": {
+      "bulgaria_desktop": { "node": "v26.3.0", "observed_at": "2026-10-04T15:21:13.045Z", "public": { "elapsed_ms": 17805.3, "models": 5603, "priced_models": 2712 }, "mcp": { "connect_ms": 567.2, "tools_list_ms": 36.3 }, "media_ms": 7676.1, "higgsfield_catalogue_ms": 140.6, "capability_state_ms": 608.3, "higgsfield_web_plan_ms": 117.3, "page_ms": 123.7, "errors": [] },
+      "kvm2": { "node": "v22.23.2", "observed_at": "2026-10-04T15:21:11.677Z", "public": { "elapsed_ms": 18321.8, "models": 5600, "priced_models": 2709 }, "mcp": { "connect_ms": 822.0, "tools_list_ms": 122.2 }, "media_ms": 10781.2, "higgsfield_catalogue_ms": 599.9, "capability_state_ms": 1481.4, "higgsfield_web_plan_ms": 152.8, "page_ms": 41.8, "errors": [] },
+      "oracle": { "node": "v24.19.0", "observed_at": "2026-10-04T15:21:21.452Z", "public": { "elapsed_ms": 13779.8, "models": 5600, "priced_models": 2709 }, "mcp": { "connect_ms": 868.7, "tools_list_ms": 128.6 }, "media_ms": 4873.2, "higgsfield_catalogue_ms": 298.5, "capability_state_ms": 1513.0, "higgsfield_web_plan_ms": 294.0, "page_ms": 274.5, "errors": [] }
+    }
+  },
+  "candidate_public_sources": {
+    "deepinfra": { "status": "available", "retained": 386 },
+    "chutes": { "status": "available", "retained": 491 },
+    "wavespeed": { "status": "available", "retained": 1054 },
+    "fal": { "status": "partial", "retained": 1503, "media_pricing_acquisition_status": "unavailable" },
+    "kie": { "status": "available", "retained": 524 },
+    "higgsfield": { "status": "available", "listed": 124, "received": 124, "retained": 108, "excluded": 16, "media_pricing_acquisition_status": "available" },
+    "openrouter": { "status": "available", "retained": 466 },
+    "groq": { "status": "available", "retained": 11 },
+    "sail": { "status": "partial", "retained": 12, "error": "PRICING_STALE" },
+    "nous": { "status": "available", "retained": { "bulgaria_desktop": 428, "kvm2": 425, "oracle": 425 } },
+    "qwencloud": { "status": "available", "retained": 270 },
+    "novita": { "status": "available", "retained": 121 },
+    "sambanova": { "status": "available", "retained": 6 },
+    "akashml": { "status": "available", "retained": 7 },
+    "ionet": { "status": "available", "retained": 39 },
+    "cerebras": { "status": "available", "retained": 2 },
+    "crazyrouter": { "status": "available", "retained": 175, "completeness": "unknown" }
+  },
+  "capability_state_default": {
+    "status": "ok",
+    "source_endpoints": ["/api/public/v2/live-models", "/api/public/v2/measured-costs"],
+    "source_stale": true,
+    "pagination": { "page_size": 500, "pages_scanned": 2, "rows_scanned": 1000, "live_rows_returned": 500, "capped": true, "next_cursor_present": true },
+    "warnings": ["functionality ledger absent", "model lineage ledger absent", "model capability ledger absent", "declared row bound reached"]
+  },
+  "higgsfield": {
+    "price_rows": 108,
+    "samples": [
+      { "model": "Higgsfield Soul 2.0", "amount": "0.12", "unit": "credit_image", "duration_seconds": null, "approximate": false },
+      { "model": "Seedance 2.0 720p", "amount": "22", "unit": "credit_video", "duration_seconds": 5, "approximate": true },
+      { "model": "Wan 3.0 720p", "amount": "8.75", "unit": "credit_video", "duration_seconds": 5, "approximate": false },
+      { "model": "Higgsfield Speak 2.0 720p", "amount": "14", "unit": "credit_audio", "duration_seconds": 5, "approximate": true }
+    ],
+    "plan_records": 16,
+    "currency_by_host": { "bulgaria_desktop": "eur", "kvm2": "eur", "oracle": "usd" },
+    "amount_semantics": "Raw public comparison endpoint fields; no scale or currency conversion inferred; subscription amounts are not model generation costs.",
+    "plans": [
+      { "name": "Free", "billing_period": "annual_or_monthly", "credits": 0, "seats": 1, "final": [0, 0], "original": [0, 0], "renewal": [0, 0] },
+      { "name": "Starter", "billing_period": "monthly", "credits": 270, "seats": 1, "final": [1900, 1900], "original": [1900, 1900], "renewal": [1900, 1900] },
+      { "name": "Starter", "billing_period": "annual", "credits": 270, "seats": 1, "final": [22800, 1900], "original": [22800, 1900], "renewal": [22800, 1900] },
+      { "name": "Plus", "billing_period": "monthly", "credits": 1200, "seats": 1, "final": [5900, 5900], "original": [5900, 5900], "renewal": [5900, 5900] },
+      { "name": "Plus", "billing_period": "annual", "credits": 1200, "seats": 1, "final": [56400, 4700], "original": [70800, 5900], "renewal": [56400, 4700] },
+      { "name": "Ultra", "billing_period": "monthly", "credits": 3000, "seats": 1, "final": [12900, 12900], "original": [12900, 12900], "renewal": [12900, 12900] },
+      { "name": "Ultra", "billing_period": "monthly", "credits": 6000, "seats": 1, "final": [22000, 22000], "original": [25000, 25000], "renewal": [25000, 25000] },
+      { "name": "Ultra", "billing_period": "monthly", "credits": 9000, "seats": 1, "final": [31000, 31000], "original": [37500, 37500], "renewal": [37500, 37500] },
+      { "name": "Ultra", "billing_period": "annual", "credits": 3000, "seats": 1, "final": [118800, 9900], "original": [154800, 12900], "renewal": [118800, 9900] },
+      { "name": "Ultra", "billing_period": "annual", "credits": 6000, "seats": 1, "final": [232200, 19350], "original": [309600, 25800], "renewal": [232200, 19350] },
+      { "name": "Ultra", "billing_period": "annual", "credits": 9000, "seats": 1, "final": [324000, 27000], "original": [464400, 38700], "renewal": [324000, 27000] },
+      { "name": "Team", "billing_period": "monthly", "credits": 1000, "seats": 2, "final": [6900, 6900], "original": [7900, 7900], "renewal": [7900, 7900] },
+      { "name": "Team", "billing_period": "annual", "credits": 1000, "seats": 2, "final": [78001, 6500], "original": [94800, 7900], "renewal": [78001, 6500] },
+      { "name": "Scale", "billing_period": "monthly", "credits": 2500, "seats": 5, "final": [16901, 16901], "original": [21500, 21500], "renewal": [16901, 16901] },
+      { "name": "Scale", "billing_period": "annual", "credits": 2500, "seats": 5, "final": [180007, 15001], "original": [258000, 21500], "renewal": [180007, 15001] }
+    ]
+  },
+  "credentials": { "retrieval": "GCP Secret Manager resource names", "secret_values_or_resource_names_packaged": false },
+  "hosted_ci_dispatched": false
+}
