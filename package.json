@@ -1,7 +1,7 @@
 {
   "name": "open-dashboard-mcp",
-  "version": "1.6.0",
-  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Higgsfield, KIE, Crazyrouter, AkashML, io.net. Refuses to quote Sail prices. GitHub trending; Jev-compatible router.",
+  "version": "1.6.1",
+  "description": "MCP: OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, Higgsfield, KIE, Crazyrouter, AkashML, io.net, ElevenLabs, Cartesia. Refuses to quote Sail prices. GitHub trending; Jev router.",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -82,7 +82,7 @@
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   },
-  "homepage": "https://www.sdforest.site/web/open-dashboard/",
+  "homepage": "https://opendashboard.sdforest.site/",
   "exports": {
     ".": "./build/index.js",
     "./contract-vocabulary.json": "./build/contract-vocabulary.json",

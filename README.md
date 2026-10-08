@@ -29,7 +29,7 @@ calls. Dashboard tools are free and require no account or API keys.
 
 The [Model Router](https://github.com/ivangegovdve-sudo/model-router) is **Jev-compatible**: it uses [Jev, TypeSafe AI's System One decision layer](https://typesafe.ai/) to select the cheapest sufficient seat under the hard rules. Jev's decision layer helps determine what is sufficient; the router remains responsible for enforcing consumer constraints, exclusions, capability and context requirements, and the price ceiling. A recommendation must satisfy those rules before a seat can be selected.
 
-In open-dashboard-mcp 1.6.0, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
+In open-dashboard-mcp 1.6.1, `dashboard_resolve_seat` delegates this read-only selection to the router's `POST /v1/seats/resolve` endpoint. Configure `MODEL_ROUTER_URL` for the real router and, when required, `MODEL_ROUTER_TOKEN` in the MCP environment. The result includes the selected seat, cost basis, reasons, decision ID and Jev metadata; an unreachable or rejecting router returns an explicit failure, never a fabricated seat or a fallback catalogue guess.
 
 The MCP does not invoke the selected seat or spend on inference. Your agent uses the returned invocation instructions with its own credentials. `dashboard_resolve_model` separately resolves provider model identities and catalogue constraints; it is not the router's seat-selection tool.
 
@@ -350,15 +350,15 @@ The key inventory must stay **off** in a distributed build: leave `OPEN_DASHBOAR
 
 <!-- summary:begin generated-do-not-edit -->
 
-Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net**. Version **1.6.0** registers **17 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
+Read-only MCP access to public model and GitHub evidence, covering **OpenRouter, Groq, Cerebras, Sail, Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE, Higgsfield, Crazyrouter, AkashML, io.net, ElevenLabs, Cartesia**. Version **1.6.1** registers **19 providers** and exposes nineteen bounded tools over stdio. Results use the same machine-readable value in `structuredContent` and JSON text content.
 
 <!-- summary:end -->
 
 **What you actually get:**
 
-- **One catalogue across sixteen named providers** — OpenRouter, Groq, Cerebras, Sail,
+- **One catalogue across nineteen named providers** — OpenRouter, Groq, Cerebras, Sail,
   Nous Research, QwenCloud, DeepInfra, Novita, SambaNova, Chutes, WaveSpeedAI, fal, KIE,
-  Crazyrouter, AkashML and io.net.
+  Higgsfield, Crazyrouter, AkashML, io.net, ElevenLabs and Cartesia.
 - **Which field a model answers in.** Catalogue rows carry `responseShape`, so a selector can
   see that a reasoning model has been observed returning an empty `content` before it
   recommends one.
@@ -426,7 +426,7 @@ The response also carries the locked `basket-v1` weekly measurement manifest. It
 
 <!-- providers:begin generated-do-not-edit -->
 
-Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.6.0**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
+Generated from the package registry: **19 providers** in **open-dashboard-mcp 1.6.1**. Publication declarations describe the named connector; they are not fresh measurements or a full provider inventory.
 
 | Provider | Sources | Pricing | Context | Modality | Lifecycle | Discounts | Spend visibility |
 |---|---|---|---|---|---|---|---|
@@ -447,6 +447,8 @@ Generated from the package registry: **17 providers** in **open-dashboard-mcp 1.
 | <span data-provider-id="crazyrouter"><strong>Crazyrouter</strong></span><br>Multi-provider aggregator | [Catalogue](https://api.crazyrouter.com/v1/models) · [Documentation](https://docs.crazyrouter.com/en/chat/openai/models) | Some collected models | Not established | Some collected models | Not established | Some collected models | Not established |
 | <span data-provider-id="akashml"><strong>AkashML</strong></span> | [Catalogue](https://api.akashml.com/v1/models) · [Documentation](https://akashml.com/docs/platform/models) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | No billing API |
 | <span data-provider-id="ionet"><strong>io.net</strong></span> | [Catalogue](https://api.intelligence.io.solutions/api/v1/models) · [Documentation](https://io.net/docs/reference/ai-models/get-started-with-io-intelligence-api.md) | All collected models | All collected models | All collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="elevenlabs"><strong>ElevenLabs</strong></span><br>Media generation platform | [Catalogue](https://elevenlabs.io/pricing/api) · [Documentation](https://huggingface.co/datasets/Trelis/tricky-tts-public) | All collected models | Not published in this connector | All collected models | Not published in this connector | Not published in this connector | Not established |
+| <span data-provider-id="cartesia"><strong>Cartesia</strong></span><br>Media generation platform | [Catalogue](https://www.cartesia.ai/pricing) · [Documentation](https://huggingface.co/datasets/Trelis/tricky-tts-public) | All collected models | Not published in this connector | All collected models | Not published in this connector | Not published in this connector | Not established |
 
 ### Provider pitches and structured caveats
 
@@ -553,6 +555,18 @@ Caveats: Not found in checked sources. No numeric operating limit was establishe
 > “Free inference platform powered by io.net's decentralized GPU network.” — [io.net IO Intelligence page description](https://io.net/intelligence), observed 2026-09-26.
 
 Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://io.net/intelligence); checked 2026-09-26.
+
+**ElevenLabs**
+
+> “Text to Speech API pricing” — [ElevenLabs API pricing page](https://elevenlabs.io/pricing/api), observed 2026-10-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://elevenlabs.io/pricing/api); checked 2026-10-08.
+
+**Cartesia**
+
+> “Sonic-3.6” — [Cartesia pricing page](https://www.cartesia.ai/pricing), observed 2026-10-08.
+
+Caveats: Not found in checked sources. No numeric operating limit was established from this checked platform page. This limited check does not establish that the provider publishes none elsewhere. [Source](https://www.cartesia.ai/pricing); checked 2026-10-08.
 
 <!-- providers:end -->
 
@@ -847,7 +861,7 @@ A model does not have *a* price. It has a **set** of price points, each valid on
 
 A point is `{ amount, unit, condition, source: { url, readAt }, provenance }`. Amounts are exact decimal strings, never floats, so a sub-cent per-token rate survives a round trip. `source` names the page it was read from and when; a price whose read time cannot be established is not emitted at all.
 
-**Units** (13): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `credit_image`, `credit_video`, `credit_audio`, `request`, `gpu_hour`.
+**Units** (15): `token_in`, `token_out`, `token_cached`, `token_cache_create`, `image`, `megapixel`, `video_second`, `video`, `credit_image`, `credit_video`, `credit_audio`, `request`, `gpu_hour`, `character_1k`, `plan_month`.
 
 **Condition kinds** (six): `latency_window`, `time_band`, `tier`, `rate_class`, `price_scope`, `generation`. A rate is never detached from the choice that produced it: a latency window, a time of day, a volume tier, a rate class, or whose price it is. `price_scope` distinguishes a rate quoted to an authenticated account from a public list rate -- without it the two look identical and compare as though they were the same quantity.
 

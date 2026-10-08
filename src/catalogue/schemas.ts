@@ -4,7 +4,7 @@ import { pricePointSchema, type PricePoint } from "../contract.js";
 import { responseShapeSchema } from "../providers/response-shape.js";
 import { modelOfferingStateSchema, modelPriceStateSchema, providerPriceCoverageResultSchema } from "./price-coverage.js";
 
-export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes", "kie", "higgsfield"]);
+export const mediaCatalogueProviderIdSchema = z.enum(["deepinfra", "wavespeed", "fal", "chutes", "kie", "higgsfield", "elevenlabs", "cartesia"]);
 export type MediaCatalogueProviderId = z.infer<typeof mediaCatalogueProviderIdSchema>;
 export const mediaKindSchema = z.enum(["image", "video", "text", "audio", "other", "unknown"]);
 export type MediaKind = z.infer<typeof mediaKindSchema>;

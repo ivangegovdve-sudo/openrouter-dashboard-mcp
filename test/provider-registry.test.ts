@@ -19,10 +19,12 @@ test("covers every provider this build normalises", () => {
     [...PROVIDER_IDS].sort(),
     [
       "akashml",
+      "cartesia",
       "cerebras",
       "chutes",
       "crazyrouter",
       "deepinfra",
+      "elevenlabs",
       "fal",
       "groq",
       "higgsfield",
