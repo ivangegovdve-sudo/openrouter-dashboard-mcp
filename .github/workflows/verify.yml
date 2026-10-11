@@ -16,11 +16,11 @@ concurrency:
 jobs:
   verify:
     timeout-minutes: 15
-    # The KVM2 Linux runner is the one that is online and the one publish.yml already
-    # builds and tests on, so a green verify here is the same verdict the release uses.
-    # This job has no GPU or local-model step. It previously pinned an offline Windows
-    # runner, which left every PR's verify queued indefinitely.
-    runs-on: [self-hosted, Linux, X64, kvm2]
+    # GitHub-hosted on purpose. This job runs pull-request code, so it must not share a
+    # machine with the self-hosted KVM2 runner that publish.yml gives id-token: write.
+    # The repository is public, so hosted minutes are free. It has no GPU or local-model
+    # step, and it previously pinned a Windows runner that is offline.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
